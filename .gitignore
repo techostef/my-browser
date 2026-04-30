@@ -1,0 +1,23 @@
+node_modules/
+.gradle/
+build/
+*.apk
+*.aab
+*.ipa
+.DS_Store
+*.hprof
+*.keystore
+!debug.keystore
+
+# iOS
+ios/Pods/
+ios/build/
+
+# Metro
+.metro-health-check*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

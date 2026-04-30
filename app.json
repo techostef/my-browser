@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "MyBrowser",
+    "slug": "my-browser",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.mybrowser.app",
+      "permissions": [
+        "INTERNET",
+        "READ_MEDIA_VIDEO",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "jsEngine": "hermes",
+    "ios": {
+      "bundleIdentifier": "com.mybrowser.app"
+    },
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow MyBrowser to access your videos.",
+          "savePhotosPermission": "Allow MyBrowser to save downloaded videos."
+        }
+      ]
+    ]
+  }
+}
