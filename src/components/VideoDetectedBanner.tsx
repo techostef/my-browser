@@ -27,7 +27,7 @@ export default function VideoDetectedBanner({
 }: Props) {
   if (videos.length === 0) return null;
 
-  const downloadableTypes = ['mp4', 'webm', 'blob-ready'];
+  const downloadableTypes = ['mp4', 'blob-ready'];
   const downloadableVideos = videos.filter(
     v => downloadableTypes.includes(v.type),
   );

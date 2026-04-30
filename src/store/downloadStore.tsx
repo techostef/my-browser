@@ -15,7 +15,14 @@ interface DownloadState {
 
 interface DownloadContextValue extends DownloadState {
   startDownload: (video: DetectedVideo) => void;
-  startBlobDownload: (pageTitle: string, base64Data: string) => void;
+  // Blob download is split into three steps so the caller can track each phase
+  // in the Downloads tab without a blocking modal:
+  //   1. createBlobTask   — immediately add a task visible in Downloads
+  //   2. updateBlobProgress — update bytes/total as MSE buffers or chunks arrive
+  //   3. completeBlobDownload — write the assembled base64 to disk
+  createBlobTask: (taskId: string, pageTitle: string, totalBytes: number) => void;
+  updateBlobProgress: (taskId: string, bytesDownloaded: number, totalBytes: number) => void;
+  completeBlobDownload: (taskId: string, pageTitle: string, base64Data: string) => void;
   pauseDownload: (id: string) => void;
   resumeDownload: (id: string) => void;
   cancelDownload: (id: string) => void;
@@ -148,25 +155,33 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     downloadManager.cancelDownload(id);
   }, []);
 
-  const startBlobDownload = useCallback((pageTitle: string, base64Data: string) => {
-    const id = `blob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const createBlobTask = useCallback((taskId: string, pageTitle: string, totalBytes: number) => {
     const task: DownloadTask = {
-      id,
+      id: taskId,
       url: 'blob-video',
       fileName: '',
       filePath: '',
-      status: 'queued',
+      status: 'downloading',
       progress: 0,
       bytesDownloaded: 0,
-      totalBytes: Math.floor((base64Data.length * 3) / 4),
+      totalBytes,
       pageTitle,
       createdAt: Date.now(),
     };
-
     dispatchRef.current({ type: 'ADD_DOWNLOAD', payload: task });
+  }, []);
 
-    downloadManager.saveBlobData(id, pageTitle, base64Data).catch(err => {
-      console.warn('Blob download failed:', err);
+  const updateBlobProgress = useCallback((taskId: string, bytesDownloaded: number, totalBytes: number) => {
+    const progress = totalBytes > 0 ? Math.min(99, Math.round((bytesDownloaded / totalBytes) * 100)) : 0;
+    dispatchRef.current({
+      type: 'UPDATE_PROGRESS',
+      payload: { id: taskId, progress, bytesDownloaded, totalBytes },
+    });
+  }, []);
+
+  const completeBlobDownload = useCallback((taskId: string, pageTitle: string, base64Data: string) => {
+    downloadManager.saveBlobData(taskId, pageTitle, base64Data).catch(err => {
+      console.warn('Blob save failed:', err);
     });
   }, []);
 
@@ -180,7 +195,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       value={{
         ...state,
         startDownload,
-        startBlobDownload,
+        createBlobTask,
+        updateBlobProgress,
+        completeBlobDownload,
         pauseDownload,
         resumeDownload,
         cancelDownload,

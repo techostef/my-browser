@@ -621,6 +621,103 @@ export const VIDEO_DETECTOR_JS = `
     }
   }
 
+  // Patch tfhd.base_data_offset in a moof+mdat buffer so it correctly points
+  // to the moof's absolute byte position in the reassembled file. When the
+  // original streaming segments are rearranged, any stored absolute offset is
+  // wrong, causing the player to read sample data from the wrong position —
+  // which breaks random access / seeking.
+  function fixTfhdBaseDataOffset(buf, absoluteMoofOffset) {
+    var d = new Uint8Array(buf);
+    var moof = findBox(d, 'moof', 0, d.length);
+    if (!moof) return;
+    var trafs = findAllBoxes(d, 'traf', moof.o + 8, moof.o + moof.s);
+    for (var ti = 0; ti < trafs.length; ti++) {
+      var tfhd = findBox(d, 'tfhd', trafs[ti].o + 8, trafs[ti].o + trafs[ti].s);
+      if (!tfhd) continue;
+      var flags = (d[tfhd.o + 9] << 16) | (d[tfhd.o + 10] << 8) | d[tfhd.o + 11];
+      if (!(flags & 0x000001)) continue; // base-data-offset not present in this tfhd
+      // tfhd layout: size(4) + 'tfhd'(4) + version(1) + flags(3) + track_ID(4) = 16 bytes
+      // base_data_offset(8) starts at offset 16 from the box start.
+      var hi = Math.floor(absoluteMoofOffset / 4294967296);
+      var lo = absoluteMoofOffset >>> 0;
+      d[tfhd.o + 16] = (hi >>> 24) & 0xFF;
+      d[tfhd.o + 17] = (hi >>> 16) & 0xFF;
+      d[tfhd.o + 18] = (hi >>> 8) & 0xFF;
+      d[tfhd.o + 19] = hi & 0xFF;
+      d[tfhd.o + 20] = (lo >>> 24) & 0xFF;
+      d[tfhd.o + 21] = (lo >>> 16) & 0xFF;
+      d[tfhd.o + 22] = (lo >>> 8) & 0xFF;
+      d[tfhd.o + 23] = lo & 0xFF;
+    }
+  }
+
+  // Build an mfra (Movie Fragment Random Access) box at the end of the file.
+  // Players use this to quickly locate the moof for any requested seek time
+  // without scanning the entire file. Each interleaved element must have a
+  // moofOffset property (absolute byte offset from file start) already set.
+  function buildMfra(interleaved, vTimescale, aTimescale) {
+    var vEntries = [];
+    var aEntries = [];
+    for (var i = 0; i < interleaved.length; i++) {
+      var frag = interleaved[i];
+      var d = new Uint8Array(frag.buf);
+      var moof = findBox(d, 'moof', 0, d.length);
+      if (!moof) continue;
+      var traf = findBox(d, 'traf', moof.o + 8, moof.o + moof.s);
+      if (!traf) continue;
+      var tfdtBox = findBox(d, 'tfdt', traf.o + 8, traf.o + traf.s);
+      var time = 0;
+      if (tfdtBox) {
+        var ver = d[tfdtBox.o + 8];
+        time = ver === 0 ? ru32(d, tfdtBox.o + 12)
+                        : ru32(d, tfdtBox.o + 12) * 4294967296 + ru32(d, tfdtBox.o + 16);
+      }
+      if (frag.kind === 0) vEntries.push({ time: time, moofOffset: frag.moofOffset });
+      else                 aEntries.push({ time: time, moofOffset: frag.moofOffset });
+    }
+
+    function buildTfra(trackId, entries) {
+      if (entries.length === 0) return null;
+      // FullBox(12) + track_ID(4) + entry_count(4) + N * (time32 + offset32 + 3 × 1) = 20 + N*11
+      var totalSize = 20 + entries.length * 11;
+      var box = new Uint8Array(totalSize);
+      wu32(box, 0, totalSize); wtype(box, 4, 'tfra');
+      // version=0 (32-bit fields), flags bits 0-5 = 0 → each count field is 1 byte
+      box[8] = 0; box[9] = 0; box[10] = 0; box[11] = 0;
+      wu32(box, 12, trackId);
+      wu32(box, 16, entries.length);
+      var off = 20;
+      for (var j = 0; j < entries.length; j++) {
+        wu32(box, off, entries[j].time >>> 0);        off += 4;
+        wu32(box, off, entries[j].moofOffset >>> 0);  off += 4;
+        box[off] = 1; off++; // traf_number (1-based)
+        box[off] = 1; off++; // trun_number
+        box[off] = 1; off++; // sample_number
+      }
+      return box;
+    }
+
+    var tfras = [];
+    var vTfra = buildTfra(1, vEntries); if (vTfra) tfras.push(vTfra);
+    var aTfra = buildTfra(2, aEntries); if (aTfra) tfras.push(aTfra);
+
+    var tfraBytes = 0;
+    for (var i = 0; i < tfras.length; i++) tfraBytes += tfras[i].length;
+    // mfra header(8) + tfras + mfro FullBox(16)
+    var mfroSize = 16;
+    var mfraTotalSize = 8 + tfraBytes + mfroSize;
+
+    var mfra = new Uint8Array(mfraTotalSize);
+    wu32(mfra, 0, mfraTotalSize); wtype(mfra, 4, 'mfra');
+    var off = 8;
+    for (var i = 0; i < tfras.length; i++) { mfra.set(tfras[i], off); off += tfras[i].length; }
+    // mfro: last box in mfra, last box in file — players read its 'size' field to locate mfra
+    wu32(mfra, off, mfroSize); wtype(mfra, off + 4, 'mfro');
+    mfra[off + 8] = 0; mfra[off + 9] = 0; mfra[off + 10] = 0; mfra[off + 11] = 0; // ver+flags
+    wu32(mfra, off + 12, mfraTotalSize); // size = total mfra box size (used by player to seek back)
+    return mfra;
+  }
+
   // Compute duration from rebased media segments: max tfdt + estimated last segment duration
   function computeDurationFromSegments(segments) {
     if (segments.length === 0) return 0;
@@ -815,11 +912,23 @@ export const VIDEO_DETECTOR_JS = `
       return a.kind - b.kind;
     });
 
-    // Build final: [ftyp][moov][interleaved fragments...]
+    // Compute absolute byte offsets for each fragment, fix tfhd.base_data_offset,
+    // then build an mfra seek table.
+    var ftypSz = vFtyp ? vFtyp.s : 0;
+    var cumOff = ftypSz + moovBox.length;
+    for (var i = 0; i < interleaved.length; i++) {
+      interleaved[i].moofOffset = cumOff;
+      fixTfhdBaseDataOffset(interleaved[i].buf, cumOff);
+      cumOff += interleaved[i].buf.byteLength;
+    }
+    var mfraBox = buildMfra(interleaved, vMdhdTS, aMdhdTS);
+
+    // Build final: [ftyp][moov][interleaved fragments...][mfra]
     var parts = [];
     if (vFtyp) parts.push(vInit.slice(vFtyp.o, vFtyp.o + vFtyp.s).buffer);
     parts.push(moovBox.buffer);
     for (var i = 0; i < interleaved.length; i++) parts.push(interleaved[i].buf);
+    parts.push(mfraBox.buffer);
 
     var totalSz = 0;
     for (var i = 0; i < parts.length; i++) totalSz += parts[i].byteLength;
@@ -941,11 +1050,24 @@ export const VIDEO_DETECTOR_JS = `
               setMehdDuration(fbInit, fbMvex2.o, fbMvex2.s, fbMehdDur);
             }
           }
+          // Fix tfhd offsets and build mfra for the fallback video-only output.
+          var fbFtypSz = fbFtyp ? fbFtyp.s : 0;
+          var fbMoovSz = fbMoov ? fbMoov.s : 0;
+          var fbCumOff = fbFtypSz + fbMoovSz;
+          var fbFakeInterleaved = [];
+          for (var fi4 = 0; fi4 < fbSplit.media.length; fi4++) {
+            fixTfhdBaseDataOffset(fbSplit.media[fi4], fbCumOff);
+            fbFakeInterleaved.push({ buf: fbSplit.media[fi4], moofOffset: fbCumOff, kind: 0 });
+            fbCumOff += fbSplit.media[fi4].byteLength;
+          }
+          var fbMfra = buildMfra(fbFakeInterleaved, fbMdhdTS, 0);
+
           // Build output
           var fbParts = [];
           if (fbFtyp) fbParts.push(fbInit.slice(fbFtyp.o, fbFtyp.o + fbFtyp.s).buffer);
           if (fbMoov) fbParts.push(fbInit.slice(fbMoov.o, fbMoov.o + fbMoov.s).buffer);
-          for (var fi4 = 0; fi4 < fbSplit.media.length; fi4++) fbParts.push(fbSplit.media[fi4]);
+          for (var fi5 = 0; fi5 < fbSplit.media.length; fi5++) fbParts.push(fbSplit.media[fi5]);
+          fbParts.push(fbMfra.buffer);
           blob = new Blob(fbParts, { type: 'video/mp4' });
           log('[FALLBACK] Built: ' + fbSplit.media.length + ' segments, size=' + blob.size);
         } else {

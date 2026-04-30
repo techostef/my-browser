@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -27,19 +27,11 @@ export default function BrowserScreen() {
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
   const [bannerDismissedMap, setBannerDismissedMap] = useState<Record<string, boolean>>({});
 
-  const { startDownload, startBlobDownload } = useDownloads();
+  const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloads();
 
-  // Blob extraction state
-  const blobChunksRef = useRef<string[]>([]);
-  const activeBlobRef = useRef<{ blobUrl: string; pageTitle: string; totalSize: number } | null>(null);
-
-  // Buffering progress (shown while MSE is still receiving chunks before extraction)
-  const [bufferingState, setBufferingState] = useState<{
-    blobUrl: string;
-    bytesBuffered: number;
-    totalSize: number;
-    ready: boolean;
-  } | null>(null);
+  // Keyed by blobUrl so multiple blob downloads from different tabs can run simultaneously.
+  const blobChunksMap = useRef<Map<string, string[]>>(new Map());
+  const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number }>>(new Map());
 
   useEffect(() => {
     isMounted.current = true;
@@ -105,62 +97,62 @@ export default function BrowserScreen() {
           console.log(`[BrowserScreen] PAGE_INFO: ${message.payload?.title}`);
           break;
         case 'BLOB_BUFFERING': {
-          const { blobUrl, bytesBuffered, ready } = message.payload;
-          const info = activeBlobRef.current;
-          if (info && info.blobUrl === blobUrl) {
-            setBufferingState({
-              blobUrl,
-              bytesBuffered,
-              totalSize: info.totalSize,
-              ready: !!ready,
-            });
+          const { blobUrl, bytesBuffered } = message.payload;
+          const info = activeBlobMap.current.get(blobUrl);
+          if (info) {
+            updateBlobProgress(info.downloadId, bytesBuffered, info.totalSize);
           }
           break;
         }
         case 'BLOB_DATA_START': {
-          const { blobUrl, totalSize, mimeType } = message.payload;
-          console.log(`[BrowserScreen] BLOB_DATA_START: url=${blobUrl} size=${totalSize} mime=${mimeType}`);
-          blobChunksRef.current = [];
-          setBufferingState(null);
+          const { blobUrl, totalSize } = message.payload;
+          console.log(`[BrowserScreen] BLOB_DATA_START: url=${blobUrl} size=${totalSize}`);
+          blobChunksMap.current.set(blobUrl, []);
+          const info = activeBlobMap.current.get(blobUrl);
+          if (info) {
+            info.totalSize = totalSize; // now we know the actual remuxed blob size
+            updateBlobProgress(info.downloadId, 0, totalSize);
+          }
           break;
         }
         case 'BLOB_DATA_CHUNK': {
-          const { index, data } = message.payload;
-          blobChunksRef.current.push(data);
-          if (index % 10 === 0) {
-            console.log(`[BrowserScreen] BLOB_DATA_CHUNK #${index} received (${data.length} chars)`);
+          const { blobUrl, index, data } = message.payload;
+          const chunks = blobChunksMap.current.get(blobUrl);
+          if (chunks) {
+            chunks.push(data);
+            const info = activeBlobMap.current.get(blobUrl);
+            if (info) {
+              const CHUNK_BYTES = 768 * 1024;
+              updateBlobProgress(info.downloadId, (index + 1) * CHUNK_BYTES, info.totalSize);
+            }
           }
           break;
         }
         case 'BLOB_DATA_END': {
-          const { totalChunks } = message.payload;
-          console.log(`[BrowserScreen] BLOB_DATA_END: ${totalChunks} chunks received`);
-          const fullBase64 = blobChunksRef.current.join('');
-          blobChunksRef.current = [];
-          const info = activeBlobRef.current;
-          if (info && fullBase64.length > 0) {
-            console.log(`[BrowserScreen] Saving blob: ${fullBase64.length} base64 chars for "${info.pageTitle}"`);
-            startBlobDownload(info.pageTitle, fullBase64);
-            Alert.alert('Download Started', 'Blob video is being saved. Check the Downloads tab.');
-          } else {
-            Alert.alert('Error', 'No blob data was received.');
+          const { blobUrl, totalChunks } = message.payload;
+          console.log(`[BrowserScreen] BLOB_DATA_END: ${totalChunks} chunks for ${blobUrl}`);
+          const chunks = blobChunksMap.current.get(blobUrl) || [];
+          const info = activeBlobMap.current.get(blobUrl);
+          blobChunksMap.current.delete(blobUrl);
+          activeBlobMap.current.delete(blobUrl);
+          if (info && chunks.length > 0) {
+            completeBlobDownload(info.downloadId, info.pageTitle, chunks.join(''));
           }
-          activeBlobRef.current = null;
           break;
         }
         case 'BLOB_DATA_ERROR': {
+          const { blobUrl } = message.payload;
           console.error(`[BrowserScreen] BLOB_DATA_ERROR:`, message.payload);
-          blobChunksRef.current = [];
-          activeBlobRef.current = null;
-          setBufferingState(null);
-          Alert.alert('Blob Error', message.payload?.error || 'Failed to extract blob video data.');
+          blobChunksMap.current.delete(blobUrl);
+          activeBlobMap.current.delete(blobUrl);
+          Alert.alert('Download Error', message.payload?.error || 'Failed to extract blob video data.');
           break;
         }
       }
     } catch (err) {
       // Ignore non-JSON messages from websites
-    } 
-  }, [startBlobDownload]);
+    }
+  }, [updateBlobProgress, completeBlobDownload]);
 
   const handleDownload = useCallback(
     (video: DetectedVideo) => {
@@ -172,29 +164,25 @@ export default function BrowserScreen() {
         return;
       }
       if (video.type === 'blob-ready') {
-        console.log(`[BrowserScreen] Starting blob extraction for: ${video.url}`);
-        activeBlobRef.current = {
-          blobUrl: video.url,
-          pageTitle: video.pageTitle,
-          totalSize: video.blobSize || 0,
-        };
         const webView = webViewRefs.current[activeTabId];
-        if (webView) {
-          const escUrl = video.url.replace(/'/g, "\\'");
-          // waitForReady=true: poll until MSE.sourceended fires (or user
-          // taps Finish). Without this we capture only the current forward-
-          // buffer (~30s) instead of the full video.
-          const js = `window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true })`;
-          webView.injectJavaScript(js + '; true;');
-          setBufferingState({
-            blobUrl: video.url,
-            bytesBuffered: 0,
-            totalSize: video.blobSize || 0,
-            ready: false,
-          });
-        } else {
+        if (!webView) {
           Alert.alert('Error', 'WebView not available for blob extraction.');
+          return;
         }
+        const downloadId = `blob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const totalSize = video.blobSize || 0;
+        // Add task to Downloads tab immediately — user can navigate away while buffering.
+        createBlobTask(downloadId, video.pageTitle, totalSize);
+        activeBlobMap.current.set(video.url, {
+          downloadId,
+          pageTitle: video.pageTitle,
+          totalSize,
+        });
+        const escUrl = video.url.replace(/'/g, "\\'");
+        webView.injectJavaScript(
+          `window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
+        );
+        Alert.alert('Download queued', 'Video is buffering. Track progress in the Downloads tab.');
         return;
       }
       if (video.type === 'hls') {
@@ -209,21 +197,6 @@ export default function BrowserScreen() {
     },
     [startDownload, activeTabId],
   );
-
-  const handleFinishBuffering = useCallback(() => {
-    if (!bufferingState) return;
-    const webView = webViewRefs.current[activeTabId];
-    if (webView) {
-      const escUrl = bufferingState.blobUrl.replace(/'/g, "\\'");
-      webView.injectJavaScript(`window.__cancelBlobWait && window.__cancelBlobWait('${escUrl}'); true;`);
-    }
-  }, [bufferingState, activeTabId]);
-
-  const handleCancelBuffering = useCallback(() => {
-    handleFinishBuffering();
-    activeBlobRef.current = null;
-    setBufferingState(null);
-  }, [handleFinishBuffering]);
 
   const handleLoadStart = useCallback((tabId: string) => () => {
     setDetectedVideosMap(prev => ({ ...prev, [tabId]: [] }));
@@ -325,40 +298,8 @@ export default function BrowserScreen() {
         onClose={() => setPreviewVideo(null)}
       />
 
-      <Modal
-        visible={bufferingState !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={handleCancelBuffering}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.bufferingCard}>
-            <Text style={styles.bufferingTitle}>Buffering video…</Text>
-            <Text style={styles.bufferingHint}>
-              Keep the page open and let the video play. Tap Finish to save what's buffered so far.
-            </Text>
-            <ActivityIndicator size="small" color="#4ECDC4" style={{ marginVertical: 12 }} />
-            <Text style={styles.bufferingBytes}>
-              {formatMB(bufferingState?.bytesBuffered || 0)} buffered
-              {bufferingState?.ready ? ' · stream ended' : ''}
-            </Text>
-            <View style={styles.bufferingButtons}>
-              <TouchableOpacity style={styles.bufferingBtnSecondary} onPress={handleCancelBuffering}>
-                <Text style={styles.bufferingBtnSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.bufferingBtnPrimary} onPress={handleFinishBuffering}>
-                <Text style={styles.bufferingBtnPrimaryText}>Finish & save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
-}
-
-function formatMB(bytes: number): string {
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 const styles = StyleSheet.create({
@@ -383,62 +324,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  bufferingCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#1A1A2E',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'stretch',
-  },
-  bufferingTitle: {
-    color: '#4ECDC4',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  bufferingHint: {
-    color: '#CCC',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  bufferingBytes: {
-    color: '#FFF',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  bufferingButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  bufferingBtnSecondary: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginRight: 8,
-  },
-  bufferingBtnSecondaryText: {
-    color: '#CCC',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  bufferingBtnPrimary: {
-    backgroundColor: '#4ECDC4',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  bufferingBtnPrimaryText: {
-    color: '#1A1A2E',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });
