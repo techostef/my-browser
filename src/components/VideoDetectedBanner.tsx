@@ -27,19 +27,19 @@ export default function VideoDetectedBanner({
 }: Props) {
   if (videos.length === 0) return null;
 
-  const downloadableTypes = ['mp4', 'blob-ready'];
+  const downloadableTypes = ['blob-ready'];
   const downloadableVideos = videos.filter(
     v => downloadableTypes.includes(v.type),
   );
-  const nonDownloadable = videos.filter(
-    v => !downloadableTypes.includes(v.type),
-  );
+  // const nonDownloadable = videos.filter(
+  //   v => !downloadableTypes.includes(v.type),
+  // );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {videos.length} video{videos.length > 1 ? 's' : ''} detected
+          {/* {videos.length} video{videos.length > 1 ? 's' : ''} detected */}
         </Text>
         <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
           <Text style={styles.closeBtnText}>✕</Text>
@@ -74,7 +74,7 @@ export default function VideoDetectedBanner({
         />
       )}
 
-      {nonDownloadable.length > 0 && (
+      {/* {nonDownloadable.length > 0 && (
         <View style={styles.warningRow}>
           <Text style={styles.warningText}>
             {nonDownloadable.length} video{nonDownloadable.length > 1 ? 's' : ''}{' '}
@@ -82,7 +82,7 @@ export default function VideoDetectedBanner({
             downloadable
           </Text>
         </View>
-      )}
+      )} */}
     </View>
   );
 }
