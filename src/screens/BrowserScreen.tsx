@@ -360,13 +360,6 @@ export default function BrowserScreen() {
         Alert.alert('Download queued', 'Video is buffering. Track progress in the Downloads tab.');
         return;
       }
-      if (video.type === 'hls') {
-        Alert.alert(
-          'HLS Stream',
-          'This is an HLS (.m3u8) stream. Direct download is not supported. An FFmpeg-based solution would be needed.',
-        );
-        return;
-      }
       startDownload(video);
       Alert.alert('Download Started', 'Check the Downloads tab for progress.');
     },
@@ -460,6 +453,7 @@ export default function BrowserScreen() {
           <VideoDetectedBanner
             videos={activeDetectedVideos}
             onPreview={setPreviewVideo}
+            onOpenInTab={(video) => addTab(video.url)}
             onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
           />
         )}

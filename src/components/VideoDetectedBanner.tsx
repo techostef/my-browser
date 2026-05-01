@@ -17,17 +17,19 @@ function formatSize(bytes: number): string {
 interface Props {
   videos: DetectedVideo[];
   onPreview: (video: DetectedVideo) => void;
+  onOpenInTab: (video: DetectedVideo) => void;
   onDismiss: () => void;
 }
 
 export default function VideoDetectedBanner({
   videos,
   onPreview,
+  onOpenInTab,
   onDismiss,
 }: Props) {
   if (videos.length === 0) return null;
 
-  const downloadableTypes = ['blob-ready'];
+  const downloadableTypes = ['blob-ready', 'hls', 'mp4', 'webm'];
   const downloadableVideos = videos.filter(
     v => downloadableTypes.includes(v.type),
   );
@@ -58,14 +60,27 @@ export default function VideoDetectedBanner({
               onPress={() => onPreview(item)}>
               <View style={styles.videoInfo}>
                 <Text style={styles.videoType}>
-                  {item.type === 'blob-ready' ? 'BLOB' : item.type.toUpperCase()}
+                  {item.type === 'blob-ready'
+                    ? 'BLOB'
+                    : item.type === 'hls'
+                      ? 'M3U8'
+                      : item.type.toUpperCase()}
                 </Text>
                 <Text style={styles.videoUrl} numberOfLines={1}>
                   {item.type === 'blob-ready'
                     ? `${item.pageTitle || 'Video'} (${formatSize(item.blobSize || 0)})`
-                    : item.url}
+                    : item.type === 'hls'
+                      ? `${item.pageTitle || 'HLS Stream'}`
+                      : item.url}
                 </Text>
               </View>
+              {item.type === 'hls' && (
+                <TouchableOpacity
+                  style={styles.openTabBtn}
+                  onPress={() => onOpenInTab(item)}>
+                  <Text style={styles.openTabBtnText}>🔗 Tab</Text>
+                </TouchableOpacity>
+              )}
               <View style={styles.previewBtn}>
                 <Text style={styles.previewBtnText}>▶ Preview</Text>
               </View>
@@ -176,6 +191,18 @@ const styles = StyleSheet.create({
   warningRow: {
     paddingHorizontal: 12,
     paddingVertical: 6,
+  },
+  openTabBtn: {
+    backgroundColor: '#F9A825',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  openTabBtnText: {
+    color: '#1A1A2E',
+    fontWeight: '700',
+    fontSize: 12,
   },
   warningText: {
     color: '#F9A825',

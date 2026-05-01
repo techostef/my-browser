@@ -119,6 +119,129 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
 </html>`;
 }
 
+function buildHlsPlayerHtml(videoUrl: string): string {
+  const escapedUrl = videoUrl.replace(/'/g, "\\'");
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; background:#000; overflow:hidden; }
+    .wrapper {
+      width:100%; height:100%;
+      display:flex; align-items:center; justify-content:center;
+    }
+    video {
+      max-width:100%; max-height:100%;
+      background:#000;
+    }
+    .error {
+      color:#fff; text-align:center; padding:24px; font-family:sans-serif;
+    }
+    .error h2 { margin-bottom:8px; color:#ff6b6b; }
+    .error p { color:#999; font-size:14px; word-break:break-all; }
+    .debug {
+      position:fixed; bottom:0; left:0; right:0;
+      background:rgba(0,0,0,0.85); color:#0f0; font-size:11px;
+      font-family:monospace; padding:8px; max-height:30vh;
+      overflow-y:auto; z-index:999;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+  <div class="wrapper">
+    <video id="player" controls autoplay playsinline></video>
+  </div>
+  <div id="debugLog" class="debug"></div>
+  <script>
+    var debugEl = document.getElementById('debugLog');
+    function log(msg) {
+      var ts = new Date().toISOString().substr(11, 12);
+      var line = ts + ' ' + msg;
+      debugEl.innerHTML += line + '<br>';
+      debugEl.scrollTop = debugEl.scrollHeight;
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
+    }
+
+    var videoUrl = '${escapedUrl}';
+    log('[INIT] HLS URL: ' + videoUrl.substring(0, 200));
+
+    var v = document.getElementById('player');
+
+    v.addEventListener('loadedmetadata', function() {
+      log('[EVENT] loadedmetadata — duration=' + v.duration + ' ' + v.videoWidth + 'x' + v.videoHeight);
+    });
+    v.addEventListener('loadeddata', function() {
+      log('[EVENT] loadeddata — readyState=' + v.readyState);
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOADED'}));
+    });
+    v.addEventListener('canplay', function() { log('[EVENT] canplay'); });
+    v.addEventListener('playing', function() { log('[EVENT] playing'); });
+    v.addEventListener('waiting', function() { log('[EVENT] waiting'); });
+    v.addEventListener('error', function() {
+      var code = v.error ? v.error.code : 'N/A';
+      var msg = v.error ? v.error.message : 'Unknown';
+      log('[ERROR] code=' + code + ' msg=' + msg);
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: msg, code: code}));
+    });
+
+    if (Hls.isSupported()) {
+      log('[HLS.js] Supported — attaching');
+      var hls = new Hls({
+        debug: false,
+        enableWorker: true,
+        lowLatencyMode: false,
+      });
+      hls.loadSource(videoUrl);
+      hls.attachMedia(v);
+      hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+        log('[HLS.js] Manifest parsed — ' + data.levels.length + ' quality level(s)');
+        v.play().catch(function(e) { log('[HLS.js] Autoplay blocked: ' + e.message); });
+      });
+      hls.on(Hls.Events.ERROR, function(event, data) {
+        log('[HLS.js ERROR] type=' + data.type + ' details=' + data.details + ' fatal=' + data.fatal);
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              log('[HLS.js] Network error — trying to recover');
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              log('[HLS.js] Media error — trying to recover');
+              hls.recoverMediaError();
+              break;
+            default:
+              log('[HLS.js] Fatal error — cannot recover');
+              hls.destroy();
+              window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: 'HLS fatal: ' + data.details}));
+              document.querySelector('.wrapper').innerHTML =
+                '<div class="error"><h2>Unable to play HLS stream</h2>'
+                + '<p>' + data.details + '</p>'
+                + '<p style="margin-top:12px;font-size:12px;color:#666">URL: ' + videoUrl.substring(0, 120) + '...</p></div>';
+              break;
+          }
+        }
+      });
+    } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+      log('[HLS] Native HLS support — setting src directly');
+      v.src = videoUrl;
+      v.addEventListener('loadedmetadata', function() {
+        v.play().catch(function(e) { log('[HLS] Autoplay blocked: ' + e.message); });
+      });
+    } else {
+      log('[HLS] Not supported in this environment');
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: 'HLS not supported'}));
+      document.querySelector('.wrapper').innerHTML =
+        '<div class="error"><h2>HLS Not Supported</h2><p>This browser does not support HLS playback.</p></div>';
+    }
+  </script>
+</body>
+</html>`;
+}
+
 export default function VideoPreviewModal({
   visible,
   video,
@@ -169,7 +292,9 @@ export default function VideoPreviewModal({
     pageUrl: video.pageUrl,
   });
 
-  const html = buildPlayerHtml(video.url, video.type);
+  const html = video.type === 'hls'
+    ? buildHlsPlayerHtml(video.url)
+    : buildPlayerHtml(video.url, video.type);
 
   return (
     <Modal
