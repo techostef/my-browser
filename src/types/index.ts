@@ -3,6 +3,7 @@ export interface BrowserTab {
   url: string;
   lastVisitedUrl: string;
   title: string;
+  hidden?: boolean;
 }
 
 export interface DetectedVideo {

@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet } from "react-native";
 import { WebView, WebViewNavigation } from "react-native-webview";
+import { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 
 import { VIDEO_DETECTOR_JS } from "../services/videoDetector";
 
@@ -10,9 +11,10 @@ interface Props {
   handleMessage: (event: any) => void;
   handleNavigationStateChange: (navState: WebViewNavigation) => void;
   handleLoadStart: () => void;
+  handleShouldStartLoadWithRequest?: (request: ShouldStartLoadRequest) => boolean;
 }
 
-const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateChange, handleLoadStart }: Props) =>{
+const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateChange, handleLoadStart, handleShouldStartLoadWithRequest }: Props) =>{
   console.log('Render Component Browser:', currentUrl);
   return (
     <WebView
@@ -23,6 +25,7 @@ const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateC
       onMessage={handleMessage}
       onNavigationStateChange={handleNavigationStateChange}
       onLoadStart={handleLoadStart}
+      onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
       // onLoadEnd={() => setLoading(false)}
       javaScriptEnabled
       domStorageEnabled

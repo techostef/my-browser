@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
+import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AddressBar from '../components/AddressBar';
@@ -13,7 +14,7 @@ import { DetectedVideo } from '../types';
 import Browser from '@/components/Browser';
 
 export default function BrowserScreen() {
-  const { tabs, activeTabId, activeTab, isReady, addTab, removeTab, setActiveTab, updateTab } = useTabs();
+  const { tabs, activeTabId, activeTab, isReady, addTab, removeTab, setActiveTab, updateTab, setTabHidden } = useTabs();
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
@@ -31,7 +32,69 @@ export default function BrowserScreen() {
 
   // Keyed by blobUrl so multiple blob downloads from different tabs can run simultaneously.
   const blobChunksMap = useRef<Map<string, string[]>>(new Map());
-  const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number }>>(new Map());
+  const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number; tabId: string }>>(new Map());
+
+  const tabHasActiveExtraction = useCallback((tabId: string) => {
+    for (const info of activeBlobMap.current.values()) {
+      if (info.tabId === tabId) return true;
+    }
+    return false;
+  }, []);
+
+  // Browser is memoized with `() => true`, so the WebView's onMessage and
+  // onShouldStartLoadWithRequest closures are frozen at first mount. Read
+  // latest state through refs so callbacks can stay stable while still seeing
+  // current `hidden` flags and tab URLs.
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
+  // Stable interceptor for in-page link clicks. When extraction is active on
+  // a tab, top-frame navigations away from its current URL are cancelled and
+  // re-opened in a new tab — this preserves the page that owns the blob.
+  const handleShouldStartLoadWithRequest = useCallback(
+    (tabId: string) => (request: ShouldStartLoadRequest) => {
+      if (!request.isTopFrame) return true;
+      if (!tabHasActiveExtraction(tabId)) return true;
+      const tab = tabsRef.current.find(t => t.id === tabId);
+      if (!tab) return true;
+      // Allow same-document loads (initial load, reloads, hash changes) so the
+      // current page can keep running its extraction script.
+      if (request.url === tab.url || request.url === tab.lastVisitedUrl) return true;
+      // Top-frame nav away from the extracting page → park the tab in the
+      // background and open the new URL in a fresh visible tab.
+      setTabHidden(tabId, true);
+      addTab(request.url);
+      return false;
+    },
+    [tabHasActiveExtraction, setTabHidden, addTab],
+  );
+
+  const finalizeExtractionForTab = useCallback(
+    (tabId: string) => {
+      if (tabHasActiveExtraction(tabId)) return;
+      const tab = tabsRef.current.find(t => t.id === tabId);
+      if (tab?.hidden) {
+        // Hidden background-extraction tab: extraction is done, drop it.
+        removeTab(tabId);
+        delete webViewRefs.current[tabId];
+        delete canGoBackMap.current[tabId];
+        delete canGoForwardMap.current[tabId];
+        setDetectedVideosMap(prev => {
+          const next = { ...prev };
+          delete next[tabId];
+          return next;
+        });
+        setBannerDismissedMap(prev => {
+          const next = { ...prev };
+          delete next[tabId];
+          return next;
+        });
+      }
+    },
+    [removeTab, tabHasActiveExtraction],
+  );
 
   useEffect(() => {
     isMounted.current = true;
@@ -47,10 +110,18 @@ export default function BrowserScreen() {
   const [previewVideo, setPreviewVideo] = useState<DetectedVideo | null>(null);
 
   const handleNavigate = useCallback((url: string) => {
+    if (tabHasActiveExtraction(activeTabId)) {
+      // Park the extracting tab in the background so its WebView and
+      // __extractBlobVideo script keep running, then open the new URL in a
+      // fresh tab. The hidden tab self-removes when extraction completes.
+      setTabHidden(activeTabId, true);
+      addTab(url);
+      return;
+    }
     updateTab(activeTabId, { url, lastVisitedUrl: url });
     setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
     setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: false }));
-  }, [activeTabId, updateTab]);
+  }, [activeTabId, updateTab, tabHasActiveExtraction, setTabHidden, addTab]);
 
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
     canGoBackMap.current[tabId] = navState.canGoBack;
@@ -84,22 +155,23 @@ export default function BrowserScreen() {
             const filtered = existing.filter(
               v => !(v.type === 'blob' && upgradedUrls.has(v.url)),
             );
-            console.log(`[BrowserScreen] Adding ${incoming.length} video(s) to tab ${tabId} (upgraded: ${upgradedUrls.size})`);
+            // console.log(`[BrowserScreen] Adding ${incoming.length} video(s) to tab ${tabId} (upgraded: ${upgradedUrls.size})`);
             return { ...prev, [tabId]: [...filtered, ...incoming] };
           });
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
           break;
         }
         case 'DETECTOR_LOG':
-          console.log(`[VideoDetector][tab:${tabId}] ${message.payload}`);
+          // console.log(`[VideoDetector][tab:${tabId}] ${message.payload}`);
           break;
         case 'PAGE_INFO':
-          console.log(`[BrowserScreen] PAGE_INFO: ${message.payload?.title}`);
+          // console.log(`[BrowserScreen] PAGE_INFO: ${message.payload?.title}`);
           break;
         case 'BLOB_BUFFERING': {
           const { blobUrl, bytesBuffered } = message.payload;
           const info = activeBlobMap.current.get(blobUrl);
           if (info) {
+            console.log(`[BrowserScreen] BLOB_BUFFERING: url=${blobUrl} bytes=${bytesBuffered}/${info.totalSize}`);
             updateBlobProgress(info.downloadId, bytesBuffered, info.totalSize);
           }
           break;
@@ -138,21 +210,42 @@ export default function BrowserScreen() {
           if (info && chunks.length > 0) {
             completeBlobDownload(info.downloadId, info.pageTitle, chunks.join(''));
           }
+          if (info) {
+            webViewRefs.current[info.tabId]?.injectJavaScript(
+              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
+            );
+            finalizeExtractionForTab(info.tabId);
+          }
           break;
         }
         case 'BLOB_DATA_ERROR': {
           const { blobUrl } = message.payload;
           console.error(`[BrowserScreen] BLOB_DATA_ERROR:`, message.payload);
+          const info = activeBlobMap.current.get(blobUrl);
           blobChunksMap.current.delete(blobUrl);
           activeBlobMap.current.delete(blobUrl);
           Alert.alert('Download Error', message.payload?.error || 'Failed to extract blob video data.');
+          if (info) {
+            webViewRefs.current[info.tabId]?.injectJavaScript(
+              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
+            );
+            finalizeExtractionForTab(info.tabId);
+          }
+          break;
+        }
+        case 'EXTRACTION_LINK_CLICK': {
+          const { href } = message.payload;
+          console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
+          // Park the extracting tab in the background, open link in a new tab.
+          setTabHidden(tabId, true);
+          addTab(href);
           break;
         }
       }
     } catch (err) {
       // Ignore non-JSON messages from websites
     }
-  }, [updateBlobProgress, completeBlobDownload]);
+  }, [updateBlobProgress, completeBlobDownload, finalizeExtractionForTab, setTabHidden, addTab]);
 
   const handleDownload = useCallback(
     (video: DetectedVideo) => {
@@ -177,10 +270,13 @@ export default function BrowserScreen() {
           downloadId,
           pageTitle: video.pageTitle,
           totalSize,
+          tabId: activeTabId,
         });
         const escUrl = video.url.replace(/'/g, "\\'");
+        // Bump the in-page guard counter so the click interceptor is armed
+        // before extraction starts. Decremented when extraction ends.
         webView.injectJavaScript(
-          `window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
+          `window.__extractionGuardCount = (window.__extractionGuardCount||0) + 1; window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
         );
         Alert.alert('Download queued', 'Video is buffering. Track progress in the Downloads tab.');
         return;
@@ -277,6 +373,7 @@ export default function BrowserScreen() {
                 handleMessage={handleMessage(tab.id)}
                 handleNavigationStateChange={handleNavigationStateChange(tab.id)}
                 handleLoadStart={handleLoadStart(tab.id)}
+                handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
               />
             </View>
           ))}

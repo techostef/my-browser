@@ -13,8 +13,101 @@ export const VIDEO_DETECTOR_JS = `
   const SCAN_INTERVAL_MS = 3000;
   const detectedUrls = new Set();
 
+  // ---- Extraction guard (SPA click interceptor + visibility shield) ----
+  // RN bumps __extractionGuardCount when a blob download starts and decrements
+  // when it ends. While it's > 0:
+  //   1. In-page anchor clicks that would navigate the top frame are
+  //      intercepted in the capture phase, so the page's own click handlers
+  //      (e.g. Twitter's pushState routing) never run and the video element
+  //      stays mounted.
+  //   2. document.hidden / visibilityState are forced to "visible" and
+  //      visibilitychange events are swallowed. Without this, when the tab
+  //      gets parked in the background after a click, Android WebView fires
+  //      Page Visibility, the page pauses video playback, MSE buffering
+  //      stops, and the extraction's waitForReady poll spins forever at the
+  //      same byte count.
+  window.__extractionGuardCount = window.__extractionGuardCount || 0;
+  try {
+    var __origHiddenDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+    var __origVisStateDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: function() {
+        if ((window.__extractionGuardCount || 0) > 0) return false;
+        return __origHiddenDesc && __origHiddenDesc.get
+          ? __origHiddenDesc.get.call(document) : false;
+      }
+    });
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: function() {
+        if ((window.__extractionGuardCount || 0) > 0) return 'visible';
+        return __origVisStateDesc && __origVisStateDesc.get
+          ? __origVisStateDesc.get.call(document) : 'visible';
+      }
+    });
+    document.addEventListener('visibilitychange', function(e) {
+      if ((window.__extractionGuardCount || 0) > 0) {
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        e.stopPropagation();
+      }
+    }, true);
+  } catch (err) {}
+  try {
+    document.addEventListener('click', function(e) {
+      if ((window.__extractionGuardCount || 0) <= 0) return;
+      var el = e.target;
+      while (el && el.nodeType === 1) {
+        if (el.tagName === 'A' && el.href) break;
+        el = el.parentElement;
+      }
+      if (!el || !el.href) return;
+      var href = el.href;
+      try {
+        var linkUrl = new URL(href, location.href);
+        var curUrl = new URL(location.href);
+        if (linkUrl.href === curUrl.href) return;
+        if (linkUrl.origin === curUrl.origin &&
+            linkUrl.pathname === curUrl.pathname &&
+            linkUrl.search === curUrl.search) return; // hash-only
+      } catch (err) {}
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'EXTRACTION_LINK_CLICK',
+          payload: { href: href }
+        }));
+      } catch (err) {}
+    }, true);
+  } catch (err) {}
+
+  // Keep video elements playing while extraction is active. A paused video
+  // stops requesting MSE segments (Twitter's player pauses when out of view
+  // or after another video starts playing). Muting prevents audio-focus
+  // conflict with whatever's loading in the visible foreground tab.
+  setInterval(function() {
+    if ((window.__extractionGuardCount || 0) <= 0) return;
+    try {
+      var vids = document.querySelectorAll('video');
+      for (var i = 0; i < vids.length; i++) {
+        var v = vids[i];
+        try {
+          v.muted = true;
+          if (v.preload !== 'auto') v.preload = 'auto';
+          if (v.paused && v.readyState > 0) {
+            var p = v.play();
+            if (p && typeof p.catch === 'function') p.catch(function(){});
+          }
+        } catch (err2) {}
+      }
+    } catch (err) {}
+  }, 1000);
+  // ---------------------------------------------------------------------
+
   function log(msg) {
-    console.log('[VideoDetector] ' + msg);
+    // console.log('[VideoDetector] ' + msg);
     try {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({

@@ -23,13 +23,14 @@ export default function TabBar({
   onAddTab,
   onRemoveTab,
 }: Props) {
+  const visibleTabs = tabs.filter(t => !t.hidden);
   return (
     <View style={styles.container}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}>
-        {tabs.map(tab => {
+        {visibleTabs.map(tab => {
           const isActive = tab.id === activeTabId;
           return (
             <TouchableOpacity
@@ -43,7 +44,7 @@ export default function TabBar({
                 ellipsizeMode="tail">
                 {tab.title || 'New Tab'}
               </Text>
-              {tabs.length > 1 && (
+              {visibleTabs.length > 1 && (
                 <TouchableOpacity
                   style={styles.closeBtn}
                   onPress={() => onRemoveTab(tab.id)}

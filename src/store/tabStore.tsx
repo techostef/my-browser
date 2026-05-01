@@ -23,6 +23,7 @@ type TabAction =
   | { type: 'REMOVE_TAB'; payload: { id: string } }
   | { type: 'SET_ACTIVE_TAB'; payload: { id: string } }
   | { type: 'UPDATE_TAB'; payload: { id: string; url?: string; title?: string; lastVisitedUrl?: string } }
+  | { type: 'SET_HIDDEN'; payload: { id: string; hidden: boolean } }
   | { type: 'RESTORE'; payload: TabState };
 
 interface TabState {
@@ -50,14 +51,23 @@ function tabReducer(state: TabState, action: TabAction): TabState {
     }
     case 'REMOVE_TAB': {
       const { id } = action.payload;
-      if (state.tabs.length <= 1) return state; // Keep at least one tab
       const idx = state.tabs.findIndex(t => t.id === id);
-      const newTabs = state.tabs.filter(t => t.id !== id);
+      if (idx < 0) return state;
+      let newTabs = state.tabs.filter(t => t.id !== id);
+      // Always keep at least one visible tab — if removal would leave only
+      // hidden (background-extracting) tabs, append a fresh blank tab.
+      if (newTabs.filter(t => !t.hidden).length === 0) {
+        newTabs = [...newTabs, createTab()];
+      }
       let newActiveId = state.activeTabId;
       if (state.activeTabId === id) {
-        // Switch to the tab before the removed one, or the first tab
-        const newIdx = Math.min(idx, newTabs.length - 1);
-        newActiveId = newTabs[newIdx].id;
+        // Prefer the visible tab nearest the removed index.
+        const visible = newTabs.filter(t => !t.hidden);
+        const visibleIdx = Math.min(
+          state.tabs.slice(0, idx).filter(t => !t.hidden).length,
+          visible.length - 1,
+        );
+        newActiveId = visible[Math.max(0, visibleIdx)].id;
       }
       return { tabs: newTabs, activeTabId: newActiveId };
     }
@@ -69,6 +79,13 @@ function tabReducer(state: TabState, action: TabAction): TabState {
       return {
         ...state,
         tabs: state.tabs.map(t => (t.id === id ? { ...t, ...updates } : t)),
+      };
+    }
+    case 'SET_HIDDEN': {
+      const { id, hidden } = action.payload;
+      return {
+        ...state,
+        tabs: state.tabs.map(t => (t.id === id ? { ...t, hidden } : t)),
       };
     }
     default:
@@ -85,6 +102,7 @@ interface TabContextValue {
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: { url?: string; title?: string; lastVisitedUrl?: string }) => void;
+  setTabHidden: (id: string, hidden: boolean) => void;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
@@ -142,6 +160,10 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const setTabHidden = useCallback((id: string, hidden: boolean) => {
+    dispatch({ type: 'SET_HIDDEN', payload: { id, hidden } });
+  }, []);
+
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
 
   return (
@@ -155,6 +177,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         removeTab,
         setActiveTab,
         updateTab,
+        setTabHidden,
       }}>
       {children}
     </TabContext.Provider>
