@@ -14,15 +14,11 @@ import { DetectedVideo } from '../types';
 import Browser from '@/components/Browser';
 
 export default function BrowserScreen() {
-  const { tabs, activeTabId, activeTab, isReady, addTab, removeTab, setActiveTab, updateTab, setTabHidden } = useTabs();
+  const { tabs, activeTabId, activeTab, isReady, addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory } = useTabs();
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
   const isMounted = useRef(false);
-
-  // Per-tab navigation state
-  const canGoBackMap = useRef<Record<string, boolean>>({});
-  const canGoForwardMap = useRef<Record<string, boolean>>({});
 
   // Per-tab video detection state
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
@@ -33,6 +29,10 @@ export default function BrowserScreen() {
   // Keyed by blobUrl so multiple blob downloads from different tabs can run simultaneously.
   const blobChunksMap = useRef<Map<string, string[]>>(new Map());
   const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number; tabId: string }>>(new Map());
+
+  // Set to true before any programmatic navigation (back/forward/address-bar) so
+  // handleNavigationStateChange knows not to push the resulting URL to history again.
+  const isHistoryNavRef = useRef<Record<string, boolean>>({});
 
   const tabHasActiveExtraction = useCallback((tabId: string) => {
     for (const info of activeBlobMap.current.values()) {
@@ -79,8 +79,6 @@ export default function BrowserScreen() {
         // Hidden background-extraction tab: extraction is done, drop it.
         removeTab(tabId);
         delete webViewRefs.current[tabId];
-        delete canGoBackMap.current[tabId];
-        delete canGoForwardMap.current[tabId];
         setDetectedVideosMap(prev => {
           const next = { ...prev };
           delete next[tabId];
@@ -109,6 +107,12 @@ export default function BrowserScreen() {
   // Video preview modal state
   const [previewVideo, setPreviewVideo] = useState<DetectedVideo | null>(null);
 
+  // Inject a URL into the (memoized) WebView without causing a React re-render.
+  const injectNavigation = useCallback((tabId: string, url: string) => {
+    const esc = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    webViewRefs.current[tabId]?.injectJavaScript(`window.location.href='${esc}'; true;`);
+  }, []);
+
   const handleNavigate = useCallback((url: string) => {
     if (tabHasActiveExtraction(activeTabId)) {
       // Park the extracting tab in the background so its WebView and
@@ -118,18 +122,45 @@ export default function BrowserScreen() {
       addTab(url);
       return;
     }
-    updateTab(activeTabId, { url, lastVisitedUrl: url });
+    isHistoryNavRef.current[activeTabId] = true;
+    pushUrl(activeTabId, url);
     setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
     setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: false }));
-  }, [activeTabId, updateTab, tabHasActiveExtraction, setTabHidden, addTab]);
+    injectNavigation(activeTabId, url);
+  }, [activeTabId, pushUrl, tabHasActiveExtraction, setTabHidden, addTab, injectNavigation]);
+
+  const handleGoBack = useCallback((tabId: string) => {
+    const tab = tabsRef.current.find(t => t.id === tabId);
+    if (!tab || tab.historyIndex <= 0) return;
+    const prevUrl = tab.urlHistory[tab.historyIndex - 1];
+    isHistoryNavRef.current[tabId] = true;
+    navigateHistory(tabId, -1);
+    injectNavigation(tabId, prevUrl);
+  }, [navigateHistory, injectNavigation]);
+
+  const handleGoForward = useCallback((tabId: string) => {
+    const tab = tabsRef.current.find(t => t.id === tabId);
+    if (!tab || tab.historyIndex >= tab.urlHistory.length - 1) return;
+    const nextUrl = tab.urlHistory[tab.historyIndex + 1];
+    isHistoryNavRef.current[tabId] = true;
+    navigateHistory(tabId, 1);
+    injectNavigation(tabId, nextUrl);
+  }, [navigateHistory, injectNavigation]);
 
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
-    canGoBackMap.current[tabId] = navState.canGoBack;
-    canGoForwardMap.current[tabId] = navState.canGoForward;
-    if (navState.url) {
-      updateTab(tabId, { url: navState.url, lastVisitedUrl: navState.url, title: navState.title || undefined });
+    if (!navState.url) return;
+
+    if (isHistoryNavRef.current[tabId]) {
+      // Programmatic navigation (back/forward/address-bar) already updated the
+      // history stack — just sync the title and clear the flag.
+      isHistoryNavRef.current[tabId] = false;
+      if (navState.title) updateTab(tabId, { title: navState.title });
+      return;
     }
-  }, [updateTab]);
+
+    // User-initiated navigation (link click, SPA route, redirect) — push to history.
+    pushUrl(tabId, navState.url, navState.title || undefined);
+  }, [updateTab, pushUrl]);
 
   const handleMessage = useCallback((tabId: string) => (event: { nativeEvent: { data: string } }) => {
     try {
@@ -155,17 +186,14 @@ export default function BrowserScreen() {
             const filtered = existing.filter(
               v => !(v.type === 'blob' && upgradedUrls.has(v.url)),
             );
-            // console.log(`[BrowserScreen] Adding ${incoming.length} video(s) to tab ${tabId} (upgraded: ${upgradedUrls.size})`);
             return { ...prev, [tabId]: [...filtered, ...incoming] };
           });
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
           break;
         }
         case 'DETECTOR_LOG':
-          // console.log(`[VideoDetector][tab:${tabId}] ${message.payload}`);
           break;
         case 'PAGE_INFO':
-          // console.log(`[BrowserScreen] PAGE_INFO: ${message.payload?.title}`);
           break;
         case 'BLOB_BUFFERING': {
           const { blobUrl, bytesBuffered } = message.payload;
@@ -182,7 +210,7 @@ export default function BrowserScreen() {
           blobChunksMap.current.set(blobUrl, []);
           const info = activeBlobMap.current.get(blobUrl);
           if (info) {
-            info.totalSize = totalSize; // now we know the actual remuxed blob size
+            info.totalSize = totalSize;
             updateBlobProgress(info.downloadId, 0, totalSize);
           }
           break;
@@ -275,7 +303,7 @@ export default function BrowserScreen() {
         const escUrl = video.url.replace(/'/g, "\\'");
         // Bump the in-page guard counter so the click interceptor is armed
         // before extraction starts. Decremented when extraction ends.
-        webView.injectJavaScript(
+        webViewRefs.current[activeTabId]?.injectJavaScript(
           `window.__extractionGuardCount = (window.__extractionGuardCount||0) + 1; window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
         );
         Alert.alert('Download queued', 'Video is buffering. Track progress in the Downloads tab.');
@@ -301,10 +329,8 @@ export default function BrowserScreen() {
 
   const handleRemoveTab = useCallback((id: string) => {
     removeTab(id);
-    // Clean up per-tab state
     delete webViewRefs.current[id];
-    delete canGoBackMap.current[id];
-    delete canGoForwardMap.current[id];
+    delete isHistoryNavRef.current[id];
     setDetectedVideosMap(prev => {
       const next = { ...prev };
       delete next[id];
@@ -318,7 +344,7 @@ export default function BrowserScreen() {
   }, [removeTab]);
 
   if (!isMounted.current) {
-    return null
+    return null;
   }
 
   if (!isReady) {
@@ -347,11 +373,11 @@ export default function BrowserScreen() {
       <AddressBar
         initialUrl={activeTab.url}
         onNavigate={handleNavigate}
-        onGoBack={() => webViewRefs.current[activeTabId]?.goBack()}
-        onGoForward={() => webViewRefs.current[activeTabId]?.goForward()}
+        onGoBack={() => handleGoBack(activeTabId)}
+        onGoForward={() => handleGoForward(activeTabId)}
         onReload={() => webViewRefs.current[activeTabId]?.reload()}
-        canGoBack={canGoBackMap.current[activeTabId] || false}
-        canGoForward={canGoForwardMap.current[activeTabId] || false}
+        canGoBack={activeTab.historyIndex > 0}
+        canGoForward={activeTab.historyIndex < activeTab.urlHistory.length - 1}
         loading={false}
       />
 

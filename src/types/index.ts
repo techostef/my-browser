@@ -4,6 +4,8 @@ export interface BrowserTab {
   lastVisitedUrl: string;
   title: string;
   hidden?: boolean;
+  urlHistory: string[];
+  historyIndex: number;
 }
 
 export interface DetectedVideo {

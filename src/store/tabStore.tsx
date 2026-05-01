@@ -15,6 +15,8 @@ function createTab(url: string = DEFAULT_URL): BrowserTab {
     url,
     lastVisitedUrl: url,
     title: 'New Tab',
+    urlHistory: [url],
+    historyIndex: 0,
   };
 }
 
@@ -24,6 +26,8 @@ type TabAction =
   | { type: 'SET_ACTIVE_TAB'; payload: { id: string } }
   | { type: 'UPDATE_TAB'; payload: { id: string; url?: string; title?: string; lastVisitedUrl?: string } }
   | { type: 'SET_HIDDEN'; payload: { id: string; hidden: boolean } }
+  | { type: 'PUSH_URL'; payload: { id: string; url: string; title?: string } }
+  | { type: 'NAVIGATE_HISTORY'; payload: { id: string; direction: -1 | 1 } }
   | { type: 'RESTORE'; payload: TabState };
 
 interface TabState {
@@ -40,7 +44,13 @@ const initialState: TabState = {
 function tabReducer(state: TabState, action: TabAction): TabState {
   switch (action.type) {
     case 'RESTORE': {
-      return action.payload;
+      // Migrate tabs that were persisted before urlHistory was added
+      const tabs = action.payload.tabs.map(t => ({
+        ...t,
+        urlHistory: t.urlHistory ?? [t.url],
+        historyIndex: t.historyIndex ?? 0,
+      }));
+      return { ...action.payload, tabs };
     }
     case 'ADD_TAB': {
       const newTab = createTab(action.payload?.url);
@@ -54,14 +64,11 @@ function tabReducer(state: TabState, action: TabAction): TabState {
       const idx = state.tabs.findIndex(t => t.id === id);
       if (idx < 0) return state;
       let newTabs = state.tabs.filter(t => t.id !== id);
-      // Always keep at least one visible tab — if removal would leave only
-      // hidden (background-extracting) tabs, append a fresh blank tab.
       if (newTabs.filter(t => !t.hidden).length === 0) {
         newTabs = [...newTabs, createTab()];
       }
       let newActiveId = state.activeTabId;
       if (state.activeTabId === id) {
-        // Prefer the visible tab nearest the removed index.
         const visible = newTabs.filter(t => !t.hidden);
         const visibleIdx = Math.min(
           state.tabs.slice(0, idx).filter(t => !t.hidden).length,
@@ -88,6 +95,42 @@ function tabReducer(state: TabState, action: TabAction): TabState {
         tabs: state.tabs.map(t => (t.id === id ? { ...t, hidden } : t)),
       };
     }
+    case 'PUSH_URL': {
+      const { id, url, title } = action.payload;
+      return {
+        ...state,
+        tabs: state.tabs.map(t => {
+          if (t.id !== id) return t;
+          // Don't push if same as current position
+          if (t.urlHistory[t.historyIndex] === url) {
+            return title ? { ...t, title } : t;
+          }
+          // Truncate any forward history, then append
+          const newHistory = [...t.urlHistory.slice(0, t.historyIndex + 1), url];
+          return {
+            ...t,
+            url,
+            lastVisitedUrl: url,
+            title: title || t.title,
+            urlHistory: newHistory,
+            historyIndex: newHistory.length - 1,
+          };
+        }),
+      };
+    }
+    case 'NAVIGATE_HISTORY': {
+      const { id, direction } = action.payload;
+      return {
+        ...state,
+        tabs: state.tabs.map(t => {
+          if (t.id !== id) return t;
+          const newIndex = t.historyIndex + direction;
+          if (newIndex < 0 || newIndex >= t.urlHistory.length) return t;
+          const url = t.urlHistory[newIndex];
+          return { ...t, url, lastVisitedUrl: url, historyIndex: newIndex };
+        }),
+      };
+    }
     default:
       return state;
   }
@@ -103,6 +146,8 @@ interface TabContextValue {
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: { url?: string; title?: string; lastVisitedUrl?: string }) => void;
   setTabHidden: (id: string, hidden: boolean) => void;
+  pushUrl: (id: string, url: string, title?: string) => void;
+  navigateHistory: (id: string, direction: -1 | 1) => void;
 }
 
 const TabContext = createContext<TabContextValue | null>(null);
@@ -112,7 +157,6 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Restore tabs from storage on mount
   useEffect(() => {
     (async () => {
       try {
@@ -130,7 +174,6 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Persist tabs to storage on every state change (debounced)
   useEffect(() => {
     if (!isReady) return;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -164,6 +207,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_HIDDEN', payload: { id, hidden } });
   }, []);
 
+  const pushUrl = useCallback((id: string, url: string, title?: string) => {
+    dispatch({ type: 'PUSH_URL', payload: { id, url, title } });
+  }, []);
+
+  const navigateHistory = useCallback((id: string, direction: -1 | 1) => {
+    dispatch({ type: 'NAVIGATE_HISTORY', payload: { id, direction } });
+  }, []);
+
   const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
 
   return (
@@ -178,6 +229,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         setActiveTab,
         updateTab,
         setTabHidden,
+        pushUrl,
+        navigateHistory,
       }}>
       {children}
     </TabContext.Provider>
