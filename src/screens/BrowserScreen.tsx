@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState } from 'react-native';
+import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -162,14 +162,32 @@ export default function BrowserScreen() {
     injectNavigation(activeTabId, url);
   }, [activeTabId, pushUrl, tabHasActiveExtraction, setTabHidden, addTab, injectNavigation]);
 
-  const handleGoBack = useCallback((tabId: string) => {
+  const handleGoBack = useCallback((tabId: string): boolean => {
     const tab = tabsRef.current.find(t => t.id === tabId);
-    if (!tab || tab.historyIndex <= 0) return;
+    if (!tab || tab.historyIndex <= 0) return false;
     const prevUrl = tab.urlHistory[tab.historyIndex - 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, -1);
     injectNavigation(tabId, prevUrl);
+    return true;
   }, [navigateHistory, injectNavigation]);
+
+  // Hardware back: navigate browser history first, then fall back to default
+  // (which exits the app at the root). Without this, Android's back button
+  // immediately closes the app even when the active tab has prior pages.
+  const activeTabIdRef = useRef(activeTabId);
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        return handleGoBack(activeTabIdRef.current);
+      });
+      return () => sub.remove();
+    }, [handleGoBack]),
+  );
 
   const handleGoForward = useCallback((tabId: string) => {
     const tab = tabsRef.current.find(t => t.id === tabId);

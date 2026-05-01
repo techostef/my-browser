@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   tab: {
+    minWidth: 100,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#D0D0D0',
@@ -101,7 +102,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   closeBtn: {
-    marginLeft: 6,
+    marginLeft: 'auto',
     width: 18,
     height: 18,
     borderRadius: 9,
