@@ -22,6 +22,7 @@ export default function App() {
         <DownloadProvider>
           <NavigationContainer>
           <Tab.Navigator
+            detachInactiveScreens={false}
             screenOptions={{
               headerShown: false,
               tabBarActiveTintColor: '#4ECDC4',

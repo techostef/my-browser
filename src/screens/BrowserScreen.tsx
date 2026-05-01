@@ -1,8 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 import AddressBar from '../components/AddressBar';
 import TabBar from '../components/TabBar';
@@ -49,6 +50,38 @@ export default function BrowserScreen() {
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+
+  // Inject a video play() kick into every tab that currently has an active
+  // extraction. Called when the app returns from background (AppState) or when
+  // the Browser screen regains focus after the user visits the Downloads tab.
+  // The video keep-alive setInterval already runs in the page, but JavaScript
+  // is throttled/suspended when the WebView's view is detached or the app goes
+  // into the background — so the interval may miss ticks. This explicit kick fires
+  // from the RN side the moment JS can run again.
+  const kickExtractingTabs = useCallback(() => {
+    const KICK_JS = `(function(){try{var vs=document.querySelectorAll('video');for(var i=0;i<vs.length;i++){var v=vs[i];v.muted=true;if(v.paused&&v.readyState>0){var p=v.play();if(p&&typeof p.catch==='function')p.catch(function(){});}}}catch(e){}})();true;`;
+    const seen = new Set<string>();
+    for (const info of activeBlobMap.current.values()) {
+      if (seen.has(info.tabId)) continue;
+      seen.add(info.tabId);
+      webViewRefs.current[info.tabId]?.injectJavaScript(KICK_JS);
+    }
+  }, []);
+
+  // Kick when app returns from background (handles app minimize/restore).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') kickExtractingTabs();
+    });
+    return () => sub.remove();
+  }, [kickExtractingTabs]);
+
+  // Kick when Browser screen regains focus (handles Downloads tab switch).
+  useFocusEffect(
+    useCallback(() => {
+      kickExtractingTabs();
+    }, [kickExtractingTabs]),
+  );
 
   // Stable interceptor for in-page link clicks. When extraction is active on
   // a tab, top-frame navigations away from its current URL are cancelled and
