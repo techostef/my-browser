@@ -16,6 +16,7 @@ export interface DetectedVideo {
   timestamp: number;
   cookies?: string;
   blobSize?: number;
+  videoWidth?: string;
 }
 
 export type DownloadStatus =

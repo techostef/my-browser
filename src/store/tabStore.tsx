@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BrowserTab } from '../types';
 
@@ -78,58 +78,69 @@ function tabReducer(state: TabState, action: TabAction): TabState {
       }
       return { tabs: newTabs, activeTabId: newActiveId };
     }
-    case 'SET_ACTIVE_TAB': {
-      return { ...state, activeTabId: action.payload.id };
-    }
     case 'UPDATE_TAB': {
       const { id, ...updates } = action.payload;
-      return {
-        ...state,
-        tabs: state.tabs.map(t => (t.id === id ? { ...t, ...updates } : t)),
-      };
+      const idx = state.tabs.findIndex(t => t.id === id);
+      if (idx < 0) return state;
+      const current = state.tabs[idx];
+      // Bail out when nothing actually changes — avoids needless context updates.
+      const changed = (Object.keys(updates) as (keyof typeof updates)[]).some(
+        k => updates[k] !== undefined && current[k] !== updates[k],
+      );
+      if (!changed) return state;
+      const newTabs = state.tabs.slice();
+      newTabs[idx] = { ...current, ...updates };
+      return { ...state, tabs: newTabs };
     }
     case 'SET_HIDDEN': {
       const { id, hidden } = action.payload;
-      return {
-        ...state,
-        tabs: state.tabs.map(t => (t.id === id ? { ...t, hidden } : t)),
-      };
+      const idx = state.tabs.findIndex(t => t.id === id);
+      if (idx < 0 || state.tabs[idx].hidden === hidden) return state;
+      const newTabs = state.tabs.slice();
+      newTabs[idx] = { ...newTabs[idx], hidden };
+      return { ...state, tabs: newTabs };
     }
     case 'PUSH_URL': {
       const { id, url, title } = action.payload;
-      return {
-        ...state,
-        tabs: state.tabs.map(t => {
-          if (t.id !== id) return t;
-          // Don't push if same as current position
-          if (t.urlHistory[t.historyIndex] === url) {
-            return title ? { ...t, title } : t;
-          }
-          // Truncate any forward history, then append
-          const newHistory = [...t.urlHistory.slice(0, t.historyIndex + 1), url];
-          return {
-            ...t,
-            url,
-            lastVisitedUrl: url,
-            title: title || t.title,
-            urlHistory: newHistory,
-            historyIndex: newHistory.length - 1,
-          };
-        }),
+      const idx = state.tabs.findIndex(t => t.id === id);
+      if (idx < 0) return state;
+      const current = state.tabs[idx];
+      const sameUrl = current.urlHistory[current.historyIndex] === url;
+      if (sameUrl) {
+        // Nothing to push. Only update title if it actually differs.
+        if (!title || current.title === title) return state;
+        const newTabs = state.tabs.slice();
+        newTabs[idx] = { ...current, title };
+        return { ...state, tabs: newTabs };
+      }
+      // Truncate any forward history, then append.
+      const newHistory = [...current.urlHistory.slice(0, current.historyIndex + 1), url];
+      const newTabs = state.tabs.slice();
+      newTabs[idx] = {
+        ...current,
+        url,
+        lastVisitedUrl: url,
+        title: title || current.title,
+        urlHistory: newHistory,
+        historyIndex: newHistory.length - 1,
       };
+      return { ...state, tabs: newTabs };
     }
     case 'NAVIGATE_HISTORY': {
       const { id, direction } = action.payload;
-      return {
-        ...state,
-        tabs: state.tabs.map(t => {
-          if (t.id !== id) return t;
-          const newIndex = t.historyIndex + direction;
-          if (newIndex < 0 || newIndex >= t.urlHistory.length) return t;
-          const url = t.urlHistory[newIndex];
-          return { ...t, url, lastVisitedUrl: url, historyIndex: newIndex };
-        }),
-      };
+      const idx = state.tabs.findIndex(t => t.id === id);
+      if (idx < 0) return state;
+      const current = state.tabs[idx];
+      const newIndex = current.historyIndex + direction;
+      if (newIndex < 0 || newIndex >= current.urlHistory.length) return state;
+      const url = current.urlHistory[newIndex];
+      const newTabs = state.tabs.slice();
+      newTabs[idx] = { ...current, url, lastVisitedUrl: url, historyIndex: newIndex };
+      return { ...state, tabs: newTabs };
+    }
+    case 'SET_ACTIVE_TAB': {
+      if (state.activeTabId === action.payload.id) return state;
+      return { ...state, activeTabId: action.payload.id };
     }
     default:
       return state;
@@ -215,26 +226,41 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'NAVIGATE_HISTORY', payload: { id, direction } });
   }, []);
 
-  const activeTab = state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
-
-  return (
-    <TabContext.Provider
-      value={{
-        tabs: state.tabs,
-        activeTabId: state.activeTabId,
-        activeTab,
-        isReady,
-        addTab,
-        removeTab,
-        setActiveTab,
-        updateTab,
-        setTabHidden,
-        pushUrl,
-        navigateHistory,
-      }}>
-      {children}
-    </TabContext.Provider>
+  const activeTab = useMemo(
+    () => state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0],
+    [state.tabs, state.activeTabId],
   );
+
+  const value = useMemo<TabContextValue>(
+    () => ({
+      tabs: state.tabs,
+      activeTabId: state.activeTabId,
+      activeTab,
+      isReady,
+      addTab,
+      removeTab,
+      setActiveTab,
+      updateTab,
+      setTabHidden,
+      pushUrl,
+      navigateHistory,
+    }),
+    [
+      state.tabs,
+      state.activeTabId,
+      activeTab,
+      isReady,
+      addTab,
+      removeTab,
+      setActiveTab,
+      updateTab,
+      setTabHidden,
+      pushUrl,
+      navigateHistory,
+    ],
+  );
+
+  return <TabContext.Provider value={value}>{children}</TabContext.Provider>;
 }
 
 export function useTabs() {

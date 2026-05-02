@@ -16,10 +16,10 @@ import Browser from '@/components/Browser';
 
 export default function BrowserScreen() {
   const { tabs, activeTabId, activeTab, isReady, addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory } = useTabs();
+  const previousUrl = useRef('')
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
-  const isMounted = useRef(false);
 
   // Per-tab video detection state
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
@@ -127,13 +127,6 @@ export default function BrowserScreen() {
     [removeTab, tabHasActiveExtraction],
   );
 
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
   const activeDetectedVideos = detectedVideosMap[activeTabId] || [];
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
 
@@ -155,6 +148,12 @@ export default function BrowserScreen() {
       addTab(url);
       return;
     }
+    console.log("navState.url", url)
+    console.log("activeTab.url", activeTab.url)
+    const currentBase = getBaseUrl(url);
+    const previousBase = getBaseUrl(activeTab.url);
+    console.log("currentBase", currentBase)
+    console.log("previousBase", previousBase)
     isHistoryNavRef.current[activeTabId] = true;
     pushUrl(activeTabId, url);
     setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
@@ -198,7 +197,23 @@ export default function BrowserScreen() {
     injectNavigation(tabId, nextUrl);
   }, [navigateHistory, injectNavigation]);
 
+  const getBaseUrl = useCallback((url: string) => {
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}`; // ignore search + hash
+    } catch {
+      return url;
+    }
+  }, []);
+
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
+    // console.log("handleNavigationStateChange url", navState.url);
+    // console.log("handleNavigationStateChange activeTab", previousUrl.current);
+    // // const currentBase = getBaseUrl(navState.url);
+    // // const previousBase = getBaseUrl(previousUrl.current);
+    // // console.log("currentBase", currentBase)
+    // // console.log("previousBase", previousBase)
+    previousUrl.current = navState.url;
     if (!navState.url) return;
 
     if (isHistoryNavRef.current[tabId]) {
@@ -367,8 +382,16 @@ export default function BrowserScreen() {
   );
 
   const handleLoadStart = useCallback((tabId: string) => () => {
-    setDetectedVideosMap(prev => ({ ...prev, [tabId]: [] }));
-    setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
+    setDetectedVideosMap(prev => {
+      const existing = prev[tabId];
+      // Avoid re-renders when there's nothing to clear.
+      if (!existing || existing.length === 0) return prev;
+      return { ...prev, [tabId]: [] };
+    });
+    setBannerDismissedMap(prev => {
+      if (prev[tabId] === false || prev[tabId] === undefined) return prev;
+      return { ...prev, [tabId]: false };
+    });
   }, []);
 
   const handleRemoveTab = useCallback((id: string) => {
@@ -387,10 +410,6 @@ export default function BrowserScreen() {
     });
   }, [removeTab]);
 
-  if (!isMounted.current) {
-    return null;
-  }
-
   if (!isReady) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -401,6 +420,8 @@ export default function BrowserScreen() {
       </SafeAreaView>
     );
   }
+
+  console.log("Render Screen BrowserScreen")
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
