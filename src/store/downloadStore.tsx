@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useEffect,
   useRef,
+  useMemo,
 } from 'react';
 import { DownloadTask, DownloadAction, DetectedVideo } from '../types';
 import { downloadManager } from '../services/downloadManager';
@@ -85,7 +86,19 @@ function downloadReducer(
   }
 }
 
+interface DownloadActions {
+  startDownload: DownloadContextValue['startDownload'];
+  createBlobTask: DownloadContextValue['createBlobTask'];
+  updateBlobProgress: DownloadContextValue['updateBlobProgress'];
+  completeBlobDownload: DownloadContextValue['completeBlobDownload'];
+  pauseDownload: DownloadContextValue['pauseDownload'];
+  resumeDownload: DownloadContextValue['resumeDownload'];
+  cancelDownload: DownloadContextValue['cancelDownload'];
+  removeDownload: DownloadContextValue['removeDownload'];
+}
+
 const DownloadContext = createContext<DownloadContextValue | null>(null);
+const DownloadActionsContext = createContext<DownloadActions | null>(null);
 
 export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(downloadReducer, initialState);
@@ -141,15 +154,20 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     downloadManager.pauseDownload(id);
   }, []);
 
+  // Read from a ref so the callback stays stable — the actions context never
+  // has to invalidate when a download's state changes.
+  const downloadsRef = useRef(state.downloads);
+  downloadsRef.current = state.downloads;
+
   const resumeDownload = useCallback((id: string) => {
-    const task = state.downloads.find(d => d.id === id);
+    const task = downloadsRef.current.find(d => d.id === id);
     if (!task) {
       return;
     }
     downloadManager.resumeDownload(id).catch(err => {
       console.warn('Resume failed:', err);
     });
-  }, [state.downloads]);
+  }, []);
 
   const cancelDownload = useCallback((id: string) => {
     downloadManager.cancelDownload(id);
@@ -190,21 +208,38 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'REMOVE_DOWNLOAD', payload: { id } });
   }, []);
 
+  const actions = useMemo<DownloadActions>(
+    () => ({
+      startDownload,
+      createBlobTask,
+      updateBlobProgress,
+      completeBlobDownload,
+      pauseDownload,
+      resumeDownload,
+      cancelDownload,
+      removeDownload,
+    }),
+    [
+      startDownload,
+      createBlobTask,
+      updateBlobProgress,
+      completeBlobDownload,
+      pauseDownload,
+      resumeDownload,
+      cancelDownload,
+      removeDownload,
+    ],
+  );
+
+  const value = useMemo<DownloadContextValue>(
+    () => ({ ...state, ...actions }),
+    [state, actions],
+  );
+
   return (
-    <DownloadContext.Provider
-      value={{
-        ...state,
-        startDownload,
-        createBlobTask,
-        updateBlobProgress,
-        completeBlobDownload,
-        pauseDownload,
-        resumeDownload,
-        cancelDownload,
-        removeDownload,
-      }}>
-      {children}
-    </DownloadContext.Provider>
+    <DownloadActionsContext.Provider value={actions}>
+      <DownloadContext.Provider value={value}>{children}</DownloadContext.Provider>
+    </DownloadActionsContext.Provider>
   );
 }
 
@@ -212,6 +247,16 @@ export function useDownloads(): DownloadContextValue {
   const ctx = useContext(DownloadContext);
   if (!ctx) {
     throw new Error('useDownloads must be used within a DownloadProvider');
+  }
+  return ctx;
+}
+
+// Subscribe to only the stable action callbacks — consumers of this hook
+// will NOT re-render when download progress/state changes.
+export function useDownloadActions(): DownloadActions {
+  const ctx = useContext(DownloadActionsContext);
+  if (!ctx) {
+    throw new Error('useDownloadActions must be used within a DownloadProvider');
   }
   return ctx;
 }

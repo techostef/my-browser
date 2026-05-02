@@ -9,14 +9,27 @@ import AddressBar from '../components/AddressBar';
 import TabBar from '../components/TabBar';
 import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
-import { useDownloads } from '../store/downloadStore';
-import { useTabs } from '../store/tabStore';
+import { useDownloadActions } from '../store/downloadStore';
+import {
+  useActiveTab,
+  useActiveTabId,
+  useIsTabsReady,
+  useTabActions,
+  useTabList,
+} from '../store/tabStore';
 import { DetectedVideo } from '../types';
 import Browser from '@/components/Browser';
 
 export default function BrowserScreen() {
-  const { tabs, activeTabId, activeTab, isReady, addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory } = useTabs();
-  const previousUrl = useRef('')
+  // Subscribe ONLY to the narrow slices BrowserScreen itself needs. Heavy
+  // state (tabs array, activeTab fields, download progress) is read inside
+  // memoized child components below, so title updates and download-progress
+  // ticks no longer re-render this screen.
+  const isReady = useIsTabsReady();
+  const activeTabId = useActiveTabId();
+  const { addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory, getTabsSnapshot } = useTabActions();
+  const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
+  const previousUrl = useRef('');
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
@@ -24,8 +37,6 @@ export default function BrowserScreen() {
   // Per-tab video detection state
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
   const [bannerDismissedMap, setBannerDismissedMap] = useState<Record<string, boolean>>({});
-
-  const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloads();
 
   // Keyed by blobUrl so multiple blob downloads from different tabs can run simultaneously.
   const blobChunksMap = useRef<Map<string, string[]>>(new Map());
@@ -43,13 +54,9 @@ export default function BrowserScreen() {
   }, []);
 
   // Browser is memoized with `() => true`, so the WebView's onMessage and
-  // onShouldStartLoadWithRequest closures are frozen at first mount. Read
-  // latest state through refs so callbacks can stay stable while still seeing
-  // current `hidden` flags and tab URLs.
-  const tabsRef = useRef(tabs);
-  useEffect(() => {
-    tabsRef.current = tabs;
-  }, [tabs]);
+  // onShouldStartLoadWithRequest closures are frozen at first mount. We read
+  // the latest tabs through `getTabsSnapshot()` from the actions context so
+  // callbacks stay stable without subscribing to the tab list.
 
   // Inject a video play() kick into every tab that currently has an active
   // extraction. Called when the app returns from background (AppState) or when
@@ -90,7 +97,7 @@ export default function BrowserScreen() {
     (tabId: string) => (request: ShouldStartLoadRequest) => {
       if (!request.isTopFrame) return true;
       if (!tabHasActiveExtraction(tabId)) return true;
-      const tab = tabsRef.current.find(t => t.id === tabId);
+      const tab = getTabsSnapshot().find(t => t.id === tabId);
       if (!tab) return true;
       // Allow same-document loads (initial load, reloads, hash changes) so the
       // current page can keep running its extraction script.
@@ -101,13 +108,13 @@ export default function BrowserScreen() {
       addTab(request.url);
       return false;
     },
-    [tabHasActiveExtraction, setTabHidden, addTab],
+    [tabHasActiveExtraction, setTabHidden, addTab, getTabsSnapshot],
   );
 
   const finalizeExtractionForTab = useCallback(
     (tabId: string) => {
       if (tabHasActiveExtraction(tabId)) return;
-      const tab = tabsRef.current.find(t => t.id === tabId);
+      const tab = getTabsSnapshot().find(t => t.id === tabId);
       if (tab?.hidden) {
         // Hidden background-extraction tab: extraction is done, drop it.
         removeTab(tabId);
@@ -124,7 +131,7 @@ export default function BrowserScreen() {
         });
       }
     },
-    [removeTab, tabHasActiveExtraction],
+    [removeTab, tabHasActiveExtraction, getTabsSnapshot],
   );
 
   const activeDetectedVideos = detectedVideosMap[activeTabId] || [];
@@ -139,6 +146,15 @@ export default function BrowserScreen() {
     webViewRefs.current[tabId]?.injectJavaScript(`window.location.href='${esc}'; true;`);
   }, []);
 
+  const getBaseUrl = useCallback((url: string) => {
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}`; // ignore search + hash
+    } catch {
+      return url;
+    }
+  }, []);
+
   const handleNavigate = useCallback((url: string) => {
     if (tabHasActiveExtraction(activeTabId)) {
       // Park the extracting tab in the background so its WebView and
@@ -148,10 +164,11 @@ export default function BrowserScreen() {
       addTab(url);
       return;
     }
-    console.log("navState.url", url)
-    console.log("activeTab.url", activeTab.url)
+    const active = getTabsSnapshot().find(t => t.id === activeTabId);
     const currentBase = getBaseUrl(url);
-    const previousBase = getBaseUrl(activeTab.url);
+    const previousBase = active ? getBaseUrl(active.url) : '';
+    console.log("navState.url", url)
+    console.log("activeTab.url", active?.url)
     console.log("currentBase", currentBase)
     console.log("previousBase", previousBase)
     isHistoryNavRef.current[activeTabId] = true;
@@ -159,17 +176,17 @@ export default function BrowserScreen() {
     setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
     setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: false }));
     injectNavigation(activeTabId, url);
-  }, [activeTabId, pushUrl, tabHasActiveExtraction, setTabHidden, addTab, injectNavigation]);
+  }, [activeTabId, pushUrl, tabHasActiveExtraction, setTabHidden, addTab, injectNavigation, getTabsSnapshot, getBaseUrl]);
 
   const handleGoBack = useCallback((tabId: string): boolean => {
-    const tab = tabsRef.current.find(t => t.id === tabId);
+    const tab = getTabsSnapshot().find(t => t.id === tabId);
     if (!tab || tab.historyIndex <= 0) return false;
     const prevUrl = tab.urlHistory[tab.historyIndex - 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, -1);
     injectNavigation(tabId, prevUrl);
     return true;
-  }, [navigateHistory, injectNavigation]);
+  }, [navigateHistory, injectNavigation, getTabsSnapshot]);
 
   // Hardware back: navigate browser history first, then fall back to default
   // (which exits the app at the root). Without this, Android's back button
@@ -189,22 +206,13 @@ export default function BrowserScreen() {
   );
 
   const handleGoForward = useCallback((tabId: string) => {
-    const tab = tabsRef.current.find(t => t.id === tabId);
+    const tab = getTabsSnapshot().find(t => t.id === tabId);
     if (!tab || tab.historyIndex >= tab.urlHistory.length - 1) return;
     const nextUrl = tab.urlHistory[tab.historyIndex + 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, 1);
     injectNavigation(tabId, nextUrl);
-  }, [navigateHistory, injectNavigation]);
-
-  const getBaseUrl = useCallback((url: string) => {
-    try {
-      const u = new URL(url);
-      return `${u.origin}${u.pathname}`; // ignore search + hash
-    } catch {
-      return url;
-    }
-  }, []);
+  }, [navigateHistory, injectNavigation, getTabsSnapshot]);
 
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
     // console.log("handleNavigationStateChange url", navState.url);
@@ -394,6 +402,15 @@ export default function BrowserScreen() {
     });
   }, []);
 
+  // Stable wrappers so memoized children don't invalidate on every render.
+  const handleAddTab = useCallback(() => addTab(), [addTab]);
+  const handleGoBackActive = useCallback(() => { handleGoBack(activeTabId); }, [handleGoBack, activeTabId]);
+  const handleGoForwardActive = useCallback(() => { handleGoForward(activeTabId); }, [handleGoForward, activeTabId]);
+  const handleReloadActive = useCallback(() => { webViewRefs.current[activeTabId]?.reload(); }, [activeTabId]);
+  const setWebViewRef = useCallback((tabId: string, ref: WebView | null) => {
+    webViewRefs.current[tabId] = ref;
+  }, []);
+
   const handleRemoveTab = useCallback((id: string) => {
     removeTab(id);
     delete webViewRefs.current[id];
@@ -427,48 +444,27 @@ export default function BrowserScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8F8F8" />
 
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
+      <TabBarContainer
         onSwitchTab={setActiveTab}
-        onAddTab={() => addTab()}
+        onAddTab={handleAddTab}
         onRemoveTab={handleRemoveTab}
       />
 
-      <AddressBar
-        initialUrl={activeTab.url}
+      <AddressBarContainer
         onNavigate={handleNavigate}
-        onGoBack={() => handleGoBack(activeTabId)}
-        onGoForward={() => handleGoForward(activeTabId)}
-        onReload={() => webViewRefs.current[activeTabId]?.reload()}
-        canGoBack={activeTab.historyIndex > 0}
-        canGoForward={activeTab.historyIndex < activeTab.urlHistory.length - 1}
-        loading={false}
+        onGoBack={handleGoBackActive}
+        onGoForward={handleGoForwardActive}
+        onReload={handleReloadActive}
       />
 
       <View style={styles.webviewArea}>
-        <View style={styles.webviewContainer}>
-          {tabs.map(tab => (
-            <View
-              key={tab.id}
-              style={[
-                styles.webviewWrapper,
-                tab.id !== activeTabId && styles.hiddenTab,
-              ]}
-              pointerEvents={tab.id === activeTabId ? 'auto' : 'none'}>
-              <Browser
-                webViewRef={(ref: WebView | null) => {
-                  webViewRefs.current[tab.id] = ref;
-                }}
-                currentUrl={tab.url}
-                handleMessage={handleMessage(tab.id)}
-                handleNavigationStateChange={handleNavigationStateChange(tab.id)}
-                handleLoadStart={handleLoadStart(tab.id)}
-                handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
-              />
-            </View>
-          ))}
-        </View>
+        <WebViewList
+          setWebViewRef={setWebViewRef}
+          handleMessage={handleMessage}
+          handleNavigationStateChange={handleNavigationStateChange}
+          handleLoadStart={handleLoadStart}
+          handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+        />
 
         {!activeBannerDismissed && (
           <VideoDetectedBanner
@@ -515,3 +511,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+
+// ----------------------------------------------------------------------------
+// Child containers — each subscribes only to the state slice it actually needs
+// so title updates / tab-list mutations don't re-render the parent BrowserScreen.
+// ----------------------------------------------------------------------------
+
+interface TabBarContainerProps {
+  onSwitchTab: (id: string) => void;
+  onAddTab: () => void;
+  onRemoveTab: (id: string) => void;
+}
+
+function TabBarContainerInner({ onSwitchTab, onAddTab, onRemoveTab }: TabBarContainerProps) {
+  const tabs = useTabList();
+  const activeTabId = useActiveTabId();
+  return (
+    <TabBar
+      tabs={tabs}
+      activeTabId={activeTabId}
+      onSwitchTab={onSwitchTab}
+      onAddTab={onAddTab}
+      onRemoveTab={onRemoveTab}
+    />
+  );
+}
+const TabBarContainer = React.memo(TabBarContainerInner);
+
+interface AddressBarContainerProps {
+  onNavigate: (url: string) => void;
+  onGoBack: () => void;
+  onGoForward: () => void;
+  onReload: () => void;
+}
+
+function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload }: AddressBarContainerProps) {
+  const activeTab = useActiveTab();
+  return (
+    <AddressBar
+      initialUrl={activeTab.url}
+      onNavigate={onNavigate}
+      onGoBack={onGoBack}
+      onGoForward={onGoForward}
+      onReload={onReload}
+      canGoBack={activeTab.historyIndex > 0}
+      canGoForward={activeTab.historyIndex < activeTab.urlHistory.length - 1}
+      loading={false}
+    />
+  );
+}
+const AddressBarContainer = React.memo(AddressBarContainerInner);
+
+interface WebViewListProps {
+  setWebViewRef: (tabId: string, ref: WebView | null) => void;
+  handleMessage: (tabId: string) => (event: { nativeEvent: { data: string } }) => void;
+  handleNavigationStateChange: (tabId: string) => (navState: WebViewNavigation) => void;
+  handleLoadStart: (tabId: string) => () => void;
+  handleShouldStartLoadWithRequest: (tabId: string) => (request: ShouldStartLoadRequest) => boolean;
+}
+
+function WebViewListInner({
+  setWebViewRef,
+  handleMessage,
+  handleNavigationStateChange,
+  handleLoadStart,
+  handleShouldStartLoadWithRequest,
+}: WebViewListProps) {
+  const tabs = useTabList();
+  const activeTabId = useActiveTabId();
+  return (
+    <View style={styles.webviewContainer}>
+      {tabs.map(tab => (
+        <View
+          key={tab.id}
+          style={[
+            styles.webviewWrapper,
+            tab.id !== activeTabId && styles.hiddenTab,
+          ]}
+          pointerEvents={tab.id === activeTabId ? 'auto' : 'none'}>
+          <Browser
+            webViewRef={(ref: WebView | null) => setWebViewRef(tab.id, ref)}
+            currentUrl={tab.url}
+            handleMessage={handleMessage(tab.id)}
+            handleNavigationStateChange={handleNavigationStateChange(tab.id)}
+            handleLoadStart={handleLoadStart(tab.id)}
+            handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+const WebViewList = React.memo(WebViewListInner);

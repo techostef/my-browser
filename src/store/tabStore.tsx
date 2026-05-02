@@ -147,11 +147,7 @@ function tabReducer(state: TabState, action: TabAction): TabState {
   }
 }
 
-interface TabContextValue {
-  tabs: BrowserTab[];
-  activeTabId: string;
-  activeTab: BrowserTab;
-  isReady: boolean;
+interface TabActions {
   addTab: (url?: string) => void;
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
@@ -159,8 +155,25 @@ interface TabContextValue {
   setTabHidden: (id: string, hidden: boolean) => void;
   pushUrl: (id: string, url: string, title?: string) => void;
   navigateHistory: (id: string, direction: -1 | 1) => void;
+  getTabsSnapshot: () => BrowserTab[];
 }
 
+interface TabContextValue extends TabActions {
+  tabs: BrowserTab[];
+  activeTabId: string;
+  activeTab: BrowserTab;
+  isReady: boolean;
+}
+
+// Split contexts so consumers can subscribe to only the slice they need.
+// Components that only consume actions won't re-render when tabs change,
+// and components that only read `activeTabId` won't re-render on title updates.
+const TabListContext = createContext<BrowserTab[] | null>(null);
+const ActiveTabIdContext = createContext<string>('');
+const IsReadyContext = createContext<boolean>(false);
+const TabActionsContext = createContext<TabActions | null>(null);
+
+// Legacy aggregate context kept for backwards compatibility with existing callers.
 const TabContext = createContext<TabContextValue | null>(null);
 
 export function TabProvider({ children }: { children: React.ReactNode }) {
@@ -231,40 +244,82 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     [state.tabs, state.activeTabId],
   );
 
-  const value = useMemo<TabContextValue>(
+  // Snapshot accessor so callbacks can read latest tabs without subscribing.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const getTabsSnapshot = useCallback(() => stateRef.current.tabs, []);
+
+  // Actions are stable for the lifetime of the provider — consumers of this
+  // context never re-render from state updates.
+  const actions = useMemo<TabActions>(
     () => ({
+      addTab,
+      removeTab,
+      setActiveTab,
+      updateTab,
+      setTabHidden,
+      pushUrl,
+      navigateHistory,
+      getTabsSnapshot,
+    }),
+    [addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory, getTabsSnapshot],
+  );
+
+  const legacyValue = useMemo<TabContextValue>(
+    () => ({
+      ...actions,
       tabs: state.tabs,
       activeTabId: state.activeTabId,
       activeTab,
       isReady,
-      addTab,
-      removeTab,
-      setActiveTab,
-      updateTab,
-      setTabHidden,
-      pushUrl,
-      navigateHistory,
     }),
-    [
-      state.tabs,
-      state.activeTabId,
-      activeTab,
-      isReady,
-      addTab,
-      removeTab,
-      setActiveTab,
-      updateTab,
-      setTabHidden,
-      pushUrl,
-      navigateHistory,
-    ],
+    [actions, state.tabs, state.activeTabId, activeTab, isReady],
   );
 
-  return <TabContext.Provider value={value}>{children}</TabContext.Provider>;
+  return (
+    <TabActionsContext.Provider value={actions}>
+      <IsReadyContext.Provider value={isReady}>
+        <TabListContext.Provider value={state.tabs}>
+          <ActiveTabIdContext.Provider value={state.activeTabId}>
+            <TabContext.Provider value={legacyValue}>{children}</TabContext.Provider>
+          </ActiveTabIdContext.Provider>
+        </TabListContext.Provider>
+      </IsReadyContext.Provider>
+    </TabActionsContext.Provider>
+  );
 }
 
 export function useTabs() {
   const ctx = useContext(TabContext);
   if (!ctx) throw new Error('useTabs must be used within a TabProvider');
   return ctx;
+}
+
+export function useTabActions(): TabActions {
+  const ctx = useContext(TabActionsContext);
+  if (!ctx) throw new Error('useTabActions must be used within a TabProvider');
+  return ctx;
+}
+
+export function useTabList(): BrowserTab[] {
+  const ctx = useContext(TabListContext);
+  if (!ctx) throw new Error('useTabList must be used within a TabProvider');
+  return ctx;
+}
+
+export function useActiveTabId(): string {
+  return useContext(ActiveTabIdContext);
+}
+
+export function useIsTabsReady(): boolean {
+  return useContext(IsReadyContext);
+}
+
+export function useActiveTab(): BrowserTab {
+  const tabs = useTabList();
+  const activeTabId = useActiveTabId();
+  return useMemo(
+    () => tabs.find(t => t.id === activeTabId) || tabs[0],
+    [tabs, activeTabId],
+  );
 }
