@@ -27,6 +27,7 @@ type TabAction =
   | { type: 'UPDATE_TAB'; payload: { id: string; url?: string; title?: string; lastVisitedUrl?: string } }
   | { type: 'SET_HIDDEN'; payload: { id: string; hidden: boolean } }
   | { type: 'PUSH_URL'; payload: { id: string; url: string; title?: string } }
+  | { type: 'REPLACE_URL'; payload: { id: string; url: string; title?: string } }
   | { type: 'NAVIGATE_HISTORY'; payload: { id: string; direction: -1 | 1 } }
   | { type: 'RESTORE'; payload: TabState };
 
@@ -126,6 +127,29 @@ function tabReducer(state: TabState, action: TabAction): TabState {
       };
       return { ...state, tabs: newTabs };
     }
+    case 'REPLACE_URL': {
+      // Overwrite the URL at the current history position without growing the
+      // stack. Used when the page only changed query params / fragment so
+      // back-navigation can skip these transient URLs.
+      const { id, url, title } = action.payload;
+      const idx = state.tabs.findIndex(t => t.id === id);
+      if (idx < 0) return state;
+      const current = state.tabs[idx];
+      const sameUrl = current.urlHistory[current.historyIndex] === url;
+      const sameTitle = !title || current.title === title;
+      if (sameUrl && sameTitle) return state;
+      const newHistory = current.urlHistory.slice();
+      newHistory[current.historyIndex] = url;
+      const newTabs = state.tabs.slice();
+      newTabs[idx] = {
+        ...current,
+        url,
+        lastVisitedUrl: url,
+        title: title || current.title,
+        urlHistory: newHistory,
+      };
+      return { ...state, tabs: newTabs };
+    }
     case 'NAVIGATE_HISTORY': {
       const { id, direction } = action.payload;
       const idx = state.tabs.findIndex(t => t.id === id);
@@ -154,6 +178,7 @@ interface TabActions {
   updateTab: (id: string, updates: { url?: string; title?: string; lastVisitedUrl?: string }) => void;
   setTabHidden: (id: string, hidden: boolean) => void;
   pushUrl: (id: string, url: string, title?: string) => void;
+  replaceUrl: (id: string, url: string, title?: string) => void;
   navigateHistory: (id: string, direction: -1 | 1) => void;
   getTabsSnapshot: () => BrowserTab[];
 }
@@ -235,6 +260,10 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'PUSH_URL', payload: { id, url, title } });
   }, []);
 
+  const replaceUrl = useCallback((id: string, url: string, title?: string) => {
+    dispatch({ type: 'REPLACE_URL', payload: { id, url, title } });
+  }, []);
+
   const navigateHistory = useCallback((id: string, direction: -1 | 1) => {
     dispatch({ type: 'NAVIGATE_HISTORY', payload: { id, direction } });
   }, []);
@@ -259,10 +288,11 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       updateTab,
       setTabHidden,
       pushUrl,
+      replaceUrl,
       navigateHistory,
       getTabsSnapshot,
     }),
-    [addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory, getTabsSnapshot],
+    [addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot],
   );
 
   const legacyValue = useMemo<TabContextValue>(

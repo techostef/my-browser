@@ -27,7 +27,7 @@ export default function BrowserScreen() {
   // ticks no longer re-render this screen.
   const isReady = useIsTabsReady();
   const activeTabId = useActiveTabId();
-  const { addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, navigateHistory, getTabsSnapshot } = useTabActions();
+  const { addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
   const previousUrl = useRef('');
 
@@ -215,13 +215,6 @@ export default function BrowserScreen() {
   }, [navigateHistory, injectNavigation, getTabsSnapshot]);
 
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
-    // console.log("handleNavigationStateChange url", navState.url);
-    // console.log("handleNavigationStateChange activeTab", previousUrl.current);
-    // // const currentBase = getBaseUrl(navState.url);
-    // // const previousBase = getBaseUrl(previousUrl.current);
-    // // console.log("currentBase", currentBase)
-    // // console.log("previousBase", previousBase)
-    previousUrl.current = navState.url;
     if (!navState.url) return;
 
     if (isHistoryNavRef.current[tabId]) {
@@ -229,12 +222,29 @@ export default function BrowserScreen() {
       // history stack — just sync the title and clear the flag.
       isHistoryNavRef.current[tabId] = false;
       if (navState.title) updateTab(tabId, { title: navState.title });
+      previousUrl.current = navState.url;
       return;
     }
 
-    // User-initiated navigation (link click, SPA route, redirect) — push to history.
-    pushUrl(tabId, navState.url, navState.title || undefined);
-  }, [updateTab, pushUrl]);
+    // Determine whether this navigation is a genuine page change or just a
+    // query/hash/case variation of the current page. Compare bases against the
+    // URL at the current history position (not the stale `previousUrl` ref)
+    // and normalize case so e.g. `/mediaViewer` and `/mediaviewer` collapse.
+    const tab = getTabsSnapshot().find(t => t.id === tabId);
+    const currentHistoryUrl = tab?.urlHistory[tab.historyIndex] ?? '';
+    const nextBase = getBaseUrl(navState.url).toLowerCase();
+    const currentBase = getBaseUrl(currentHistoryUrl).toLowerCase();
+
+    if (nextBase === currentBase) {
+      // Same page, only params/hash/case differ → overwrite in place so
+      // pressing back skips these transient URLs.
+      replaceUrl(tabId, navState.url, navState.title || undefined);
+    } else {
+      // New page → push to history.
+      pushUrl(tabId, navState.url, navState.title || undefined);
+    }
+    previousUrl.current = navState.url;
+  }, [updateTab, pushUrl, replaceUrl, getTabsSnapshot, getBaseUrl]);
 
   const handleMessage = useCallback((tabId: string) => (event: { nativeEvent: { data: string } }) => {
     try {
@@ -273,14 +283,14 @@ export default function BrowserScreen() {
           const { blobUrl, bytesBuffered } = message.payload;
           const info = activeBlobMap.current.get(blobUrl);
           if (info) {
-            console.log(`[BrowserScreen] BLOB_BUFFERING: url=${blobUrl} bytes=${bytesBuffered}/${info.totalSize}`);
+            // console.log(`[BrowserScreen] BLOB_BUFFERING: url=${blobUrl} bytes=${bytesBuffered}/${info.totalSize}`);
             updateBlobProgress(info.downloadId, bytesBuffered, info.totalSize);
           }
           break;
         }
         case 'BLOB_DATA_START': {
           const { blobUrl, totalSize } = message.payload;
-          console.log(`[BrowserScreen] BLOB_DATA_START: url=${blobUrl} size=${totalSize}`);
+          // console.log(`[BrowserScreen] BLOB_DATA_START: url=${blobUrl} size=${totalSize}`);
           blobChunksMap.current.set(blobUrl, []);
           const info = activeBlobMap.current.get(blobUrl);
           if (info) {
@@ -304,7 +314,7 @@ export default function BrowserScreen() {
         }
         case 'BLOB_DATA_END': {
           const { blobUrl, totalChunks } = message.payload;
-          console.log(`[BrowserScreen] BLOB_DATA_END: ${totalChunks} chunks for ${blobUrl}`);
+          // console.log(`[BrowserScreen] BLOB_DATA_END: ${totalChunks} chunks for ${blobUrl}`);
           const chunks = blobChunksMap.current.get(blobUrl) || [];
           const info = activeBlobMap.current.get(blobUrl);
           blobChunksMap.current.delete(blobUrl);
@@ -322,7 +332,7 @@ export default function BrowserScreen() {
         }
         case 'BLOB_DATA_ERROR': {
           const { blobUrl } = message.payload;
-          console.error(`[BrowserScreen] BLOB_DATA_ERROR:`, message.payload);
+          // console.error(`[BrowserScreen] BLOB_DATA_ERROR:`, message.payload);
           const info = activeBlobMap.current.get(blobUrl);
           blobChunksMap.current.delete(blobUrl);
           activeBlobMap.current.delete(blobUrl);
@@ -337,7 +347,7 @@ export default function BrowserScreen() {
         }
         case 'EXTRACTION_LINK_CLICK': {
           const { href } = message.payload;
-          console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
+          // console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
           // Park the extracting tab in the background, open link in a new tab.
           setTabHidden(tabId, true);
           addTab(href);
@@ -438,7 +448,6 @@ export default function BrowserScreen() {
     );
   }
 
-  console.log("Render Screen BrowserScreen")
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
