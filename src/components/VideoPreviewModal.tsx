@@ -22,6 +22,68 @@ interface Props {
 
 function buildPlayerHtml(videoUrl: string, videoType: string): string {
   const mimeType = videoType === 'webm' ? 'video/webm' : 'video/mp4';
+  const scriptLog = `
+<script>
+    var debugEl = document.getElementById('debugLog');
+    function log(msg) {
+      // DISABLED LOGGING
+      /*
+      var ts = new Date().toISOString().substr(11, 12);
+      var line = ts + ' ' + msg;
+      debugEl.innerHTML += line + '<br>';
+      debugEl.scrollTop = debugEl.scrollHeight;
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
+      */
+    }
+
+    log('[INIT] Video URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 200)}');
+    log('[INIT] MIME type: ${mimeType}');
+    log('[INIT] Page cookies available: ' + (document.cookie ? 'yes' : 'none'));
+
+    var v = document.getElementById('player');
+
+    v.addEventListener('loadstart', function() { log('[EVENT] loadstart'); });
+    v.addEventListener('loadedmetadata', function() {
+      log('[EVENT] loadedmetadata — duration=' + v.duration + ' videoWidth=' + v.videoWidth + 'x' + v.videoHeight);
+    });
+    v.addEventListener('loadeddata', function() {
+      log('[EVENT] loadeddata — readyState=' + v.readyState);
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOADED'}));
+    });
+    v.addEventListener('canplay', function() { log('[EVENT] canplay'); });
+    v.addEventListener('playing', function() { log('[EVENT] playing'); });
+    v.addEventListener('waiting', function() { log('[EVENT] waiting'); });
+    v.addEventListener('stalled', function() { log('[EVENT] stalled — network may be blocked'); });
+    v.addEventListener('suspend', function() { log('[EVENT] suspend'); });
+    v.addEventListener('abort', function() { log('[EVENT] abort'); });
+
+    v.addEventListener('error', function(e) {
+      var code = v.error ? v.error.code : 'N/A';
+      var msg = v.error ? v.error.message : 'Unknown error';
+      var codeNames = {1:'MEDIA_ERR_ABORTED',2:'MEDIA_ERR_NETWORK',3:'MEDIA_ERR_DECODE',4:'MEDIA_ERR_SRC_NOT_SUPPORTED'};
+      var codeName = codeNames[code] || 'UNKNOWN';
+      log('[ERROR] code=' + code + ' (' + codeName + ') msg=' + msg);
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: codeName + ': ' + msg, code: code}));
+      document.querySelector('.wrapper').innerHTML =
+        '<div class="error"><h2>Unable to play video</h2>'
+        + '<p>Error: ' + codeName + '</p>'
+        + '<p>' + msg + '</p>'
+        + '<p style="margin-top:12px;font-size:12px;color:#666">URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 120)}...</p></div>';
+    });
+
+    var src = v.querySelector('source');
+    if (src) {
+      src.addEventListener('error', function(e) {
+        log('[SOURCE ERROR] The <source> element failed to load');
+      });
+    }
+
+    // Also try fetch to check if URL is accessible
+    fetch('${videoUrl.replace(/'/g, "\\'")}', { method: 'HEAD', mode: 'no-cors' })
+      .then(function(r) { log('[FETCH HEAD] status=' + r.status + ' type=' + r.type); })
+      .catch(function(e) { log('[FETCH HEAD ERROR] ' + e.message); });
+  </script>  
+`
   return `
 <!DOCTYPE html>
 <html>
@@ -58,14 +120,18 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
     </video>
   </div>
   <div id="debugLog" class="debug"></div>
+  ${scriptLog}
   <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
+      // DISABLED LOGGING
+      /* 
       var ts = new Date().toISOString().substr(11, 12);
       var line = ts + ' ' + msg;
       debugEl.innerHTML += line + '<br>';
       debugEl.scrollTop = debugEl.scrollHeight;
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
+      */
     }
 
     log('[INIT] Video URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 200)}');
@@ -159,11 +225,14 @@ function buildHlsPlayerHtml(videoUrl: string): string {
   <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
+      // DISABLED LOGGING
+      /*
       var ts = new Date().toISOString().substr(11, 12);
       var line = ts + ' ' + msg;
       debugEl.innerHTML += line + '<br>';
       debugEl.scrollTop = debugEl.scrollHeight;
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
+      */
     }
 
     var videoUrl = '${escapedUrl}';
@@ -285,12 +354,6 @@ export default function VideoPreviewModal({
   }, [onClose]);
 
   if (!video) return null;
-
-  console.log(`${TAG} Rendering preview for video:`, {
-    url: video.url.substring(0, 150),
-    type: video.type,
-    pageUrl: video.pageUrl,
-  });
 
   const html = video.type === 'hls'
     ? buildHlsPlayerHtml(video.url)

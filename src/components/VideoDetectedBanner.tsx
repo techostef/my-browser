@@ -113,9 +113,10 @@ export default function VideoDetectedBanner({
   const isMounted = React.useRef(false);
 
   const downloadableTypes = ["blob-ready", "hls", "mp4", "webm"];
-  const [downloadableVideos, setDownloadableVideos] = React.useState<
+  const downloadableVideos = videos.filter((v) => downloadableTypes.includes(v.type));
+  const [filteredVideos, setFilteredVideos] = React.useState<
     DetectedVideo[]
-  >(videos.filter((v) => downloadableTypes.includes(v.type)));
+  >([]);
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
 
   const handleValidateVideos = async () => {
@@ -132,7 +133,7 @@ export default function VideoDetectedBanner({
       })
     );
 
-    setDownloadableVideos(results);
+    setFilteredVideos(results);
   };
 
   useEffect(() => {
@@ -166,7 +167,7 @@ export default function VideoDetectedBanner({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {downloadableVideos.length} video{downloadableVideos.length > 1 ? "s" : ""} detected
+          {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""} detected
         </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -200,9 +201,9 @@ export default function VideoDetectedBanner({
               </TouchableOpacity>
             </View>
 
-            {downloadableVideos.length > 0 ? (
+            {filteredVideos.length > 0 ? (
               <FlatList
-                data={downloadableVideos}
+                data={filteredVideos}
                 keyExtractor={(item, index) => `${item.url}-${index}`}
                 style={styles.list}
                 renderItem={({ item }) => (
