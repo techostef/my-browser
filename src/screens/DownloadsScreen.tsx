@@ -23,7 +23,9 @@ export default function DownloadsScreen() {
   const {
     downloads,
     folders,
+    deviceFolders,
     refreshDownloads,
+    scanDeviceDownloadFolder,
     pauseDownload,
     resumeDownload,
     cancelDownload,
@@ -35,8 +37,10 @@ export default function DownloadsScreen() {
     removeDownload,
   } = useDownloads();
 
+  const DEVICE_ROOT_PATH = '__device_download__';
+
   type DownloadGridItem =
-    | { type: 'folder'; path: string; name: string }
+    | { type: 'folder'; path: string; name: string; source: 'private' | 'device'; isDeviceRoot?: boolean }
     | { type: 'file'; task: DownloadTask };
 
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
@@ -47,6 +51,7 @@ export default function DownloadsScreen() {
   const [folderNameText, setFolderNameText] = useState('');
   const [currentFolderPath, setCurrentFolderPath] = useState('');
   const [moveTask, setMoveTask] = useState<DownloadTask | null>(null);
+  const [isScanningDevice, setIsScanningDevice] = useState(false);
 
   const getMediaType = useCallback((task: DownloadTask): DownloadMediaType => {
     const source = (task.fileName || task.filePath || task.url || '')
@@ -70,10 +75,32 @@ export default function DownloadsScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshDownloads().catch(err => {
-        console.warn('Failed to scan private folder on Downloads focus:', err);
+        console.warn('Failed to scan private downloads on Downloads focus:', err);
       });
     }, [refreshDownloads]),
   );
+
+  const isDevicePath =
+    currentFolderPath === DEVICE_ROOT_PATH ||
+    currentFolderPath.startsWith(`${DEVICE_ROOT_PATH}/`);
+  const currentDeviceFolderPath =
+    currentFolderPath === DEVICE_ROOT_PATH
+      ? ''
+      : currentFolderPath.startsWith(`${DEVICE_ROOT_PATH}/`)
+        ? currentFolderPath.substring(DEVICE_ROOT_PATH.length + 1)
+        : '';
+
+  const openDeviceRoot = useCallback(() => {
+    setCurrentFolderPath(DEVICE_ROOT_PATH);
+    setIsScanningDevice(true);
+    scanDeviceDownloadFolder()
+      .catch(err => {
+        Alert.alert('Scan failed', err instanceof Error ? err.message : 'Unable to scan device download folder');
+      })
+      .finally(() => {
+        setIsScanningDevice(false);
+      });
+  }, [scanDeviceDownloadFolder]);
 
   const handleRename = useCallback((task: DownloadTask) => {
     if (!task.filePath) {
@@ -224,10 +251,35 @@ export default function DownloadsScreen() {
     ]);
   }, [handleDeleteFolder, openRenameFolder]);
 
+  const handleOpenFolder = useCallback((item: Extract<DownloadGridItem, { type: 'folder' }>) => {
+    if (item.isDeviceRoot) {
+      openDeviceRoot();
+      return;
+    }
+    setCurrentFolderPath(item.path);
+  }, [openDeviceRoot]);
+
   const handleBackFolder = useCallback(() => {
     if (!currentFolderPath) {
       return;
     }
+
+    if (currentFolderPath === DEVICE_ROOT_PATH) {
+      setCurrentFolderPath('');
+      return;
+    }
+
+    if (currentFolderPath.startsWith(`${DEVICE_ROOT_PATH}/`)) {
+      const relative = currentFolderPath.substring(DEVICE_ROOT_PATH.length + 1);
+      const slashIndex = relative.lastIndexOf('/');
+      setCurrentFolderPath(
+        slashIndex >= 0
+          ? `${DEVICE_ROOT_PATH}/${relative.substring(0, slashIndex)}`
+          : DEVICE_ROOT_PATH,
+      );
+      return;
+    }
+
     const slashIndex = currentFolderPath.lastIndexOf('/');
     setCurrentFolderPath(slashIndex >= 0 ? currentFolderPath.substring(0, slashIndex) : '');
   }, [currentFolderPath]);
@@ -260,23 +312,69 @@ export default function DownloadsScreen() {
 
   const previewType = previewTask ? getMediaType(previewTask) : 'other';
 
-  const visibleFolders = folders
-    .filter(folderPath => {
-      const slashIndex = folderPath.lastIndexOf('/');
-      const parentPath = slashIndex >= 0 ? folderPath.substring(0, slashIndex) : '';
-      return parentPath === currentFolderPath;
-    })
-    .map(folderPath => ({
-      type: 'folder' as const,
-      path: folderPath,
-      name: folderPath.split('/').pop() || folderPath,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const visiblePrivateFolders = !isDevicePath
+    ? folders
+        .filter(folderPath => {
+          const slashIndex = folderPath.lastIndexOf('/');
+          const parentPath = slashIndex >= 0 ? folderPath.substring(0, slashIndex) : '';
+          return parentPath === currentFolderPath;
+        })
+        .map(folderPath => ({
+          type: 'folder' as const,
+          path: folderPath,
+          name: folderPath.split('/').pop() || folderPath,
+          source: 'private' as const,
+        }))
+    : [];
+
+  const visibleDeviceFolders = isDevicePath
+    ? deviceFolders
+        .filter(folderPath => {
+          const slashIndex = folderPath.lastIndexOf('/');
+          const parentPath = slashIndex >= 0 ? folderPath.substring(0, slashIndex) : '';
+          return parentPath === currentDeviceFolderPath;
+        })
+        .map(folderPath => ({
+          type: 'folder' as const,
+          path: `${DEVICE_ROOT_PATH}/${folderPath}`,
+          name: folderPath.split('/').pop() || folderPath,
+          source: 'device' as const,
+        }))
+    : [];
+
+  const visibleFolders: DownloadGridItem[] = [
+    ...visiblePrivateFolders,
+    ...(currentFolderPath === ''
+      ? [
+          {
+            type: 'folder' as const,
+            path: DEVICE_ROOT_PATH,
+            name: 'Device Download',
+            source: 'device' as const,
+            isDeviceRoot: true,
+          },
+        ]
+      : []),
+    ...visibleDeviceFolders,
+  ].sort((a, b) => (a.type === 'folder' && b.type === 'folder' ? a.name.localeCompare(b.name) : 0));
 
   const visibleDownloads = downloads.filter(task => {
     if (task.status !== 'completed') {
       return currentFolderPath === '';
     }
+
+    if (task.source === 'device') {
+      if (!isDevicePath) {
+        return false;
+      }
+      const fileFolder = task.folderPath || '';
+      return fileFolder === currentDeviceFolderPath;
+    }
+
+    if (isDevicePath) {
+      return false;
+    }
+
     const fileFolder = task.folderPath || '';
     return fileFolder === currentFolderPath;
   });
@@ -292,12 +390,14 @@ export default function DownloadsScreen() {
         <View>
           <Text style={styles.headerTitle}>Downloads</Text>
           <Text style={styles.headerSubtitle}>
-            {currentFolderPath ? currentFolderPath : 'Root'} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
+            {(currentFolderPath || 'Root').replace(DEVICE_ROOT_PATH, 'Device Download')} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
           </Text>
         </View>
-        <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
-          <Text style={styles.newFolderBtnText}>+ Folder</Text>
-        </TouchableOpacity>
+        {!isDevicePath ? (
+          <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
+            <Text style={styles.newFolderBtnText}>+ Folder</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {currentFolderPath ? (
@@ -312,10 +412,16 @@ export default function DownloadsScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📥</Text>
           <Text style={styles.emptyText}>
-            {currentFolderPath ? 'This folder is empty' : 'No downloads yet'}
+            {isScanningDevice
+              ? 'Scanning device folder...'
+              : currentFolderPath
+                ? 'This folder is empty'
+                : 'No downloads yet'}
           </Text>
           <Text style={styles.emptySubtext}>
-            {currentFolderPath
+            {isDevicePath
+              ? 'Tap Device Download from root to rescan and refresh files/folders'
+              : currentFolderPath
               ? 'Create a subfolder or move files here'
               : 'Browse a page with videos and tap the download button'}
           </Text>
@@ -331,14 +437,18 @@ export default function DownloadsScreen() {
             <View style={styles.gridItem}>
               {item.type === 'folder' ? (
                 <View style={styles.folderCard}>
-                  <TouchableOpacity style={styles.folderCardBody} onPress={() => setCurrentFolderPath(item.path)}>
+                  <TouchableOpacity style={styles.folderCardBody} onPress={() => handleOpenFolder(item)}>
                     <Text style={styles.folderIcon}>📁</Text>
                     <Text style={styles.folderName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.folderMeta} numberOfLines={1}>Tap to open</Text>
+                    <Text style={styles.folderMeta} numberOfLines={1}>
+                      {item.isDeviceRoot && isScanningDevice ? 'Scanning...' : 'Tap to open'}
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.folderMenuBtn} onPress={() => handleFolderAction(item.path)}>
-                    <Text style={styles.folderMenuText}>⋯</Text>
-                  </TouchableOpacity>
+                  {item.source === 'private' ? (
+                    <TouchableOpacity style={styles.folderMenuBtn} onPress={() => handleFolderAction(item.path)}>
+                      <Text style={styles.folderMenuText}>⋯</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ) : (
                 <DownloadItem

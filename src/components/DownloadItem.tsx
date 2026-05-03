@@ -60,6 +60,9 @@ export default function DownloadItem({
   const statusColor = getStatusColor(task.status);
   const isPlayableMedia =
     task.status === 'completed' && !!task.filePath && mediaType !== 'other';
+  const canManageCompletedFile =
+    task.source !== 'device' &&
+    (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled');
   const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
   const sizeBytes = task.totalBytes > 0 ? task.totalBytes : task.bytesDownloaded;
@@ -223,9 +226,7 @@ export default function DownloadItem({
                   <Text style={styles.actionBtnText}>✕ Cancel</Text>
                 </TouchableOpacity>
               )}
-              {(task.status === 'completed' ||
-                task.status === 'failed' ||
-                task.status === 'cancelled') && (
+              {canManageCompletedFile && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.moveBtn]}
                   onPress={() => {
@@ -235,9 +236,7 @@ export default function DownloadItem({
                   <Text style={styles.actionBtnText}>📁 Move</Text>
                 </TouchableOpacity>
               )}
-              {(task.status === 'completed' ||
-                task.status === 'failed' ||
-                task.status === 'cancelled') && (
+              {canManageCompletedFile && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.renameBtn]}
                   onPress={() => {
@@ -247,9 +246,7 @@ export default function DownloadItem({
                   <Text style={styles.actionBtnText}>✏ Rename</Text>
                 </TouchableOpacity>
               )}
-              {(task.status === 'completed' ||
-                task.status === 'failed' ||
-                task.status === 'cancelled') && (
+              {canManageCompletedFile && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.removeBtn]}
                   onPress={() => {

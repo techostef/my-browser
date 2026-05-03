@@ -13,6 +13,7 @@ import { downloadManager } from '../services/downloadManager';
 interface DownloadState {
   downloads: DownloadTask[];
   folders: string[];
+  deviceFolders: string[];
 }
 
 interface DownloadContextValue extends DownloadState {
@@ -33,11 +34,12 @@ interface DownloadContextValue extends DownloadState {
   createFolder: (folderName: string) => Promise<void>;
   renameFolder: (folderName: string, newFolderName: string) => Promise<void>;
   deleteFolder: (folderName: string, force?: boolean) => Promise<void>;
+  scanDeviceDownloadFolder: () => Promise<void>;
   moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<void>;
   removeDownload: (id: string) => void;
 }
 
-const initialState: DownloadState = { downloads: [], folders: [] };
+const initialState: DownloadState = { downloads: [], folders: [], deviceFolders: [] };
 
 function downloadReducer(
   state: DownloadState,
@@ -101,6 +103,12 @@ function downloadReducer(
         folders: action.payload.folders,
       };
 
+    case 'SET_DEVICE_FOLDERS':
+      return {
+        ...state,
+        deviceFolders: action.payload.folders,
+      };
+
     default:
       return state;
   }
@@ -119,6 +127,7 @@ interface DownloadActions {
   createFolder: DownloadContextValue['createFolder'];
   renameFolder: DownloadContextValue['renameFolder'];
   deleteFolder: DownloadContextValue['deleteFolder'];
+  scanDeviceDownloadFolder: DownloadContextValue['scanDeviceDownloadFolder'];
   moveDownloadToFolder: DownloadContextValue['moveDownloadToFolder'];
   removeDownload: DownloadContextValue['removeDownload'];
 }
@@ -137,13 +146,33 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const refreshDownloads = useCallback(async () => {
     try {
       const privateFiles = await downloadManager.listPrivateDownloads();
+      const scannedDeviceFiles = downloadsRef.current.filter(
+        d => d.status === 'completed' && d.source === 'device',
+      );
       const privateFolders = await downloadManager.listPrivateFolders();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
-      const merged = [...activeOrPending, ...privateFiles].sort((a, b) => b.createdAt - a.createdAt);
+      const merged = [...activeOrPending, ...privateFiles, ...scannedDeviceFiles].sort((a, b) => b.createdAt - a.createdAt);
       dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
       dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
     } catch (err) {
       console.warn('Failed to refresh downloads from private folder:', err);
+    }
+  }, []);
+
+  const scanDeviceDownloadFolder = useCallback(async () => {
+    try {
+      const privateFiles = await downloadManager.listPrivateDownloads();
+      const privateFolders = await downloadManager.listPrivateFolders();
+      const scannedDevice = await downloadManager.scanDeviceDownloadFolder();
+      const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
+      const merged = [...activeOrPending, ...privateFiles, ...scannedDevice.files].sort((a, b) => b.createdAt - a.createdAt);
+
+      dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
+      dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
+      dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: scannedDevice.folders } });
+    } catch (err) {
+      console.warn('Scan device download folder failed:', err);
+      throw err;
     }
   }, []);
 
@@ -223,7 +252,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const moveDownloadToFolder = useCallback(async (id: string, folderName?: string | null) => {
     const task = downloadsRef.current.find(d => d.id === id);
-    if (!task?.filePath || task.status !== 'completed') {
+    if (!task?.filePath || task.status !== 'completed' || task.source === 'device') {
       return;
     }
 
@@ -278,7 +307,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const renameDownload = useCallback(async (id: string, newFileName: string) => {
     const task = downloadsRef.current.find(d => d.id === id);
-    if (!task?.filePath) {
+    if (!task?.filePath || task.source === 'device') {
       return;
     }
     try {
@@ -322,7 +351,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const removeDownload = useCallback((id: string) => {
     const task = downloadsRef.current.find(d => d.id === id);
 
-    if (task?.status === 'completed' && task.filePath) {
+    if (task?.status === 'completed' && task.filePath && task.source !== 'device') {
       downloadManager.deletePrivateFile(task.filePath).catch(err => {
         console.warn('Delete private file failed:', err);
       });
@@ -347,6 +376,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       createFolder,
       renameFolder,
       deleteFolder,
+      scanDeviceDownloadFolder,
       moveDownloadToFolder,
       removeDownload,
     }),
@@ -363,6 +393,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       createFolder,
       renameFolder,
       deleteFolder,
+      scanDeviceDownloadFolder,
       moveDownloadToFolder,
       removeDownload,
     ],

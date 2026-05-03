@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 // @ts-ignore - mux.js ships its own runtime types separately
 import muxjs from 'mux.js';
 import { DownloadTask } from '../types';
@@ -21,6 +22,11 @@ interface ActiveTask {
   fileUri: string;
   bytesDownloaded: number;
   totalBytes: number;
+}
+
+interface DeviceFolderScanResult {
+  files: DownloadTask[];
+  folders: string[];
 }
 
 class DownloadManager {
@@ -116,6 +122,7 @@ class DownloadManager {
           url: entryPath,
           fileName: entry,
           filePath: entryPath,
+          source: 'private',
           folderPath,
           status: 'completed',
           progress: 100,
@@ -130,6 +137,88 @@ class DownloadManager {
     await walk(privateDir, '');
     files.sort((a, b) => b.createdAt - a.createdAt);
     return files;
+  }
+
+  async scanDeviceDownloadFolder(): Promise<DeviceFolderScanResult> {
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        throw new Error('Storage permission is required to read device downloads');
+      }
+
+      const scannedFiles: DownloadTask[] = [];
+
+      const albums = await MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true });
+      const downloadsAlbum = albums.find(album => /downloads?/i.test(album.title));
+      if (!downloadsAlbum) {
+        return { files: [], folders: [] };
+      }
+
+      let after: string | undefined;
+      while (true) {
+        const page = await MediaLibrary.getAssetsAsync({
+          album: downloadsAlbum,
+          first: 100,
+          after,
+          sortBy: [MediaLibrary.SortBy.creationTime],
+        });
+
+        for (const asset of page.assets) {
+          const createdAt = this.normalizeTimestamp(asset.creationTime);
+          const fileName = asset.filename || asset.uri.split('/').pop() || `device_${asset.id}`;
+
+          let filePath = asset.uri;
+          try {
+            const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+            if (info.localUri) {
+              filePath = info.localUri;
+            }
+          } catch {
+            filePath = asset.uri;
+          }
+
+          let sizeBytes = 0;
+          try {
+            const fileInfo = await FileSystem.getInfoAsync(filePath);
+            if (fileInfo.exists && typeof fileInfo.size === 'number') {
+              sizeBytes = fileInfo.size;
+            }
+          } catch {
+            sizeBytes = 0;
+          }
+
+          scannedFiles.push({
+            id: `device_${asset.id}`,
+            url: filePath,
+            fileName,
+            filePath,
+            source: 'device',
+            folderPath: '',
+            status: 'completed',
+            progress: 100,
+            bytesDownloaded: sizeBytes,
+            totalBytes: sizeBytes,
+            pageTitle: 'Device Download',
+            createdAt,
+          });
+        }
+
+        if (!page.hasNextPage || !page.endCursor) {
+          break;
+        }
+        after = page.endCursor;
+      }
+
+      scannedFiles.sort((a, b) => b.createdAt - a.createdAt);
+
+      return {
+        files: scannedFiles,
+        folders: [],
+      };
+    } catch (err) {
+      console.warn('Failed to scan device downloads from media library:', err);
+      return { files: [], folders: [] };
+    }
   }
 
   async listPrivateFolders(): Promise<string[]> {
