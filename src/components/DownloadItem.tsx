@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Modal } from 'react-native';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { DownloadTask } from '../types';
 
@@ -165,79 +165,90 @@ export default function DownloadItem({
 
         <TouchableOpacity
           style={styles.menuBtn}
-          onPress={() => setActionsVisible(v => !v)}>
+          onPress={() => setActionsVisible(true)}>
           <Text style={styles.menuBtnText}>⋯</Text>
         </TouchableOpacity>
       </View>
 
-      {actionsVisible && (
-        <View style={styles.actions}>
-          {isPlayableMedia && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.openBtn]}
-              onPress={() => {
-                onOpenMedia(task);
-                setActionsVisible(false);
-              }}>
-              <Text style={styles.actionBtnText}>▶ Open</Text>
-            </TouchableOpacity>
-          )}
-          {task.status === 'downloading' && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.pauseBtn]}
-              onPress={() => {
-                onPause(task.id);
-                setActionsVisible(false);
-              }}>
-              <Text style={styles.actionBtnText}>⏸ Pause</Text>
-            </TouchableOpacity>
-          )}
-          {task.status === 'paused' && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.resumeBtn]}
-              onPress={() => {
-                onResume(task.id);
-                setActionsVisible(false);
-              }}>
-              <Text style={styles.actionBtnText}>▶ Resume</Text>
-            </TouchableOpacity>
-          )}
-          {(task.status === 'downloading' || task.status === 'paused' || task.status === 'queued') && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.cancelBtn]}
-              onPress={() => {
-                onCancel(task.id);
-                setActionsVisible(false);
-              }}>
-              <Text style={styles.actionBtnText}>✕ Cancel</Text>
-            </TouchableOpacity>
-          )}
-          {(task.status === 'completed' ||
-            task.status === 'failed' ||
-            task.status === 'cancelled') && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.renameBtn]}
-              onPress={() => {
-                onRename(task);
-                setActionsVisible(false);
-              }}>
-              <Text style={styles.actionBtnText}>✏ Rename</Text>
-            </TouchableOpacity>
-          )}
-          {(task.status === 'completed' ||
-            task.status === 'failed' ||
-            task.status === 'cancelled') && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.removeBtn]}
-              onPress={() => {
-                onRemove(task.id);
-                setActionsVisible(false);
-              }}>
-              <Text style={styles.actionBtnText}>🗑 Delete</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      <Modal
+        visible={actionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionsVisible(false)}>
+        <TouchableOpacity
+          style={styles.dialogBackdrop}
+          activeOpacity={1}
+          onPress={() => setActionsVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.dialogCard} onPress={() => {}}>
+            <View style={styles.actions}>
+              {isPlayableMedia && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.openBtn]}
+                  onPress={() => {
+                    onOpenMedia(task);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>▶ Open</Text>
+                </TouchableOpacity>
+              )}
+              {task.status === 'downloading' && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.pauseBtn]}
+                  onPress={() => {
+                    onPause(task.id);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>⏸ Pause</Text>
+                </TouchableOpacity>
+              )}
+              {task.status === 'paused' && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.resumeBtn]}
+                  onPress={() => {
+                    onResume(task.id);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>▶ Resume</Text>
+                </TouchableOpacity>
+              )}
+              {(task.status === 'downloading' || task.status === 'paused' || task.status === 'queued') && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.cancelBtn]}
+                  onPress={() => {
+                    onCancel(task.id);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>✕ Cancel</Text>
+                </TouchableOpacity>
+              )}
+              {(task.status === 'completed' ||
+                task.status === 'failed' ||
+                task.status === 'cancelled') && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.renameBtn]}
+                  onPress={() => {
+                    onRename(task);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>✏ Rename</Text>
+                </TouchableOpacity>
+              )}
+              {(task.status === 'completed' ||
+                task.status === 'failed' ||
+                task.status === 'cancelled') && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.removeBtn]}
+                  onPress={() => {
+                    onRemove(task.id);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>🗑 Delete</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -352,16 +363,25 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
+    gap: 8,
+  },
+  dialogBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  dialogCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 12,
   },
   actionBtn: {
+    width: '100%',
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   actionBtnText: {
