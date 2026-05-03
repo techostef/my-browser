@@ -16,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Video, ResizeMode } from 'expo-av';
 
 import DownloadItem, { DownloadMediaType } from '../components/DownloadItem';
-import { DownloadTask } from '../types';
+import { DEVICE_DOWNLOAD_MOVE_TARGET, DownloadTask } from '../types';
 import { useDownloads } from '../store/downloadStore';
 
 export default function DownloadsScreen() {
@@ -304,7 +304,9 @@ export default function DownloadsScreen() {
       return;
     }
 
-    moveDownloadToFolder(moveTask.id, folderName)
+    const target = moveTask.source === 'private' ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
+
+    moveDownloadToFolder(moveTask.id, target)
       .catch(err => {
         const message = err instanceof Error ? err.message : 'Unable to move file';
         Alert.alert('Move error', message);
@@ -387,6 +389,8 @@ export default function DownloadsScreen() {
     ...visibleFolders,
     ...visibleDownloads.map(task => ({ type: 'file' as const, task })),
   ];
+
+  console.log("gridData", gridData)
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -556,16 +560,26 @@ export default function DownloadsScreen() {
         onRequestClose={closeMoveModal}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeMoveModal}>
           <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Move file to folder</Text>
+            <Text style={styles.modalTitle}>
+              {moveTask?.source === 'device' ? 'Move file to private folder' : 'Move file to device download'}
+            </Text>
             <View style={styles.moveOptions}>
-              <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(null)}>
-                <Text style={styles.moveOptionText}>Root</Text>
-              </TouchableOpacity>
-              {folders.map(folder => (
-                <TouchableOpacity key={folder} style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(folder)}>
-                  <Text style={styles.moveOptionText}>{folder}</Text>
+              {moveTask?.source === 'device' ? (
+                <>
+                  <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(null)}>
+                    <Text style={styles.moveOptionText}>Root</Text>
+                  </TouchableOpacity>
+                  {folders.map(folder => (
+                    <TouchableOpacity key={folder} style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(folder)}>
+                      <Text style={styles.moveOptionText}>{folder}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              ) : (
+                <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(DEVICE_DOWNLOAD_MOVE_TARGET)}>
+                  <Text style={styles.moveOptionText}>Device Download</Text>
                 </TouchableOpacity>
-              ))}
+              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>

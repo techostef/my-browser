@@ -60,6 +60,7 @@ export default function DownloadItem({
   const statusColor = getStatusColor(task.status);
   const isPlayableMedia =
     task.status === 'completed' && !!task.filePath && mediaType !== 'other';
+  const canMoveCompletedFile = task.status === 'completed' && !!task.filePath;
   const canManageCompletedFile =
     task.source !== 'device' &&
     (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled');
@@ -186,16 +187,6 @@ export default function DownloadItem({
           onPress={() => setActionsVisible(false)}>
           <TouchableOpacity activeOpacity={1} style={styles.dialogCard} onPress={() => {}}>
             <View style={styles.actions}>
-              {isPlayableMedia && (
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.openBtn]}
-                  onPress={() => {
-                    onOpenMedia(task);
-                    setActionsVisible(false);
-                  }}>
-                  <Text style={styles.actionBtnText}>▶ Open</Text>
-                </TouchableOpacity>
-              )}
               {task.status === 'downloading' && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.pauseBtn]}
@@ -226,14 +217,16 @@ export default function DownloadItem({
                   <Text style={styles.actionBtnText}>✕ Cancel</Text>
                 </TouchableOpacity>
               )}
-              {canManageCompletedFile && (
+              {canMoveCompletedFile && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.moveBtn]}
                   onPress={() => {
                     onMove?.(task);
                     setActionsVisible(false);
                   }}>
-                  <Text style={styles.actionBtnText}>📁 Move</Text>
+                  <Text style={styles.actionBtnText}>
+                    {task.source === 'device' ? '📁 Copy to Private' : '📁 Copy to Device Download'}
+                  </Text>
                 </TouchableOpacity>
               )}
               {canManageCompletedFile && (

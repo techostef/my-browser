@@ -8,7 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DownloadTask, DownloadAction, DetectedVideo } from '../types';
+import { DownloadTask, DownloadAction, DetectedVideo, DEVICE_DOWNLOAD_MOVE_TARGET } from '../types';
 import { downloadManager } from '../services/downloadManager';
 
 interface DownloadState {
@@ -334,18 +334,28 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const moveDownloadToFolder = useCallback(async (id: string, folderName?: string | null) => {
     const task = downloadsRef.current.find(d => d.id === id);
-    if (!task?.filePath || task.status !== 'completed' || task.source === 'device') {
+    if (!task?.filePath || task.status !== 'completed') {
       return;
     }
 
     try {
-      await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
-      await refreshDownloads();
+      if (task.source === 'device') {
+        await downloadManager.moveDeviceFileToPrivateFolder(task.filePath, task.id, folderName);
+      } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
+        await downloadManager.movePrivateFileToDeviceDownload(task.filePath);
+      } else {
+        await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+      }
+
+      await Promise.all([
+        refreshDownloads(),
+        scanDeviceDownloadFolder(),
+      ]);
     } catch (err) {
       console.warn('Move to folder failed:', err);
       throw err;
     }
-  }, [refreshDownloads]);
+  }, [refreshDownloads, scanDeviceDownloadFolder]);
 
   const startDownload = useCallback((video: DetectedVideo) => {
     const id = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;

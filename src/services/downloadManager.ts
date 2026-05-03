@@ -407,6 +407,66 @@ class DownloadManager {
     return targetPath;
   }
 
+  async moveDeviceFileToPrivateFolder(
+    filePath: string,
+    taskId: string,
+    folderPath?: string | null,
+  ): Promise<string> {
+    const privateDir = await this.ensurePrivateFolder();
+    const fileName = filePath.split('/').pop();
+    if (!fileName) {
+      throw new Error('Invalid file path');
+    }
+
+    let targetDir = privateDir;
+    if (folderPath && folderPath.trim()) {
+      const safeFolderPath = this.sanitizeFolderPath(folderPath);
+      if (!safeFolderPath) {
+        throw new Error('Folder name cannot be empty');
+      }
+      targetDir = `${privateDir}${safeFolderPath}/`;
+      await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
+    }
+
+    const targetPath = await this.getUniqueFilePath(`${targetDir}${fileName}`);
+    await FileSystem.copyAsync({ from: filePath, to: targetPath });
+
+    const assetId = taskId.startsWith('device_') ? taskId.substring('device_'.length) : '';
+    if (assetId) {
+      try {
+        await MediaLibrary.deleteAssetsAsync([assetId]);
+      } catch (err) {
+        console.warn('Unable to delete original device asset after move:', err);
+      }
+    }
+
+    return targetPath;
+  }
+
+  async movePrivateFileToDeviceDownload(filePath: string): Promise<void> {
+    const permission = await MediaLibrary.requestPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error('Storage permission is required to move file to device download folder');
+    }
+
+    const sourceInfo = await FileSystem.getInfoAsync(filePath);
+    if (!sourceInfo.exists || sourceInfo.isDirectory) {
+      throw new Error('Invalid file path');
+    }
+
+    const asset = await MediaLibrary.createAssetAsync(filePath);
+    const albumName = 'Download';
+    const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
+
+    if (existingAlbum) {
+      await MediaLibrary.addAssetsToAlbumAsync([asset], existingAlbum, false);
+    } else {
+      await MediaLibrary.createAlbumAsync(albumName, asset, false);
+    }
+
+    await FileSystem.deleteAsync(filePath, { idempotent: true });
+  }
+
   async deletePrivateFile(filePath: string): Promise<void> {
     await FileSystem.deleteAsync(filePath, { idempotent: true });
   }

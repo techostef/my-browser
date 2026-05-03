@@ -43,6 +43,8 @@ export interface DownloadTask {
   error?: string;
 }
 
+export const DEVICE_DOWNLOAD_MOVE_TARGET = '__target_device_download__';
+
 export type DownloadAction =
   | { type: 'SET_DOWNLOADS'; payload: { downloads: DownloadTask[] } }
   | { type: 'ADD_DOWNLOAD'; payload: DownloadTask }
