@@ -371,7 +371,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   menuBtn: {
-    width: 30,
+    paddingRight: 4,
+    width: 20,
     height: 30,
     borderRadius: 8,
     backgroundColor: '#F2F2F2',
@@ -383,6 +384,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#444',
     marginTop: -4,
+    transform: [{ rotate: '90deg' }],
   },
   actions: {
     gap: 8,
