@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -344,6 +344,20 @@ export default function DownloadsScreen() {
   }, [closeMoveInPrivateModal, moveDownloadToFolder, moveTaskInPrivate]);
 
   const previewType = previewTask ? getMediaType(previewTask) : 'other';
+  const privateFolderTreeOptions = useMemo<Array<{ path: string; name: string; depth: number }>>(
+    () => folders
+      .slice()
+      .sort((a, b) => a.localeCompare(b))
+      .map(path => {
+        const segments = path.split('/').filter(Boolean);
+        return {
+          path,
+          name: segments[segments.length - 1] || path,
+          depth: Math.max(segments.length - 1, 0),
+        };
+      }),
+    [folders],
+  );
 
   const visiblePrivateFolders = !isDevicePath
     ? folders
@@ -597,9 +611,13 @@ export default function DownloadsScreen() {
                   <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleCopyToFolder(null)}>
                     <Text style={styles.moveOptionText}>Root</Text>
                   </TouchableOpacity>
-                  {folders.map(folder => (
-                    <TouchableOpacity key={folder} style={styles.moveOptionBtn} onPress={() => handleCopyToFolder(folder)}>
-                      <Text style={styles.moveOptionText}>{folder}</Text>
+                  {privateFolderTreeOptions.map(folder => (
+                    <TouchableOpacity
+                      key={folder.path}
+                      style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
+                      onPress={() => handleCopyToFolder(folder.path)}>
+                      <View style={{ width: folder.depth * 16 }} />
+                      <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </>
@@ -625,9 +643,13 @@ export default function DownloadsScreen() {
               <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveInPrivateToFolder(null)}>
                 <Text style={styles.moveOptionText}>Root</Text>
               </TouchableOpacity>
-              {folders.map(folder => (
-                <TouchableOpacity key={`move_private_${folder}`} style={styles.moveOptionBtn} onPress={() => handleMoveInPrivateToFolder(folder)}>
-                  <Text style={styles.moveOptionText}>{folder}</Text>
+              {privateFolderTreeOptions.map(folder => (
+                <TouchableOpacity
+                  key={`move_private_${folder.path}`}
+                  style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
+                  onPress={() => handleMoveInPrivateToFolder(folder.path)}>
+                  <View style={{ width: folder.depth * 16 }} />
+                  <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -888,6 +910,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F2',
     paddingVertical: 10,
     paddingHorizontal: 12,
+  },
+  moveTreeOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   moveOptionText: {
     fontSize: 14,
