@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import {
+  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -115,6 +116,7 @@ export default function VideoDetectedBanner({
   const [downloadableVideos, setDownloadableVideos] = React.useState<
     DetectedVideo[]
   >(videos.filter((v) => downloadableTypes.includes(v.type)));
+  const [isDetailVisible, setIsDetailVisible] = React.useState(false);
 
   const handleValidateVideos = async () => {
     const results = await Promise.all(
@@ -150,59 +152,103 @@ export default function VideoDetectedBanner({
     return null;
   }
 
+  const handlePreviewFromDetail = (video: DetectedVideo) => {
+    setIsDetailVisible(false);
+    onPreview(video);
+  };
+
+  const handleOpenInTabFromDetail = (video: DetectedVideo) => {
+    setIsDetailVisible(false);
+    onOpenInTab(video);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {/* {videos.length} video{videos.length > 1 ? 's' : ''} detected */}
+          {downloadableVideos.length} video{downloadableVideos.length > 1 ? "s" : ""} detected
         </Text>
-        <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
-          <Text style={styles.closeBtnText}>✕</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => setIsDetailVisible(true)}
+            style={styles.detailsBtn}
+          >
+            <Text style={styles.detailsBtnText}>Details</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
+            <Text style={styles.closeBtnText}>✕</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+    
 
-      {downloadableVideos.length > 0 && (
-        <FlatList
-          data={downloadableVideos}
-          keyExtractor={(item, index) => `${item.url}-${index}`}
-          style={styles.list}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.videoRow}
-              activeOpacity={0.7}
-              onPress={() => onPreview(item)}
-            >
-              <View style={styles.videoInfo}>
-                <Text style={styles.videoType}>
-                  {item.type === "blob-ready"
-                    ? "BLOB"
-                    : item.type === "hls"
-                      ? "M3U8"
-                      : item.type.toUpperCase()}
-                </Text>
-                <Text style={styles.videoUrl} numberOfLines={1}>
-                  {item.type === "blob-ready"
-                    ? `${item.pageTitle || "Video"} (${formatSize(item.blobSize || 0)})`
-                    : item.type === "hls"
-                      ? `${item.pageTitle || "HLS Stream"}`
-                      : item.videoWidth}
-                </Text>
+      <Modal
+        visible={isDetailVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsDetailVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detected Videos</Text>
+              <TouchableOpacity
+                onPress={() => setIsDetailVisible(false)}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {downloadableVideos.length > 0 ? (
+              <FlatList
+                data={downloadableVideos}
+                keyExtractor={(item, index) => `${item.url}-${index}`}
+                style={styles.list}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.videoRow}
+                    activeOpacity={0.7}
+                    onPress={() => handlePreviewFromDetail(item)}
+                  >
+                    <View style={styles.videoInfo}>
+                      <Text style={styles.videoType}>
+                        {item.type === "blob-ready"
+                          ? "BLOB"
+                          : item.type === "hls"
+                            ? "M3U8"
+                            : item.type.toUpperCase()}
+                      </Text>
+                      <Text style={styles.videoUrl} numberOfLines={1}>
+                        {item.type === "blob-ready"
+                          ? `${item.pageTitle || "Video"} (${formatSize(item.blobSize || 0)})`
+                          : item.type === "hls"
+                            ? `${item.pageTitle || "HLS Stream"}`
+                            : item.videoWidth || item.pageTitle || "Video"}
+                      </Text>
+                    </View>
+                    {item.type === "hls" && (
+                      <TouchableOpacity
+                        style={styles.openTabBtn}
+                        onPress={() => handleOpenInTabFromDetail(item)}
+                      >
+                        <Text style={styles.openTabBtnText}>🔗 Tab</Text>
+                      </TouchableOpacity>
+                    )}
+                    <View style={styles.previewBtn}>
+                      <Text style={styles.previewBtnText}>▶ Preview</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No downloadable videos found</Text>
               </View>
-              {item.type === "hls" && (
-                <TouchableOpacity
-                  style={styles.openTabBtn}
-                  onPress={() => onOpenInTab(item)}
-                >
-                  <Text style={styles.openTabBtnText}>🔗 Tab</Text>
-                </TouchableOpacity>
-              )}
-              <View style={styles.previewBtn}>
-                <Text style={styles.previewBtnText}>▶ Preview</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
-      )}
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* {nonDownloadable.length > 0 && (
         <View style={styles.warningRow}>
@@ -227,8 +273,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1A2E",
     borderBottomWidth: 1,
     borderBottomColor: "#333",
-    paddingBottom: 4,
-    maxHeight: 220,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
@@ -247,6 +291,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  detailsBtn: {
+    backgroundColor: "rgba(78,205,196,0.2)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#4ECDC4",
+    marginRight: 8,
+  },
+  detailsBtnText: {
+    color: "#4ECDC4",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   closeBtn: {
     width: 28,
     height: 28,
@@ -259,8 +321,42 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 14,
   },
+  summaryText: {
+    color: "#AAA",
+    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  modalContent: {
+    backgroundColor: "#1A1A2E",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#333",
+    overflow: "hidden",
+    maxHeight: "75%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
+  },
+  modalTitle: {
+    color: "#4ECDC4",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   list: {
-    maxHeight: 140,
+    maxHeight: 420,
   },
   videoRow: {
     flexDirection: "row",
@@ -323,5 +419,14 @@ const styles = StyleSheet.create({
     color: "#F9A825",
     fontSize: 11,
     fontStyle: "italic",
+  },
+  emptyState: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  emptyStateText: {
+    color: "#AAA",
+    fontSize: 13,
   },
 });
