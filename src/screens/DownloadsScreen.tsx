@@ -139,19 +139,23 @@ export default function DownloadsScreen() {
       ) : (
         <FlatList
           data={downloads}
+          numColumns={2}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
+          columnWrapperStyle={styles.listRow}
           renderItem={({ item }) => (
-            <DownloadItem
-              task={item}
-              mediaType={getMediaType(item)}
-              onPause={pauseDownload}
-              onResume={resumeDownload}
-              onCancel={cancelDownload}
-              onOpenMedia={handleOpenMedia}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
+            <View style={styles.gridItem}>
+              <DownloadItem
+                task={item}
+                mediaType={getMediaType(item)}
+                onPause={pauseDownload}
+                onResume={resumeDownload}
+                onCancel={cancelDownload}
+                onOpenMedia={handleOpenMedia}
+                onRename={handleRename}
+                onRemove={handleRemove}
+              />
+            </View>
           )}
         />
       )}
@@ -248,6 +252,14 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  listRow: {
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    width: '48.5%',
+    marginBottom: 10,
   },
   emptyState: {
     flex: 1,

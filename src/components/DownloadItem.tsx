@@ -59,6 +59,8 @@ export default function DownloadItem({
   const isPlayableMedia =
     task.status === 'completed' && !!task.filePath && mediaType !== 'other';
   const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
+  const [actionsVisible, setActionsVisible] = useState(false);
+  const sizeBytes = task.totalBytes > 0 ? task.totalBytes : task.bytesDownloaded;
 
   useEffect(() => {
     let isMounted = true;
@@ -114,110 +116,137 @@ export default function DownloadItem({
         )}
       </TouchableOpacity>
 
-      <View style={styles.infoSection}>
-        <Text style={styles.fileName} numberOfLines={1}>
-          {task.fileName || task.url.split('/').pop() || 'video'}
-        </Text>
-        <Text style={styles.pageTitle} numberOfLines={1}>
-          {task.pageTitle}
-        </Text>
-
-        {/* Progress bar */}
-        {(task.status === 'downloading' || task.status === 'paused') && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBg}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${task.progress}%`,
-                    backgroundColor: statusColor,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {task.progress}% · {formatBytes(task.bytesDownloaded)}
-              {task.totalBytes > 0 ? ` / ${formatBytes(task.totalBytes)}` : ''}
-            </Text>
+      {(task.status === 'downloading' || task.status === 'paused') && (
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBg}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${task.progress}%`,
+                  backgroundColor: statusColor,
+                },
+              ]}
+            />
           </View>
+          <Text style={styles.progressText}>
+            {task.progress}% · {formatBytes(task.bytesDownloaded)}
+            {task.totalBytes > 0 ? ` / ${formatBytes(task.totalBytes)}` : ''}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.statusRow}>
+        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <Text style={styles.statusText}>
+            {task.status.toUpperCase()}
+          </Text>
+        </View>
+        {task.error ? (
+          <Text style={styles.errorText} numberOfLines={1}>
+            {task.error}
+          </Text>
+        ) : (
+          <Text style={styles.pageTitle} numberOfLines={1}>
+            {task.pageTitle}
+          </Text>
         )}
+      </View>
 
-        <View style={styles.statusRow}>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>
-              {task.status.toUpperCase()}
-            </Text>
-          </View>
-          {task.error && (
-            <Text style={styles.errorText} numberOfLines={1}>
-              {task.error}
-            </Text>
+      <View style={styles.bottomRow}>
+        <View style={styles.infoSection}>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {task.fileName || task.url.split('/').pop() || 'video'}
+          </Text>
+          <Text style={styles.fileSize} numberOfLines={1}>
+            {formatBytes(sizeBytes)}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.menuBtn}
+          onPress={() => setActionsVisible(v => !v)}>
+          <Text style={styles.menuBtnText}>⋯</Text>
+        </TouchableOpacity>
+      </View>
+
+      {actionsVisible && (
+        <View style={styles.actions}>
+          {isPlayableMedia && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.openBtn]}
+              onPress={() => {
+                onOpenMedia(task);
+                setActionsVisible(false);
+              }}>
+              <Text style={styles.actionBtnText}>▶ Open</Text>
+            </TouchableOpacity>
+          )}
+          {task.status === 'downloading' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.pauseBtn]}
+              onPress={() => {
+                onPause(task.id);
+                setActionsVisible(false);
+              }}>
+              <Text style={styles.actionBtnText}>⏸ Pause</Text>
+            </TouchableOpacity>
+          )}
+          {task.status === 'paused' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.resumeBtn]}
+              onPress={() => {
+                onResume(task.id);
+                setActionsVisible(false);
+              }}>
+              <Text style={styles.actionBtnText}>▶ Resume</Text>
+            </TouchableOpacity>
+          )}
+          {(task.status === 'downloading' || task.status === 'paused' || task.status === 'queued') && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.cancelBtn]}
+              onPress={() => {
+                onCancel(task.id);
+                setActionsVisible(false);
+              }}>
+              <Text style={styles.actionBtnText}>✕ Cancel</Text>
+            </TouchableOpacity>
+          )}
+          {(task.status === 'completed' ||
+            task.status === 'failed' ||
+            task.status === 'cancelled') && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.renameBtn]}
+              onPress={() => {
+                onRename(task);
+                setActionsVisible(false);
+              }}>
+              <Text style={styles.actionBtnText}>✏ Rename</Text>
+            </TouchableOpacity>
+          )}
+          {(task.status === 'completed' ||
+            task.status === 'failed' ||
+            task.status === 'cancelled') && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.removeBtn]}
+              onPress={() => {
+                onRemove(task.id);
+                setActionsVisible(false);
+              }}>
+              <Text style={styles.actionBtnText}>🗑 Delete</Text>
+            </TouchableOpacity>
           )}
         </View>
-      </View>
-
-      {/* Action buttons */}
-      <View style={styles.actions}>
-        {isPlayableMedia && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.openBtn]}
-            onPress={() => onOpenMedia(task)}>
-            <Text style={styles.actionBtnText}>▶️</Text>
-          </TouchableOpacity>
-        )}
-        {task.status === 'downloading' && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.pauseBtn]}
-            onPress={() => onPause(task.id)}>
-            <Text style={styles.actionBtnText}>⏸</Text>
-          </TouchableOpacity>
-        )}
-        {task.status === 'paused' && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.resumeBtn]}
-            onPress={() => onResume(task.id)}>
-            <Text style={styles.actionBtnText}>▶</Text>
-          </TouchableOpacity>
-        )}
-        {(task.status === 'downloading' || task.status === 'paused' || task.status === 'queued') && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.cancelBtn]}
-            onPress={() => onCancel(task.id)}>
-            <Text style={styles.actionBtnText}>✕</Text>
-          </TouchableOpacity>
-        )}
-        {(task.status === 'completed' ||
-          task.status === 'failed' ||
-          task.status === 'cancelled') && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.renameBtn]}
-            onPress={() => onRename(task)}>
-            <Text style={styles.actionBtnText}>✏️</Text>
-          </TouchableOpacity>
-        )}
-        {(task.status === 'completed' ||
-          task.status === 'failed' ||
-          task.status === 'cancelled') && (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.removeBtn]}
-            onPress={() => onRemove(task.id)}>
-            <Text style={styles.actionBtnText}>🗑</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
     backgroundColor: '#FFF',
     borderRadius: 12,
-    marginHorizontal: 12,
-    marginVertical: 6,
-    padding: 12,
+    padding: 10,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -225,11 +254,10 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   thumbnailWrap: {
-    width: 64,
-    height: 64,
+    width: '100%',
+    height: 120,
     borderRadius: 10,
     overflow: 'hidden',
-    marginRight: 10,
     backgroundColor: '#EFEFEF',
   },
   thumbnailImage: {
@@ -243,21 +271,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8ECF1',
   },
   thumbnailIcon: {
-    fontSize: 24,
-  },
-  infoSection: {
-    flex: 1,
-    marginRight: 8,
-  },
-  fileName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  pageTitle: {
-    fontSize: 11,
-    color: '#888',
-    marginTop: 2,
+    fontSize: 30,
   },
   progressContainer: {
     marginTop: 8,
@@ -280,7 +294,7 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -292,26 +306,68 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
   },
+  pageTitle: {
+    fontSize: 11,
+    color: '#888',
+    marginLeft: 8,
+    flex: 1,
+  },
   errorText: {
     color: '#E74C3C',
     fontSize: 10,
     marginLeft: 8,
     flex: 1,
   },
-  actions: {
-    justifyContent: 'center',
+  bottomRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
+  },
+  infoSection: {
+    flex: 1,
+    marginRight: 8,
+  },
+  fileName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+  },
+  fileSize: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  menuBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBtnText: {
+    fontSize: 18,
+    lineHeight: 18,
+    color: '#444',
+    marginTop: -4,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
+    marginTop: 8,
   },
   actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBtnText: {
-    fontSize: 16,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#222',
   },
   pauseBtn: {
     backgroundColor: '#FFF3E0',
