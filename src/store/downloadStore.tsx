@@ -106,6 +106,10 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   dispatchRef.current = dispatch;
 
   useEffect(() => {
+    downloadManager.initializePrivateFolder().catch(err => {
+      console.warn('Failed to initialize private downloads folder:', err);
+    });
+
     downloadManager.setProgressCallback((id, received, total) => {
       const progress = total > 0 ? Math.round((received / total) * 100) : 0;
       dispatchRef.current({

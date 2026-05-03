@@ -1,9 +1,7 @@
 import * as FileSystem from 'expo-file-system';
-import * as MediaLibrary from 'expo-media-library';
 // @ts-ignore - mux.js ships its own runtime types separately
 import muxjs from 'mux.js';
 import { DownloadTask } from '../types';
-import { requestStoragePermission } from '../utils/permissions';
 
 type ProgressCallback = (
   id: string,
@@ -29,6 +27,8 @@ class DownloadManager {
   private activeTasks: Map<string, ActiveTask> = new Map();
   private onProgress: ProgressCallback | null = null;
   private onStatusChange: StatusCallback | null = null;
+  private readonly privateFolderName = 'private_downloads/';
+  private privateFolderUri: string | null = null;
 
   setProgressCallback(cb: ProgressCallback) {
     this.onProgress = cb;
@@ -36,6 +36,26 @@ class DownloadManager {
 
   setStatusCallback(cb: StatusCallback) {
     this.onStatusChange = cb;
+  }
+
+  private async ensurePrivateFolder(): Promise<string> {
+    if (this.privateFolderUri) {
+      return this.privateFolderUri;
+    }
+
+    const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+    if (!baseDir) {
+      throw new Error('No writable file directory available');
+    }
+
+    const privateDir = `${baseDir}${this.privateFolderName}`;
+    await FileSystem.makeDirectoryAsync(privateDir, { intermediates: true });
+    this.privateFolderUri = privateDir;
+    return privateDir;
+  }
+
+  async initializePrivateFolder(): Promise<string> {
+    return this.ensurePrivateFolder();
   }
 
   private sanitizeFileName(url: string, pageTitle: string): string {
@@ -73,21 +93,13 @@ class DownloadManager {
     pageUrl?: string,
     cookies?: string,
   ): Promise<string> {
-    const hasPermission = await requestStoragePermission();
-    if (!hasPermission) {
-      throw new Error('Storage permission denied');
-    }
-
     if (this.isHlsUrl(url)) {
       return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies);
     }
 
     const fileName = this.sanitizeFileName(url, pageTitle);
-    const documentDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-    if (!documentDir) {
-      throw new Error('No writable file directory available');
-    }
-    const destPath = `${documentDir}${fileName}`;
+    const privateDir = await this.ensurePrivateFolder();
+    const destPath = `${privateDir}${fileName}`;
 
     this.onStatusChange?.(id, 'downloading');
 
@@ -275,10 +287,7 @@ class DownloadManager {
   ): Promise<string> {
     const TAG = '[HLS-DL]';
     const headers = this.buildHeaders(pageUrl, cookies);
-    const documentDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-    if (!documentDir) {
-      throw new Error('No writable file directory available');
-    }
+    const privateDir = await this.ensurePrivateFolder();
 
     this.onStatusChange?.(id, 'downloading');
     this.onProgress?.(id, 0, 0);
@@ -330,7 +339,7 @@ class DownloadManager {
       // Step 3: Download segments (and fMP4 init segment if the playlist had #EXT-X-MAP)
       const totalSegments = segmentUrls.length;
       const segmentPaths: string[] = [];
-      const tempDir = `${documentDir}hls_${id}/`;
+      const tempDir = `${privateDir}hls_${id}/`;
       await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
 
       let initSegPath: string | undefined;
@@ -367,7 +376,7 @@ class DownloadManager {
         .replace(/\s+/g, '_')
         .substring(0, 40);
       const outputFileName = `${safe}_${Date.now()}.mp4`;
-      const outputPath = `${documentDir}${outputFileName}`;
+      const outputPath = `${privateDir}${outputFileName}`;
 
       let merged: Uint8Array;
 
@@ -466,15 +475,6 @@ class DownloadManager {
 
       console.log(`${TAG} Output file saved: ${outputPath} (${merged.length} bytes, format=${format})`);
 
-      // Step 5: Save to media library
-      try {
-        await MediaLibrary.saveToLibraryAsync(outputPath);
-        console.log(`${TAG} Saved to media library`);
-      } catch (mlErr: any) {
-        console.warn(`${TAG} MediaLibrary.saveToLibraryAsync failed (file kept at ${outputPath}):`, mlErr?.message);
-        // File is still saved in app documents — not a fatal error
-      }
-
       this.onStatusChange?.(id, 'completed', outputPath);
       return outputPath;
     } catch (err: any) {
@@ -496,7 +496,6 @@ class DownloadManager {
         throw new Error('Download was cancelled');
       }
 
-      await MediaLibrary.saveToLibraryAsync(result.uri);
       this.activeTasks.delete(id);
       this.onStatusChange?.(id, 'completed', result.uri);
       return result.uri;
@@ -547,7 +546,6 @@ class DownloadManager {
         throw new Error('Download was cancelled');
       }
 
-      await MediaLibrary.saveToLibraryAsync(result.uri);
       this.activeTasks.delete(id);
       this.onStatusChange?.(id, 'completed', result.uri);
       return result.uri;
@@ -584,21 +582,13 @@ class DownloadManager {
     pageTitle: string,
     base64Data: string,
   ): Promise<string> {
-    const hasPermission = await requestStoragePermission();
-    if (!hasPermission) {
-      throw new Error('Storage permission denied');
-    }
-
     const safe = (pageTitle || 'video')
       .replace(/[^a-zA-Z0-9 ]/g, '')
       .replace(/\s+/g, '_')
       .substring(0, 40);
     const fileName = `${safe}_${Date.now()}.mp4`;
-    const documentDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-    if (!documentDir) {
-      throw new Error('No writable file directory available');
-    }
-    const destPath = `${documentDir}${fileName}`;
+    const privateDir = await this.ensurePrivateFolder();
+    const destPath = `${privateDir}${fileName}`;
 
     this.onStatusChange?.(id, 'downloading');
 
@@ -607,7 +597,6 @@ class DownloadManager {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      await MediaLibrary.saveToLibraryAsync(destPath);
       this.onStatusChange?.(id, 'completed', destPath);
       return destPath;
     } catch (err: any) {
