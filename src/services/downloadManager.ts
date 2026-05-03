@@ -714,7 +714,7 @@ class DownloadManager {
       let parsed = this.parseM3u8(manifestText, manifestUrl);
       let audioRendition: { uri?: string } | undefined;
       if (parsed.isMaster && parsed.bestVariant) {
-        console.log(`${TAG} Master playlist: ${parsed.audioRenditions.length} audio rendition(s), variant audio group=${parsed.bestVariantAudioGroup ?? '(none)'}`);
+        // console.log(`${TAG} Master playlist: ${parsed.audioRenditions.length} audio rendition(s), variant audio group=${parsed.bestVariantAudioGroup ?? '(none)'}`);
         if (parsed.audioRenditions.length > 0) {
           // Prefer the rendition whose GROUP-ID matches the chosen variant's AUDIO attribute,
           // falling back to the DEFAULT=YES rendition, then the first one.
@@ -722,9 +722,9 @@ class DownloadManager {
             parsed.audioRenditions.find(r => r.groupId === parsed.bestVariantAudioGroup) ||
             parsed.audioRenditions.find(r => r.isDefault) ||
             parsed.audioRenditions[0];
-          console.log(`${TAG} Selected audio rendition: groupId=${(audioRendition as any).groupId} name=${(audioRendition as any).name} uri=${audioRendition.uri?.substring(0, 100) ?? '(inline in variant)'}`);
+          // console.log(`${TAG} Selected audio rendition: groupId=${(audioRendition as any).groupId} name=${(audioRendition as any).name} uri=${audioRendition.uri?.substring(0, 100) ?? '(inline in variant)'}`);
         }
-        console.log(`${TAG} Picking best variant: ${parsed.bestVariant.substring(0, 150)}`);
+        // console.log(`${TAG} Picking best variant: ${parsed.bestVariant.substring(0, 150)}`);
         manifestUrl = parsed.bestVariant;
         response = await fetch(manifestUrl, { headers });
         if (!response.ok) {
@@ -742,7 +742,7 @@ class DownloadManager {
         throw new Error('No video segments found in HLS playlist');
       }
 
-      console.log(`${TAG} Found ${segmentUrls.length} segments to download${parsed.initUri ? ' (with fMP4 init segment)' : ''}`);
+      // console.log(`${TAG} Found ${segmentUrls.length} segments to download${parsed.initUri ? ' (with fMP4 init segment)' : ''}`);
 
       // Step 3: Download segments (and fMP4 init segment if the playlist had #EXT-X-MAP)
       const totalSegments = segmentUrls.length;
@@ -777,7 +777,7 @@ class DownloadManager {
       // (CMAF) use fMP4 fragments. We pick a different assembly path for each.
       const probeBytes = await this.readFileBytes(segmentPaths[0]);
       const format = this.detectSegmentFormat(probeBytes);
-      console.log(`${TAG} All ${totalSegments} segments downloaded, format=${format}`);
+      // console.log(`${TAG} All ${totalSegments} segments downloaded, format=${format}`);
 
       const safe = (pageTitle || 'video')
         .replace(/[^a-zA-Z0-9 ]/g, '')
@@ -815,7 +815,7 @@ class DownloadManager {
         }
         transmuxer.flush();
 
-        console.log(`${TAG} mux.js emitted segment types: ${JSON.stringify(typeCounts)}, totalBytes=${mp4Bytes}`);
+        // console.log(`${TAG} mux.js emitted segment types: ${JSON.stringify(typeCounts)}, totalBytes=${mp4Bytes}`);
 
         if (!muxInit || mp4Chunks.length === 0) {
           throw new Error('Transmux produced no MP4 data');
@@ -881,7 +881,7 @@ class DownloadManager {
       // Cleanup temp segments
       await FileSystem.deleteAsync(tempDir, { idempotent: true }).catch(() => {});
 
-      console.log(`${TAG} Output file saved: ${outputPath} (${merged.length} bytes, format=${format})`);
+      // console.log(`${TAG} Output file saved: ${outputPath} (${merged.length} bytes, format=${format})`);
 
       this.onStatusChange?.(id, 'completed', outputPath);
       return outputPath;

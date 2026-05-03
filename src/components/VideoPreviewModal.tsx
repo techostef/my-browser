@@ -325,9 +325,9 @@ export default function VideoPreviewModal({
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'LOG') {
-        console.log(`${TAG} [Player] ${msg.message}`);
+        // console.log(`${TAG} [Player] ${msg.message}`);
       } else if (msg.type === 'LOADED') {
-        console.log(`${TAG} Video loaded successfully`);
+        // console.log(`${TAG} Video loaded successfully`);
         setIsLoading(false);
         setHasError(false);
       } else if (msg.type === 'ERROR') {
@@ -408,7 +408,7 @@ export default function VideoPreviewModal({
               console.error(`${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`);
             }}
             onLoadEnd={() => {
-              console.log(`${TAG} WebView HTML loaded`);
+              // console.log(`${TAG} WebView HTML loaded`);
             }}
             javaScriptEnabled
             domStorageEnabled

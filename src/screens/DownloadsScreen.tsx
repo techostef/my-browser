@@ -454,14 +454,18 @@ export default function DownloadsScreen() {
     ...visibleDownloads.map(task => ({ type: 'file' as const, task })),
   ];
 
-  console.log("gridData", gridData)
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Downloads</Text>
-          <Text style={styles.headerSubtitle}>
+        {currentFolderPath ? (
+          <View style={styles.folderPathRow}>
+            <TouchableOpacity style={styles.backFolderBtn} onPress={handleBackFolder}>
+              <Text style={styles.backFolderText}>←</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <View style={{ marginRight: 'auto'}}>
+          <Text style={styles.headerTitle}>
             {(currentFolderPath || 'Root').replace(DEVICE_ROOT_PATH, 'Device Download')} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
           </Text>
         </View>
@@ -478,14 +482,6 @@ export default function DownloadsScreen() {
           </TouchableOpacity>
         )}
       </View>
-
-      {currentFolderPath ? (
-        <View style={styles.folderPathRow}>
-          <TouchableOpacity style={styles.backFolderBtn} onPress={handleBackFolder}>
-            <Text style={styles.backFolderText}>← Back</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
 
       {isDevicePath ? (
         <View style={styles.deviceScanStatusRow}>
@@ -732,10 +728,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#DDD',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: '#333',
   },
@@ -770,8 +765,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   folderPathRow: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: 4,
   },
   deviceScanStatusRow: {
     paddingHorizontal: 12,
@@ -783,14 +777,12 @@ const styles = StyleSheet.create({
   },
   backFolderBtn: {
     alignSelf: 'flex-start',
-    backgroundColor: '#E8EDF4',
-    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   backFolderText: {
     color: '#1F4E79',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
   },
   listContent: {
