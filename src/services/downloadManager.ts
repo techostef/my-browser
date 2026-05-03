@@ -407,9 +407,8 @@ class DownloadManager {
     return targetPath;
   }
 
-  async moveDeviceFileToPrivateFolder(
+  async copyDeviceFileToPrivateFolder(
     filePath: string,
-    taskId: string,
     folderPath?: string | null,
   ): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
@@ -430,23 +429,13 @@ class DownloadManager {
 
     const targetPath = await this.getUniqueFilePath(`${targetDir}${fileName}`);
     await FileSystem.copyAsync({ from: filePath, to: targetPath });
-
-    const assetId = taskId.startsWith('device_') ? taskId.substring('device_'.length) : '';
-    if (assetId) {
-      try {
-        await MediaLibrary.deleteAssetsAsync([assetId]);
-      } catch (err) {
-        console.warn('Unable to delete original device asset after move:', err);
-      }
-    }
-
     return targetPath;
   }
 
-  async movePrivateFileToDeviceDownload(filePath: string): Promise<void> {
+  async copyPrivateFileToDeviceDownload(filePath: string): Promise<void> {
     const permission = await MediaLibrary.requestPermissionsAsync();
     if (!permission.granted) {
-      throw new Error('Storage permission is required to move file to device download folder');
+      throw new Error('Storage permission is required to copy file to device download folder');
     }
 
     const sourceInfo = await FileSystem.getInfoAsync(filePath);
@@ -463,8 +452,6 @@ class DownloadManager {
     } else {
       await MediaLibrary.createAlbumAsync(albumName, asset, false);
     }
-
-    await FileSystem.deleteAsync(filePath, { idempotent: true });
   }
 
   async deletePrivateFile(filePath: string): Promise<void> {

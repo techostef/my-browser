@@ -51,7 +51,8 @@ export default function DownloadsScreen() {
   const [activeFolderPath, setActiveFolderPath] = useState('');
   const [folderNameText, setFolderNameText] = useState('');
   const [currentFolderPath, setCurrentFolderPath] = useState('');
-  const [moveTask, setMoveTask] = useState<DownloadTask | null>(null);
+  const [copyTask, setCopyTask] = useState<DownloadTask | null>(null);
+  const [moveTaskInPrivate, setMoveTaskInPrivate] = useState<DownloadTask | null>(null);
 
   const getMediaType = useCallback((task: DownloadTask): DownloadMediaType => {
     const source = (task.fileName || task.filePath || task.url || '')
@@ -288,33 +289,59 @@ export default function DownloadsScreen() {
     setCurrentFolderPath(slashIndex >= 0 ? currentFolderPath.substring(0, slashIndex) : '');
   }, [currentFolderPath]);
 
-  const handleMoveRequest = useCallback((task: DownloadTask) => {
+  const handleCopyRequest = useCallback((task: DownloadTask) => {
     if (task.status !== 'completed' || !task.filePath) {
       return;
     }
-    setMoveTask(task);
+    setCopyTask(task);
   }, []);
 
-  const closeMoveModal = useCallback(() => {
-    setMoveTask(null);
+  const handleMoveInPrivateRequest = useCallback((task: DownloadTask) => {
+    if (task.status !== 'completed' || !task.filePath || task.source === 'device') {
+      return;
+    }
+    setMoveTaskInPrivate(task);
   }, []);
 
-  const handleMoveToFolder = useCallback((folderName?: string | null) => {
-    if (!moveTask) {
+  const closeCopyModal = useCallback(() => {
+    setCopyTask(null);
+  }, []);
+
+  const closeMoveInPrivateModal = useCallback(() => {
+    setMoveTaskInPrivate(null);
+  }, []);
+
+  const handleCopyToFolder = useCallback((folderName?: string | null) => {
+    if (!copyTask) {
       return;
     }
 
-    const target = moveTask.source === 'private' ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
+    const target = copyTask.source === 'private' ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
 
-    moveDownloadToFolder(moveTask.id, target)
+    moveDownloadToFolder(copyTask.id, target)
+      .catch(err => {
+        const message = err instanceof Error ? err.message : 'Unable to move file';
+        Alert.alert('Copy error', message);
+      })
+      .finally(() => {
+        closeCopyModal();
+      });
+  }, [closeCopyModal, copyTask, moveDownloadToFolder]);
+
+  const handleMoveInPrivateToFolder = useCallback((folderName?: string | null) => {
+    if (!moveTaskInPrivate) {
+      return;
+    }
+
+    moveDownloadToFolder(moveTaskInPrivate.id, folderName)
       .catch(err => {
         const message = err instanceof Error ? err.message : 'Unable to move file';
         Alert.alert('Move error', message);
       })
       .finally(() => {
-        closeMoveModal();
+        closeMoveInPrivateModal();
       });
-  }, [closeMoveModal, moveDownloadToFolder, moveTask]);
+  }, [closeMoveInPrivateModal, moveDownloadToFolder, moveTaskInPrivate]);
 
   const previewType = previewTask ? getMediaType(previewTask) : 'other';
 
@@ -482,7 +509,8 @@ export default function DownloadsScreen() {
                   onCancel={cancelDownload}
                   onOpenMedia={handleOpenMedia}
                   onRename={handleRename}
-                  onMove={handleMoveRequest}
+                  onMove={handleCopyRequest}
+                  onMoveInPrivate={handleMoveInPrivateRequest}
                   onRemove={handleRemove}
                 />
               )}
@@ -554,32 +582,54 @@ export default function DownloadsScreen() {
       </Modal>
 
       <Modal
-        visible={!!moveTask}
+        visible={!!copyTask}
         transparent
         animationType="fade"
-        onRequestClose={closeMoveModal}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeMoveModal}>
+        onRequestClose={closeCopyModal}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeCopyModal}>
           <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>
-              {moveTask?.source === 'device' ? 'Move file to private folder' : 'Move file to device download'}
+              {copyTask?.source === 'device' ? 'Copy file to private folder' : 'Copy file to device download'}
             </Text>
             <View style={styles.moveOptions}>
-              {moveTask?.source === 'device' ? (
+              {copyTask?.source === 'device' ? (
                 <>
-                  <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(null)}>
+                  <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleCopyToFolder(null)}>
                     <Text style={styles.moveOptionText}>Root</Text>
                   </TouchableOpacity>
                   {folders.map(folder => (
-                    <TouchableOpacity key={folder} style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(folder)}>
+                    <TouchableOpacity key={folder} style={styles.moveOptionBtn} onPress={() => handleCopyToFolder(folder)}>
                       <Text style={styles.moveOptionText}>{folder}</Text>
                     </TouchableOpacity>
                   ))}
                 </>
               ) : (
-                <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(DEVICE_DOWNLOAD_MOVE_TARGET)}>
+                <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleCopyToFolder(DEVICE_DOWNLOAD_MOVE_TARGET)}>
                   <Text style={styles.moveOptionText}>Device Download</Text>
                 </TouchableOpacity>
               )}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={!!moveTaskInPrivate}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMoveInPrivateModal}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeMoveInPrivateModal}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Move file to folder</Text>
+            <View style={styles.moveOptions}>
+              <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveInPrivateToFolder(null)}>
+                <Text style={styles.moveOptionText}>Root</Text>
+              </TouchableOpacity>
+              {folders.map(folder => (
+                <TouchableOpacity key={`move_private_${folder}`} style={styles.moveOptionBtn} onPress={() => handleMoveInPrivateToFolder(folder)}>
+                  <Text style={styles.moveOptionText}>{folder}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>

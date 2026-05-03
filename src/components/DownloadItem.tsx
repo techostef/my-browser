@@ -14,6 +14,7 @@ interface Props {
   onOpenMedia: (task: DownloadTask) => void;
   onRename: (task: DownloadTask) => void;
   onMove?: (task: DownloadTask) => void;
+  onMoveInPrivate?: (task: DownloadTask) => void;
   onRemove: (id: string) => void;
 }
 
@@ -55,12 +56,14 @@ export default function DownloadItem({
   onOpenMedia,
   onRename,
   onMove,
+  onMoveInPrivate,
   onRemove,
 }: Props) {
   const statusColor = getStatusColor(task.status);
   const isPlayableMedia =
     task.status === 'completed' && !!task.filePath && mediaType !== 'other';
   const canMoveCompletedFile = task.status === 'completed' && !!task.filePath;
+  const canMovePrivateFile = task.source !== 'device' && task.status === 'completed' && !!task.filePath;
   const canManageCompletedFile =
     task.source !== 'device' &&
     (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled');
@@ -227,6 +230,16 @@ export default function DownloadItem({
                   <Text style={styles.actionBtnText}>
                     {task.source === 'device' ? '📁 Copy to Private' : '📁 Copy to Device Download'}
                   </Text>
+                </TouchableOpacity>
+              )}
+              {canMovePrivateFile && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.moveBtn]}
+                  onPress={() => {
+                    onMoveInPrivate?.(task);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>📂 Move to Folder</Text>
                 </TouchableOpacity>
               )}
               {canManageCompletedFile && (

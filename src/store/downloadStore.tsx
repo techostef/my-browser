@@ -340,9 +340,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (task.source === 'device') {
-        await downloadManager.moveDeviceFileToPrivateFolder(task.filePath, task.id, folderName);
+        await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName);
       } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
-        await downloadManager.movePrivateFileToDeviceDownload(task.filePath);
+        await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
       } else {
         await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
       }
