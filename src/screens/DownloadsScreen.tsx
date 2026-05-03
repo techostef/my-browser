@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BackHandler,
   View,
   Text,
   FlatList,
@@ -12,7 +13,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Video, ResizeMode } from 'expo-av';
 
 import DownloadItem, { DownloadMediaType } from '../components/DownloadItem';
@@ -20,6 +21,7 @@ import { DEVICE_DOWNLOAD_MOVE_TARGET, DownloadTask } from '../types';
 import { useDownloads } from '../store/downloadStore';
 
 export default function DownloadsScreen() {
+  const navigation = useNavigation();
   const {
     downloads,
     folders,
@@ -53,6 +55,11 @@ export default function DownloadsScreen() {
   const [currentFolderPath, setCurrentFolderPath] = useState('');
   const [copyTask, setCopyTask] = useState<DownloadTask | null>(null);
   const [moveTaskInPrivate, setMoveTaskInPrivate] = useState<DownloadTask | null>(null);
+  const currentFolderPathRef = useRef(currentFolderPath);
+
+  useEffect(() => {
+    currentFolderPathRef.current = currentFolderPath;
+  }, [currentFolderPath]);
 
   const getMediaType = useCallback((task: DownloadTask): DownloadMediaType => {
     const source = (task.fileName || task.filePath || task.url || '')
@@ -288,6 +295,22 @@ export default function DownloadsScreen() {
     const slashIndex = currentFolderPath.lastIndexOf('/');
     setCurrentFolderPath(slashIndex >= 0 ? currentFolderPath.substring(0, slashIndex) : '');
   }, [currentFolderPath]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (currentFolderPathRef.current) {
+          handleBackFolder();
+          return true;
+        }
+
+        (navigation as any).navigate('Browser');
+        return true;
+      });
+
+      return () => sub.remove();
+    }, [handleBackFolder, navigation]),
+  );
 
   const handleCopyRequest = useCallback((task: DownloadTask) => {
     if (task.status !== 'completed' || !task.filePath) {
