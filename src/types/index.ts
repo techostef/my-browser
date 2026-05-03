@@ -32,6 +32,7 @@ export interface DownloadTask {
   url: string;
   fileName: string;
   filePath: string;
+  folderPath?: string;
   status: DownloadStatus;
   progress: number; // 0-100
   bytesDownloaded: number;
@@ -47,6 +48,7 @@ export type DownloadAction =
   | { type: 'UPDATE_PROGRESS'; payload: { id: string; progress: number; bytesDownloaded: number; totalBytes: number } }
   | { type: 'SET_STATUS'; payload: { id: string; status: DownloadStatus; error?: string } }
   | { type: 'SET_FILE_PATH'; payload: { id: string; filePath: string } }
+  | { type: 'SET_FOLDERS'; payload: { folders: string[] } }
   | { type: 'REMOVE_DOWNLOAD'; payload: { id: string } };
 
 export interface WebViewMessage {

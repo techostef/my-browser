@@ -12,6 +12,7 @@ import { downloadManager } from '../services/downloadManager';
 
 interface DownloadState {
   downloads: DownloadTask[];
+  folders: string[];
 }
 
 interface DownloadContextValue extends DownloadState {
@@ -29,10 +30,14 @@ interface DownloadContextValue extends DownloadState {
   resumeDownload: (id: string) => void;
   cancelDownload: (id: string) => void;
   renameDownload: (id: string, newFileName: string) => Promise<void>;
+  createFolder: (folderName: string) => Promise<void>;
+  renameFolder: (folderName: string, newFolderName: string) => Promise<void>;
+  deleteFolder: (folderName: string, force?: boolean) => Promise<void>;
+  moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<void>;
   removeDownload: (id: string) => void;
 }
 
-const initialState: DownloadState = { downloads: [] };
+const initialState: DownloadState = { downloads: [], folders: [] };
 
 function downloadReducer(
   state: DownloadState,
@@ -40,13 +45,14 @@ function downloadReducer(
 ): DownloadState {
   switch (action.type) {
     case 'SET_DOWNLOADS':
-      return { downloads: action.payload.downloads };
+      return { ...state, downloads: action.payload.downloads };
 
     case 'ADD_DOWNLOAD':
-      return { downloads: [action.payload, ...state.downloads] };
+      return { ...state, downloads: [action.payload, ...state.downloads] };
 
     case 'UPDATE_PROGRESS':
       return {
+        ...state,
         downloads: state.downloads.map(d =>
           d.id === action.payload.id
             ? {
@@ -61,6 +67,7 @@ function downloadReducer(
 
     case 'SET_STATUS':
       return {
+        ...state,
         downloads: state.downloads.map(d =>
           d.id === action.payload.id
             ? {
@@ -74,6 +81,7 @@ function downloadReducer(
 
     case 'SET_FILE_PATH':
       return {
+        ...state,
         downloads: state.downloads.map(d =>
           d.id === action.payload.id
             ? { ...d, filePath: action.payload.filePath }
@@ -83,7 +91,14 @@ function downloadReducer(
 
     case 'REMOVE_DOWNLOAD':
       return {
+        ...state,
         downloads: state.downloads.filter(d => d.id !== action.payload.id),
+      };
+
+    case 'SET_FOLDERS':
+      return {
+        ...state,
+        folders: action.payload.folders,
       };
 
     default:
@@ -101,6 +116,10 @@ interface DownloadActions {
   resumeDownload: DownloadContextValue['resumeDownload'];
   cancelDownload: DownloadContextValue['cancelDownload'];
   renameDownload: DownloadContextValue['renameDownload'];
+  createFolder: DownloadContextValue['createFolder'];
+  renameFolder: DownloadContextValue['renameFolder'];
+  deleteFolder: DownloadContextValue['deleteFolder'];
+  moveDownloadToFolder: DownloadContextValue['moveDownloadToFolder'];
   removeDownload: DownloadContextValue['removeDownload'];
 }
 
@@ -118,9 +137,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const refreshDownloads = useCallback(async () => {
     try {
       const privateFiles = await downloadManager.listPrivateDownloads();
+      const privateFolders = await downloadManager.listPrivateFolders();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
       const merged = [...activeOrPending, ...privateFiles].sort((a, b) => b.createdAt - a.createdAt);
       dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
+      dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
     } catch (err) {
       console.warn('Failed to refresh downloads from private folder:', err);
     }
@@ -152,6 +173,67 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       }
     });
     refreshDownloads();
+  }, [refreshDownloads]);
+
+  const createFolder = useCallback(async (folderName: string) => {
+    const trimmed = folderName.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      await downloadManager.createPrivateFolder(trimmed);
+      await refreshDownloads();
+    } catch (err) {
+      console.warn('Create folder failed:', err);
+      throw err;
+    }
+  }, [refreshDownloads]);
+
+  const renameFolder = useCallback(async (folderName: string, newFolderName: string) => {
+    const fromName = folderName.trim();
+    const toName = newFolderName.trim();
+    if (!fromName || !toName) {
+      return;
+    }
+
+    try {
+      await downloadManager.renamePrivateFolder(fromName, toName);
+      await refreshDownloads();
+    } catch (err) {
+      console.warn('Rename folder failed:', err);
+      throw err;
+    }
+  }, [refreshDownloads]);
+
+  const deleteFolder = useCallback(async (folderName: string, force = false) => {
+    const trimmed = folderName.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      await downloadManager.deletePrivateFolder(trimmed, force);
+      await refreshDownloads();
+    } catch (err) {
+      console.warn('Delete folder failed:', err);
+      throw err;
+    }
+  }, [refreshDownloads]);
+
+  const moveDownloadToFolder = useCallback(async (id: string, folderName?: string | null) => {
+    const task = downloadsRef.current.find(d => d.id === id);
+    if (!task?.filePath || task.status !== 'completed') {
+      return;
+    }
+
+    try {
+      await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+      await refreshDownloads();
+    } catch (err) {
+      console.warn('Move to folder failed:', err);
+      throw err;
+    }
   }, [refreshDownloads]);
 
   const startDownload = useCallback((video: DetectedVideo) => {
@@ -262,6 +344,10 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       resumeDownload,
       cancelDownload,
       renameDownload,
+      createFolder,
+      renameFolder,
+      deleteFolder,
+      moveDownloadToFolder,
       removeDownload,
     }),
     [
@@ -274,6 +360,10 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       resumeDownload,
       cancelDownload,
       renameDownload,
+      createFolder,
+      renameFolder,
+      deleteFolder,
+      moveDownloadToFolder,
       removeDownload,
     ],
   );

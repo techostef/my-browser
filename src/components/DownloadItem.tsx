@@ -13,6 +13,7 @@ interface Props {
   onCancel: (id: string) => void;
   onOpenMedia: (task: DownloadTask) => void;
   onRename: (task: DownloadTask) => void;
+  onMove?: (task: DownloadTask) => void;
   onRemove: (id: string) => void;
 }
 
@@ -53,6 +54,7 @@ export default function DownloadItem({
   onCancel,
   onOpenMedia,
   onRename,
+  onMove,
   onRemove,
 }: Props) {
   const statusColor = getStatusColor(task.status);
@@ -136,7 +138,7 @@ export default function DownloadItem({
         </View>
       )}
 
-      <View style={styles.statusRow}>
+      {/* <View style={styles.statusRow}>
         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
           <Text style={styles.statusText}>
             {task.status.toUpperCase()}
@@ -151,7 +153,7 @@ export default function DownloadItem({
             {task.pageTitle}
           </Text>
         )}
-      </View>
+      </View> */}
 
       <View style={styles.bottomRow}>
         <View style={styles.infoSection}>
@@ -219,6 +221,18 @@ export default function DownloadItem({
                     setActionsVisible(false);
                   }}>
                   <Text style={styles.actionBtnText}>✕ Cancel</Text>
+                </TouchableOpacity>
+              )}
+              {(task.status === 'completed' ||
+                task.status === 'failed' ||
+                task.status === 'cancelled') && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.moveBtn]}
+                  onPress={() => {
+                    onMove?.(task);
+                    setActionsVisible(false);
+                  }}>
+                  <Text style={styles.actionBtnText}>📁 Move</Text>
                 </TouchableOpacity>
               )}
               {(task.status === 'completed' ||
@@ -346,6 +360,11 @@ const styles = StyleSheet.create({
   fileSize: {
     fontSize: 11,
     color: '#888',
+    marginTop: 1,
+  },
+  fileFolder: {
+    fontSize: 10,
+    color: '#999',
     marginTop: 2,
   },
   menuBtn: {
@@ -400,6 +419,9 @@ const styles = StyleSheet.create({
   },
   openBtn: {
     backgroundColor: '#E8F5E9',
+  },
+  moveBtn: {
+    backgroundColor: '#EFE7FF',
   },
   renameBtn: {
     backgroundColor: '#E3F2FD',

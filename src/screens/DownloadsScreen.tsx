@@ -22,16 +22,31 @@ import { useDownloads } from '../store/downloadStore';
 export default function DownloadsScreen() {
   const {
     downloads,
+    folders,
     refreshDownloads,
     pauseDownload,
     resumeDownload,
     cancelDownload,
     renameDownload,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveDownloadToFolder,
     removeDownload,
   } = useDownloads();
+
+  type DownloadGridItem =
+    | { type: 'folder'; path: string; name: string }
+    | { type: 'file'; task: DownloadTask };
+
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
   const [renameText, setRenameText] = useState('');
   const [previewTask, setPreviewTask] = useState<DownloadTask | null>(null);
+  const [folderDialogMode, setFolderDialogMode] = useState<'create' | 'rename' | null>(null);
+  const [activeFolderPath, setActiveFolderPath] = useState('');
+  const [folderNameText, setFolderNameText] = useState('');
+  const [currentFolderPath, setCurrentFolderPath] = useState('');
+  const [moveTask, setMoveTask] = useState<DownloadTask | null>(null);
 
   const getMediaType = useCallback((task: DownloadTask): DownloadMediaType => {
     const source = (task.fileName || task.filePath || task.url || '')
@@ -117,44 +132,227 @@ export default function DownloadsScreen() {
     setPreviewTask(null);
   }, []);
 
+  const openCreateFolder = useCallback(() => {
+    setFolderDialogMode('create');
+    setActiveFolderPath('');
+    setFolderNameText('');
+  }, []);
+
+  const openRenameFolder = useCallback((folderPath: string) => {
+    const leafName = folderPath.split('/').pop() || folderPath;
+    setFolderDialogMode('rename');
+    setActiveFolderPath(folderPath);
+    setFolderNameText(leafName);
+  }, []);
+
+  const closeFolderDialog = useCallback(() => {
+    setFolderDialogMode(null);
+    setActiveFolderPath('');
+    setFolderNameText('');
+    Keyboard.dismiss();
+  }, []);
+
+  const submitFolderDialog = useCallback(() => {
+    const trimmed = folderNameText.trim();
+    if (!trimmed || !folderDialogMode) {
+      return;
+    }
+
+    const nextPath = currentFolderPath ? `${currentFolderPath}/${trimmed}` : trimmed;
+    const action = folderDialogMode === 'create'
+      ? createFolder(nextPath)
+      : renameFolder(activeFolderPath, trimmed);
+
+    action
+      .catch(err => {
+        Alert.alert('Folder error', err instanceof Error ? err.message : 'Unable to update folder');
+      })
+      .finally(() => {
+        closeFolderDialog();
+      });
+  }, [activeFolderPath, closeFolderDialog, createFolder, currentFolderPath, folderDialogMode, folderNameText, renameFolder]);
+
+  const runDeleteFolder = useCallback((folderPath: string, force = false) => {
+    deleteFolder(folderPath, force).catch(err => {
+      const message = err instanceof Error ? err.message : 'Unable to delete folder';
+
+      if (!force && message.toLowerCase().includes('not empty')) {
+        Alert.alert(
+          'Delete folder and all contents?',
+          'This folder contains files or subfolders. This action cannot be undone.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete All',
+              style: 'destructive',
+              onPress: () => runDeleteFolder(folderPath, true),
+            },
+          ],
+        );
+        return;
+      }
+
+      Alert.alert('Folder error', message);
+    });
+  }, [deleteFolder]);
+
+  const handleDeleteFolder = useCallback((folderPath: string) => {
+    const folderName = folderPath.split('/').pop() || folderPath;
+    Alert.alert('Delete folder', `Delete folder "${folderName}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => runDeleteFolder(folderPath),
+      },
+    ]);
+  }, [runDeleteFolder]);
+
+  const handleFolderAction = useCallback((folderPath: string) => {
+    const folderName = folderPath.split('/').pop() || folderPath;
+    Alert.alert(folderName, 'Folder options', [
+      {
+        text: 'Rename',
+        onPress: () => openRenameFolder(folderPath),
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => handleDeleteFolder(folderPath),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [handleDeleteFolder, openRenameFolder]);
+
+  const handleBackFolder = useCallback(() => {
+    if (!currentFolderPath) {
+      return;
+    }
+    const slashIndex = currentFolderPath.lastIndexOf('/');
+    setCurrentFolderPath(slashIndex >= 0 ? currentFolderPath.substring(0, slashIndex) : '');
+  }, [currentFolderPath]);
+
+  const handleMoveRequest = useCallback((task: DownloadTask) => {
+    if (task.status !== 'completed' || !task.filePath) {
+      return;
+    }
+    setMoveTask(task);
+  }, []);
+
+  const closeMoveModal = useCallback(() => {
+    setMoveTask(null);
+  }, []);
+
+  const handleMoveToFolder = useCallback((folderName?: string | null) => {
+    if (!moveTask) {
+      return;
+    }
+
+    moveDownloadToFolder(moveTask.id, folderName)
+      .catch(err => {
+        const message = err instanceof Error ? err.message : 'Unable to move file';
+        Alert.alert('Move error', message);
+      })
+      .finally(() => {
+        closeMoveModal();
+      });
+  }, [closeMoveModal, moveDownloadToFolder, moveTask]);
+
   const previewType = previewTask ? getMediaType(previewTask) : 'other';
+
+  const visibleFolders = folders
+    .filter(folderPath => {
+      const slashIndex = folderPath.lastIndexOf('/');
+      const parentPath = slashIndex >= 0 ? folderPath.substring(0, slashIndex) : '';
+      return parentPath === currentFolderPath;
+    })
+    .map(folderPath => ({
+      type: 'folder' as const,
+      path: folderPath,
+      name: folderPath.split('/').pop() || folderPath,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const visibleDownloads = downloads.filter(task => {
+    if (task.status !== 'completed') {
+      return currentFolderPath === '';
+    }
+    const fileFolder = task.folderPath || '';
+    return fileFolder === currentFolderPath;
+  });
+
+  const gridData: DownloadGridItem[] = [
+    ...visibleFolders,
+    ...visibleDownloads.map(task => ({ type: 'file' as const, task })),
+  ];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Downloads</Text>
-        <Text style={styles.headerSubtitle}>
-          {downloads.length} item{downloads.length !== 1 ? 's' : ''}
-        </Text>
+        <View>
+          <Text style={styles.headerTitle}>Downloads</Text>
+          <Text style={styles.headerSubtitle}>
+            {currentFolderPath ? currentFolderPath : 'Root'} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
+          <Text style={styles.newFolderBtnText}>+ Folder</Text>
+        </TouchableOpacity>
       </View>
 
-      {downloads.length === 0 ? (
+      {currentFolderPath ? (
+        <View style={styles.folderPathRow}>
+          <TouchableOpacity style={styles.backFolderBtn} onPress={handleBackFolder}>
+            <Text style={styles.backFolderText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {gridData.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📥</Text>
-          <Text style={styles.emptyText}>No downloads yet</Text>
+          <Text style={styles.emptyText}>
+            {currentFolderPath ? 'This folder is empty' : 'No downloads yet'}
+          </Text>
           <Text style={styles.emptySubtext}>
-            Browse a page with videos and tap the download button
+            {currentFolderPath
+              ? 'Create a subfolder or move files here'
+              : 'Browse a page with videos and tap the download button'}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={downloads}
+          data={gridData}
           numColumns={2}
-          keyExtractor={item => item.id}
+          keyExtractor={item => (item.type === 'folder' ? `folder_${item.path}` : item.task.id)}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.listRow}
           renderItem={({ item }) => (
             <View style={styles.gridItem}>
-              <DownloadItem
-                task={item}
-                mediaType={getMediaType(item)}
-                onPause={pauseDownload}
-                onResume={resumeDownload}
-                onCancel={cancelDownload}
-                onOpenMedia={handleOpenMedia}
-                onRename={handleRename}
-                onRemove={handleRemove}
-              />
+              {item.type === 'folder' ? (
+                <View style={styles.folderCard}>
+                  <TouchableOpacity style={styles.folderCardBody} onPress={() => setCurrentFolderPath(item.path)}>
+                    <Text style={styles.folderIcon}>📁</Text>
+                    <Text style={styles.folderName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.folderMeta} numberOfLines={1}>Tap to open</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.folderMenuBtn} onPress={() => handleFolderAction(item.path)}>
+                    <Text style={styles.folderMenuText}>⋯</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <DownloadItem
+                  task={item.task}
+                  mediaType={getMediaType(item.task)}
+                  onPause={pauseDownload}
+                  onResume={resumeDownload}
+                  onCancel={cancelDownload}
+                  onOpenMedia={handleOpenMedia}
+                  onRename={handleRename}
+                  onMove={handleMoveRequest}
+                  onRemove={handleRemove}
+                />
+              )}
             </View>
           )}
         />
@@ -187,6 +385,61 @@ export default function DownloadsScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={!!folderDialogMode}
+        transparent
+        animationType="fade"
+        onRequestClose={closeFolderDialog}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {folderDialogMode === 'create' ? 'Create folder' : 'Rename folder'}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={folderNameText}
+              onChangeText={setFolderNameText}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Folder name"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtn} onPress={closeFolderDialog}>
+                <Text style={styles.modalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalPrimaryBtn]} onPress={submitFolderDialog}>
+                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>
+                  {folderDialogMode === 'create' ? 'Create' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!moveTask}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMoveModal}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeMoveModal}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Move file to folder</Text>
+            <View style={styles.moveOptions}>
+              <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(null)}>
+                <Text style={styles.moveOptionText}>Root</Text>
+              </TouchableOpacity>
+              {folders.map(folder => (
+                <TouchableOpacity key={folder} style={styles.moveOptionBtn} onPress={() => handleMoveToFolder(folder)}>
+                  <Text style={styles.moveOptionText}>{folder}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal
@@ -239,6 +492,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#DDD',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   headerTitle: {
     fontSize: 22,
@@ -250,6 +506,33 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
+  newFolderBtn: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  newFolderBtnText: {
+    color: '#1A73E8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  folderPathRow: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  backFolderBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#E8EDF4',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  backFolderText: {
+    color: '#1F4E79',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   listContent: {
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -260,6 +543,54 @@ const styles = StyleSheet.create({
   gridItem: {
     width: '48.5%',
     marginBottom: 10,
+  },
+  folderCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  folderCardBody: {
+    height: 120,
+    borderRadius: 10,
+    backgroundColor: '#E8F0FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  folderIcon: {
+    fontSize: 34,
+    marginBottom: 8,
+  },
+  folderName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2B2B2B',
+  },
+  folderMeta: {
+    fontSize: 10,
+    color: '#6A6A6A',
+    marginTop: 3,
+  },
+  folderMenuBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  folderMenuText: {
+    fontSize: 18,
+    lineHeight: 18,
+    color: '#444',
+    marginTop: -4,
   },
   emptyState: {
     flex: 1,
@@ -333,6 +664,20 @@ const styles = StyleSheet.create({
   },
   modalPrimaryBtnText: {
     color: '#FFF',
+  },
+  moveOptions: {
+    gap: 8,
+  },
+  moveOptionBtn: {
+    borderRadius: 8,
+    backgroundColor: '#F2F2F2',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  moveOptionText: {
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '600',
   },
   previewContainer: {
     flex: 1,

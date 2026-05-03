@@ -34,6 +34,24 @@ class DownloadManager {
     this.onProgress = cb;
   }
 
+  private sanitizeFolderName(name: string): string {
+    const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    return cleaned;
+  }
+
+  private sanitizeFolderPath(path: string): string {
+    return path
+      .split('/')
+      .map(segment => this.sanitizeFolderName(segment))
+      .filter(Boolean)
+      .join('/');
+  }
+
+  private joinPrivateFolderPath(privateDir: string, folderPath: string): string {
+    const safePath = this.sanitizeFolderPath(folderPath);
+    return safePath ? `${privateDir}${safePath}/` : privateDir;
+  }
+
   setStatusCallback(cb: StatusCallback) {
     this.onStatusChange = cb;
   }
@@ -72,35 +90,198 @@ class DownloadManager {
 
   async listPrivateDownloads(): Promise<DownloadTask[]> {
     const privateDir = await this.ensurePrivateFolder();
-    const entries = await FileSystem.readDirectoryAsync(privateDir);
     const files: DownloadTask[] = [];
 
-    for (const entry of entries) {
-      const filePath = `${privateDir}${entry}`;
-      const info = await FileSystem.getInfoAsync(filePath);
-      if (!info.exists || info.isDirectory) {
-        continue;
+    const walk = async (dirPath: string, folderPath: string): Promise<void> => {
+      const entries = await FileSystem.readDirectoryAsync(dirPath);
+
+      for (const entry of entries) {
+        const entryPath = `${dirPath}${entry}`;
+        const info = await FileSystem.getInfoAsync(entryPath);
+        if (!info.exists) {
+          continue;
+        }
+
+        if (info.isDirectory) {
+          const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
+          await walk(`${entryPath}/`, childFolderPath);
+          continue;
+        }
+
+        const createdAt = this.normalizeTimestamp(info.modificationTime);
+        const size = typeof info.size === 'number' ? info.size : 0;
+
+        files.push({
+          id: `file_${entryPath}`,
+          url: entryPath,
+          fileName: entry,
+          filePath: entryPath,
+          folderPath,
+          status: 'completed',
+          progress: 100,
+          bytesDownloaded: size,
+          totalBytes: size,
+          pageTitle: 'Private file',
+          createdAt,
+        });
       }
+    };
 
-      const createdAt = this.normalizeTimestamp(info.modificationTime);
-      const size = typeof info.size === 'number' ? info.size : 0;
-
-      files.push({
-        id: `file_${filePath}`,
-        url: filePath,
-        fileName: entry,
-        filePath,
-        status: 'completed',
-        progress: 100,
-        bytesDownloaded: size,
-        totalBytes: size,
-        pageTitle: 'Private file',
-        createdAt,
-      });
-    }
-
+    await walk(privateDir, '');
     files.sort((a, b) => b.createdAt - a.createdAt);
     return files;
+  }
+
+  async listPrivateFolders(): Promise<string[]> {
+    const privateDir = await this.ensurePrivateFolder();
+    const folders: string[] = [];
+
+    const walk = async (dirPath: string, parentFolderPath: string): Promise<void> => {
+      const entries = await FileSystem.readDirectoryAsync(dirPath);
+
+      for (const entry of entries) {
+        const entryPath = `${dirPath}${entry}`;
+        const info = await FileSystem.getInfoAsync(entryPath);
+        if (!info.exists || !info.isDirectory) {
+          continue;
+        }
+
+        const folderPath = parentFolderPath ? `${parentFolderPath}/${entry}` : entry;
+        folders.push(folderPath);
+        await walk(`${entryPath}/`, folderPath);
+      }
+    };
+
+    await walk(privateDir, '');
+
+    folders.sort((a, b) => a.localeCompare(b));
+    return folders;
+  }
+
+  async createPrivateFolder(folderPath: string): Promise<string> {
+    const privateDir = await this.ensurePrivateFolder();
+    const safePath = this.sanitizeFolderPath(folderPath);
+    if (!safePath) {
+      throw new Error('Folder name cannot be empty');
+    }
+
+    const targetPath = `${privateDir}${safePath}/`;
+    const existing = await FileSystem.getInfoAsync(targetPath);
+    if (existing.exists) {
+      throw new Error('Folder already exists');
+    }
+
+    await FileSystem.makeDirectoryAsync(targetPath, { intermediates: true });
+    return targetPath;
+  }
+
+  async renamePrivateFolder(folderPath: string, newFolderName: string): Promise<string> {
+    const privateDir = await this.ensurePrivateFolder();
+    const safeCurrentPath = this.sanitizeFolderPath(folderPath);
+    const safeNewName = this.sanitizeFolderName(newFolderName);
+
+    if (!safeCurrentPath || !safeNewName) {
+      throw new Error('Folder name cannot be empty');
+    }
+
+    const slashIndex = safeCurrentPath.lastIndexOf('/');
+    const parentPath = slashIndex >= 0 ? safeCurrentPath.substring(0, slashIndex) : '';
+    const currentName = slashIndex >= 0 ? safeCurrentPath.substring(slashIndex + 1) : safeCurrentPath;
+
+    if (currentName === safeNewName) {
+      return `${privateDir}${safeCurrentPath}/`;
+    }
+
+    const currentPath = `${privateDir}${safeCurrentPath}/`;
+    const nextRelativePath = parentPath ? `${parentPath}/${safeNewName}` : safeNewName;
+    const nextPath = `${privateDir}${nextRelativePath}/`;
+
+    const currentInfo = await FileSystem.getInfoAsync(currentPath);
+    if (!currentInfo.exists || !currentInfo.isDirectory) {
+      throw new Error('Folder not found');
+    }
+
+    const nextInfo = await FileSystem.getInfoAsync(nextPath);
+    if (nextInfo.exists) {
+      throw new Error('A folder with this name already exists');
+    }
+
+    await FileSystem.moveAsync({ from: currentPath, to: nextPath });
+    return nextPath;
+  }
+
+  async deletePrivateFolder(folderPath: string, force = false): Promise<void> {
+    const privateDir = await this.ensurePrivateFolder();
+    const safePath = this.sanitizeFolderPath(folderPath);
+    if (!safePath) {
+      throw new Error('Folder name cannot be empty');
+    }
+
+    const targetPath = `${privateDir}${safePath}/`;
+    const folderInfo = await FileSystem.getInfoAsync(targetPath);
+    if (!folderInfo.exists) {
+      return;
+    }
+    if (!folderInfo.isDirectory) {
+      throw new Error('Invalid folder');
+    }
+
+    const entries = await FileSystem.readDirectoryAsync(targetPath);
+    if (entries.length > 0 && !force) {
+      throw new Error('Folder is not empty');
+    }
+
+    await FileSystem.deleteAsync(targetPath, { idempotent: true });
+  }
+
+  private async getUniqueFilePath(filePath: string): Promise<string> {
+    const info = await FileSystem.getInfoAsync(filePath);
+    if (!info.exists) {
+      return filePath;
+    }
+
+    const slashIndex = filePath.lastIndexOf('/');
+    const dirPath = filePath.substring(0, slashIndex + 1);
+    const fileName = filePath.substring(slashIndex + 1);
+    const dotIndex = fileName.lastIndexOf('.');
+    const baseName = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
+    const extension = dotIndex > 0 ? fileName.substring(dotIndex) : '';
+
+    let attempt = 1;
+    while (true) {
+      const candidate = `${dirPath}${baseName} (${attempt})${extension}`;
+      const candidateInfo = await FileSystem.getInfoAsync(candidate);
+      if (!candidateInfo.exists) {
+        return candidate;
+      }
+      attempt += 1;
+    }
+  }
+
+  async movePrivateFileToFolder(filePath: string, folderPath?: string | null): Promise<string> {
+    const privateDir = await this.ensurePrivateFolder();
+    const fileName = filePath.split('/').pop();
+    if (!fileName) {
+      throw new Error('Invalid file path');
+    }
+
+    let targetDir = privateDir;
+    if (folderPath && folderPath.trim()) {
+      const safeFolderPath = this.sanitizeFolderPath(folderPath);
+      if (!safeFolderPath) {
+        throw new Error('Folder name cannot be empty');
+      }
+      targetDir = `${privateDir}${safeFolderPath}/`;
+      await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
+    }
+
+    const targetPath = await this.getUniqueFilePath(`${targetDir}${fileName}`);
+    if (targetPath === filePath) {
+      return filePath;
+    }
+
+    await FileSystem.moveAsync({ from: filePath, to: targetPath });
+    return targetPath;
   }
 
   async deletePrivateFile(filePath: string): Promise<void> {
