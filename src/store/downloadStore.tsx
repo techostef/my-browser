@@ -16,6 +16,7 @@ interface DownloadState {
 
 interface DownloadContextValue extends DownloadState {
   startDownload: (video: DetectedVideo) => void;
+  refreshDownloads: () => Promise<void>;
   // Blob download is split into three steps so the caller can track each phase
   // in the Downloads tab without a blocking modal:
   //   1. createBlobTask   — immediately add a task visible in Downloads
@@ -27,6 +28,7 @@ interface DownloadContextValue extends DownloadState {
   pauseDownload: (id: string) => void;
   resumeDownload: (id: string) => void;
   cancelDownload: (id: string) => void;
+  renameDownload: (id: string, newFileName: string) => Promise<void>;
   removeDownload: (id: string) => void;
 }
 
@@ -37,6 +39,9 @@ function downloadReducer(
   action: DownloadAction,
 ): DownloadState {
   switch (action.type) {
+    case 'SET_DOWNLOADS':
+      return { downloads: action.payload.downloads };
+
     case 'ADD_DOWNLOAD':
       return { downloads: [action.payload, ...state.downloads] };
 
@@ -88,12 +93,14 @@ function downloadReducer(
 
 interface DownloadActions {
   startDownload: DownloadContextValue['startDownload'];
+  refreshDownloads: DownloadContextValue['refreshDownloads'];
   createBlobTask: DownloadContextValue['createBlobTask'];
   updateBlobProgress: DownloadContextValue['updateBlobProgress'];
   completeBlobDownload: DownloadContextValue['completeBlobDownload'];
   pauseDownload: DownloadContextValue['pauseDownload'];
   resumeDownload: DownloadContextValue['resumeDownload'];
   cancelDownload: DownloadContextValue['cancelDownload'];
+  renameDownload: DownloadContextValue['renameDownload'];
   removeDownload: DownloadContextValue['removeDownload'];
 }
 
@@ -104,6 +111,20 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(downloadReducer, initialState);
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
+
+  const downloadsRef = useRef(state.downloads);
+  downloadsRef.current = state.downloads;
+
+  const refreshDownloads = useCallback(async () => {
+    try {
+      const privateFiles = await downloadManager.listPrivateDownloads();
+      const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
+      const merged = [...activeOrPending, ...privateFiles].sort((a, b) => b.createdAt - a.createdAt);
+      dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
+    } catch (err) {
+      console.warn('Failed to refresh downloads from private folder:', err);
+    }
+  }, []);
 
   useEffect(() => {
     downloadManager.initializePrivateFolder().catch(err => {
@@ -130,7 +151,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         });
       }
     });
-  }, []);
+    refreshDownloads();
+  }, [refreshDownloads]);
 
   const startDownload = useCallback((video: DetectedVideo) => {
     const id = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -158,11 +180,6 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     downloadManager.pauseDownload(id);
   }, []);
 
-  // Read from a ref so the callback stays stable — the actions context never
-  // has to invalidate when a download's state changes.
-  const downloadsRef = useRef(state.downloads);
-  downloadsRef.current = state.downloads;
-
   const resumeDownload = useCallback((id: string) => {
     const task = downloadsRef.current.find(d => d.id === id);
     if (!task) {
@@ -176,6 +193,19 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const cancelDownload = useCallback((id: string) => {
     downloadManager.cancelDownload(id);
   }, []);
+
+  const renameDownload = useCallback(async (id: string, newFileName: string) => {
+    const task = downloadsRef.current.find(d => d.id === id);
+    if (!task?.filePath) {
+      return;
+    }
+    try {
+      await downloadManager.renamePrivateFile(task.filePath, newFileName);
+      await refreshDownloads();
+    } catch (err) {
+      console.warn('Rename failed:', err);
+    }
+  }, [refreshDownloads]);
 
   const createBlobTask = useCallback((taskId: string, pageTitle: string, totalBytes: number) => {
     const task: DownloadTask = {
@@ -208,29 +238,42 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeDownload = useCallback((id: string) => {
-    downloadManager.cancelDownload(id);
-    dispatch({ type: 'REMOVE_DOWNLOAD', payload: { id } });
+    const task = downloadsRef.current.find(d => d.id === id);
+
+    if (task?.status === 'completed' && task.filePath) {
+      downloadManager.deletePrivateFile(task.filePath).catch(err => {
+        console.warn('Delete private file failed:', err);
+      });
+    } else {
+      downloadManager.cancelDownload(id);
+    }
+
+    dispatchRef.current({ type: 'REMOVE_DOWNLOAD', payload: { id } });
   }, []);
 
   const actions = useMemo<DownloadActions>(
     () => ({
       startDownload,
+      refreshDownloads,
       createBlobTask,
       updateBlobProgress,
       completeBlobDownload,
       pauseDownload,
       resumeDownload,
       cancelDownload,
+      renameDownload,
       removeDownload,
     }),
     [
       startDownload,
+      refreshDownloads,
       createBlobTask,
       updateBlobProgress,
       completeBlobDownload,
       pauseDownload,
       resumeDownload,
       cancelDownload,
+      renameDownload,
       removeDownload,
     ],
   );

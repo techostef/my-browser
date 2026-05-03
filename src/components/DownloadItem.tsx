@@ -1,14 +1,22 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { DownloadTask } from '../types';
+
+export type DownloadMediaType = 'image' | 'video' | 'audio' | 'other';
 
 interface Props {
   task: DownloadTask;
+  mediaType: DownloadMediaType;
   onPause: (id: string) => void;
   onResume: (id: string) => void;
   onCancel: (id: string) => void;
+  onOpenMedia: (task: DownloadTask) => void;
+  onRename: (task: DownloadTask) => void;
   onRemove: (id: string) => void;
 }
+
+const videoThumbnailCache = new Map<string, string>();
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -39,15 +47,73 @@ function getStatusColor(status: DownloadTask['status']): string {
 
 export default function DownloadItem({
   task,
+  mediaType,
   onPause,
   onResume,
   onCancel,
+  onOpenMedia,
+  onRename,
   onRemove,
 }: Props) {
   const statusColor = getStatusColor(task.status);
+  const isPlayableMedia =
+    task.status === 'completed' && !!task.filePath && mediaType !== 'other';
+  const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (mediaType !== 'video' || !task.filePath || task.status !== 'completed') {
+      setVideoThumbnailUri(null);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const cached = videoThumbnailCache.get(task.filePath);
+    if (cached) {
+      setVideoThumbnailUri(cached);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    VideoThumbnails.getThumbnailAsync(task.filePath, { time: 1000 })
+      .then(result => {
+        if (!isMounted || !result?.uri) {
+          return;
+        }
+        videoThumbnailCache.set(task.filePath, result.uri);
+        setVideoThumbnailUri(result.uri);
+      })
+      .catch(err => {
+        console.warn('Failed to create video thumbnail:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [mediaType, task.filePath, task.status]);
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.thumbnailWrap}
+        disabled={!isPlayableMedia}
+        onPress={() => onOpenMedia(task)}>
+        {mediaType === 'image' && task.filePath ? (
+          <Image source={{ uri: task.filePath }} style={styles.thumbnailImage} />
+        ) : mediaType === 'video' && videoThumbnailUri ? (
+          <Image source={{ uri: videoThumbnailUri }} style={styles.thumbnailImage} />
+        ) : (
+          <View style={styles.thumbnailFallback}>
+            <Text style={styles.thumbnailIcon}>
+              {mediaType === 'video' ? '🎬' : mediaType === 'audio' ? '🎵' : '📄'}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
       <View style={styles.infoSection}>
         <Text style={styles.fileName} numberOfLines={1}>
           {task.fileName || task.url.split('/').pop() || 'video'}
@@ -93,6 +159,13 @@ export default function DownloadItem({
 
       {/* Action buttons */}
       <View style={styles.actions}>
+        {isPlayableMedia && (
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.openBtn]}
+            onPress={() => onOpenMedia(task)}>
+            <Text style={styles.actionBtnText}>▶️</Text>
+          </TouchableOpacity>
+        )}
         {task.status === 'downloading' && (
           <TouchableOpacity
             style={[styles.actionBtn, styles.pauseBtn]}
@@ -112,6 +185,15 @@ export default function DownloadItem({
             style={[styles.actionBtn, styles.cancelBtn]}
             onPress={() => onCancel(task.id)}>
             <Text style={styles.actionBtnText}>✕</Text>
+          </TouchableOpacity>
+        )}
+        {(task.status === 'completed' ||
+          task.status === 'failed' ||
+          task.status === 'cancelled') && (
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.renameBtn]}
+            onPress={() => onRename(task)}>
+            <Text style={styles.actionBtnText}>✏️</Text>
           </TouchableOpacity>
         )}
         {(task.status === 'completed' ||
@@ -141,6 +223,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+  },
+  thumbnailWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginRight: 10,
+    backgroundColor: '#EFEFEF',
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbnailFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8ECF1',
+  },
+  thumbnailIcon: {
+    fontSize: 24,
   },
   infoSection: {
     flex: 1,
@@ -218,6 +321,12 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     backgroundColor: '#FFEBEE',
+  },
+  openBtn: {
+    backgroundColor: '#E8F5E9',
+  },
+  renameBtn: {
+    backgroundColor: '#E3F2FD',
   },
   removeBtn: {
     backgroundColor: '#F5F5F5',

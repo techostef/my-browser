@@ -58,6 +58,63 @@ class DownloadManager {
     return this.ensurePrivateFolder();
   }
 
+  private normalizeTimestamp(msOrSeconds?: number | null): number {
+    if (!msOrSeconds) {
+      return Date.now();
+    }
+    return msOrSeconds < 1_000_000_000_000 ? Math.round(msOrSeconds * 1000) : Math.round(msOrSeconds);
+  }
+
+  private sanitizeProvidedFileName(name: string): string {
+    const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    return cleaned || `file_${Date.now()}`;
+  }
+
+  async listPrivateDownloads(): Promise<DownloadTask[]> {
+    const privateDir = await this.ensurePrivateFolder();
+    const entries = await FileSystem.readDirectoryAsync(privateDir);
+    const files: DownloadTask[] = [];
+
+    for (const entry of entries) {
+      const filePath = `${privateDir}${entry}`;
+      const info = await FileSystem.getInfoAsync(filePath);
+      if (!info.exists || info.isDirectory) {
+        continue;
+      }
+
+      const createdAt = this.normalizeTimestamp(info.modificationTime);
+      const size = typeof info.size === 'number' ? info.size : 0;
+
+      files.push({
+        id: `file_${filePath}`,
+        url: filePath,
+        fileName: entry,
+        filePath,
+        status: 'completed',
+        progress: 100,
+        bytesDownloaded: size,
+        totalBytes: size,
+        pageTitle: 'Private file',
+        createdAt,
+      });
+    }
+
+    files.sort((a, b) => b.createdAt - a.createdAt);
+    return files;
+  }
+
+  async deletePrivateFile(filePath: string): Promise<void> {
+    await FileSystem.deleteAsync(filePath, { idempotent: true });
+  }
+
+  async renamePrivateFile(filePath: string, newFileName: string): Promise<string> {
+    const privateDir = await this.ensurePrivateFolder();
+    const safeName = this.sanitizeProvidedFileName(newFileName);
+    const newPath = `${privateDir}${safeName}`;
+    await FileSystem.moveAsync({ from: filePath, to: newPath });
+    return newPath;
+  }
+
   private sanitizeFileName(url: string, pageTitle: string): string {
     // Try to extract filename from URL
     try {

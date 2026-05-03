@@ -42,6 +42,7 @@ export interface DownloadTask {
 }
 
 export type DownloadAction =
+  | { type: 'SET_DOWNLOADS'; payload: { downloads: DownloadTask[] } }
   | { type: 'ADD_DOWNLOAD'; payload: DownloadTask }
   | { type: 'UPDATE_PROGRESS'; payload: { id: string; progress: number; bytesDownloaded: number; totalBytes: number } }
   | { type: 'SET_STATUS'; payload: { id: string; status: DownloadStatus; error?: string } }
