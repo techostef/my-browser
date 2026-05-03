@@ -357,13 +357,13 @@ export default function DownloadsScreen() {
       return;
     }
 
-    moveDownloadToFolder(moveTaskInPrivate.id, folderName)
+    const taskId = moveTaskInPrivate.id;
+    closeMoveInPrivateModal();
+
+    moveDownloadToFolder(taskId, folderName)
       .catch(err => {
         const message = err instanceof Error ? err.message : 'Unable to move file';
         Alert.alert('Move error', message);
-      })
-      .finally(() => {
-        closeMoveInPrivateModal();
       });
   }, [closeMoveInPrivateModal, moveDownloadToFolder, moveTaskInPrivate]);
 
