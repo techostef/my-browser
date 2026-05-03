@@ -164,7 +164,6 @@ class DownloadManager {
         if (downloadIndex < 0) {
           return null;
         }
-        console.log("parts", parts)
         const afterDownload = parts.slice(downloadIndex + 1);
         if (afterDownload.length <= 1) {
           return '';
@@ -252,7 +251,7 @@ class DownloadManager {
       };
     } catch (err) {
       console.warn('Failed to scan device downloads without SAF picker:', err);
-      return { files: [], folders: [] };
+      throw err;
     }
   }
 

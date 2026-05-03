@@ -7,6 +7,7 @@ import React, {
   useRef,
   useMemo,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DownloadTask, DownloadAction, DetectedVideo } from '../types';
 import { downloadManager } from '../services/downloadManager';
 
@@ -14,6 +15,12 @@ interface DownloadState {
   downloads: DownloadTask[];
   folders: string[];
   deviceFolders: string[];
+  isDeviceScanRunning: boolean;
+}
+
+interface DeviceScanCachePayload {
+  files: DownloadTask[];
+  folders: string[];
 }
 
 interface DownloadContextValue extends DownloadState {
@@ -39,7 +46,14 @@ interface DownloadContextValue extends DownloadState {
   removeDownload: (id: string) => void;
 }
 
-const initialState: DownloadState = { downloads: [], folders: [], deviceFolders: [] };
+const DEVICE_SCAN_CACHE_KEY = '@device_download_scan_cache_v1';
+
+const initialState: DownloadState = {
+  downloads: [],
+  folders: [],
+  deviceFolders: [],
+  isDeviceScanRunning: false,
+};
 
 function downloadReducer(
   state: DownloadState,
@@ -109,6 +123,12 @@ function downloadReducer(
         deviceFolders: action.payload.folders,
       };
 
+    case 'SET_DEVICE_SCAN_RUNNING':
+      return {
+        ...state,
+        isDeviceScanRunning: action.payload.isRunning,
+      };
+
     default:
       return state;
   }
@@ -143,6 +163,37 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const downloadsRef = useRef(state.downloads);
   downloadsRef.current = state.downloads;
 
+  const persistDeviceScanCache = useCallback(async (files: DownloadTask[], folders: string[]) => {
+    try {
+      const payload: DeviceScanCachePayload = { files, folders };
+      await AsyncStorage.setItem(DEVICE_SCAN_CACHE_KEY, JSON.stringify(payload));
+    } catch (err) {
+      console.warn('Failed to persist device scan cache:', err);
+    }
+  }, []);
+
+  const restoreDeviceScanCache = useCallback(async (): Promise<DeviceScanCachePayload> => {
+    try {
+      const raw = await AsyncStorage.getItem(DEVICE_SCAN_CACHE_KEY);
+      if (!raw) {
+        return { files: [], folders: [] };
+      }
+
+      const parsed = JSON.parse(raw) as Partial<DeviceScanCachePayload>;
+      const files = Array.isArray(parsed.files)
+        ? parsed.files.filter(file => file?.status === 'completed' && file?.source === 'device')
+        : [];
+      const folders = Array.isArray(parsed.folders)
+        ? parsed.folders.filter((folder): folder is string => typeof folder === 'string')
+        : [];
+
+      return { files, folders };
+    } catch (err) {
+      console.warn('Failed to restore device scan cache:', err);
+      return { files: [], folders: [] };
+    }
+  }, []);
+
   const refreshDownloads = useCallback(async () => {
     try {
       const privateFiles = await downloadManager.listPrivateDownloads();
@@ -160,46 +211,32 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const scanDeviceDownloadFolder = useCallback(async () => {
+    dispatchRef.current({ type: 'SET_DEVICE_SCAN_RUNNING', payload: { isRunning: true } });
     try {
       const privateFiles = await downloadManager.listPrivateDownloads();
       const privateFolders = await downloadManager.listPrivateFolders();
       const scannedDevice = await downloadManager.scanDeviceDownloadFolder();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
-      const previousDeviceFiles = downloadsRef.current.filter(
-        d => d.status === 'completed' && d.source === 'device',
-      );
-      const mergedDeviceFileMap = new Map<string, DownloadTask>();
-      for (const file of previousDeviceFiles) {
-        mergedDeviceFileMap.set(file.id, file);
-      }
-      for (const file of scannedDevice.files) {
-        mergedDeviceFileMap.set(file.id, file);
-      }
 
       const merged = [
         ...activeOrPending,
         ...privateFiles,
-        ...Array.from(mergedDeviceFileMap.values()),
+        ...scannedDevice.files,
       ].sort((a, b) => b.createdAt - a.createdAt);
-
-      const mergedDeviceFolders = Array.from(
-        new Set([...state.deviceFolders, ...scannedDevice.folders]),
-      ).sort((a, b) => a.localeCompare(b));
 
       dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
       dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
-      dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: mergedDeviceFolders } });
+      dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: scannedDevice.folders } });
+      await persistDeviceScanCache(scannedDevice.files, scannedDevice.folders);
     } catch (err) {
       console.warn('Scan device download folder failed:', err);
       throw err;
+    } finally {
+      dispatchRef.current({ type: 'SET_DEVICE_SCAN_RUNNING', payload: { isRunning: false } });
     }
-  }, [state.deviceFolders]);
+  }, [persistDeviceScanCache]);
 
   useEffect(() => {
-    downloadManager.initializePrivateFolder().catch(err => {
-      console.warn('Failed to initialize private downloads folder:', err);
-    });
-
     downloadManager.setProgressCallback((id, received, total) => {
       const progress = total > 0 ? Math.round((received / total) * 100) : 0;
       dispatchRef.current({
@@ -220,8 +257,34 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         });
       }
     });
-    refreshDownloads();
-  }, [refreshDownloads]);
+
+    (async () => {
+      try {
+        await downloadManager.initializePrivateFolder();
+        const [cachedDeviceScan, privateFiles, privateFolders] = await Promise.all([
+          restoreDeviceScanCache(),
+          downloadManager.listPrivateDownloads(),
+          downloadManager.listPrivateFolders(),
+        ]);
+
+        const merged = [
+          ...downloadsRef.current.filter(d => d.status !== 'completed'),
+          ...privateFiles,
+          ...cachedDeviceScan.files,
+        ].sort((a, b) => b.createdAt - a.createdAt);
+
+        dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
+        dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
+        dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: cachedDeviceScan.folders } });
+      } catch (err) {
+        console.warn('Failed to bootstrap downloads:', err);
+      }
+
+      scanDeviceDownloadFolder().catch(err => {
+        console.warn('Startup device scan failed:', err);
+      });
+    })();
+  }, [restoreDeviceScanCache, scanDeviceDownloadFolder]);
 
   const createFolder = useCallback(async (folderName: string) => {
     const trimmed = folderName.trim();

@@ -51,6 +51,7 @@ export type DownloadAction =
   | { type: 'SET_FILE_PATH'; payload: { id: string; filePath: string } }
   | { type: 'SET_FOLDERS'; payload: { folders: string[] } }
   | { type: 'SET_DEVICE_FOLDERS'; payload: { folders: string[] } }
+  | { type: 'SET_DEVICE_SCAN_RUNNING'; payload: { isRunning: boolean } }
   | { type: 'REMOVE_DOWNLOAD'; payload: { id: string } };
 
 export interface WebViewMessage {

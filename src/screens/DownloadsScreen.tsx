@@ -24,6 +24,7 @@ export default function DownloadsScreen() {
     downloads,
     folders,
     deviceFolders,
+    isDeviceScanRunning,
     refreshDownloads,
     scanDeviceDownloadFolder,
     pauseDownload,
@@ -51,7 +52,6 @@ export default function DownloadsScreen() {
   const [folderNameText, setFolderNameText] = useState('');
   const [currentFolderPath, setCurrentFolderPath] = useState('');
   const [moveTask, setMoveTask] = useState<DownloadTask | null>(null);
-  const [isScanningDevice, setIsScanningDevice] = useState(false);
 
   const getMediaType = useCallback((task: DownloadTask): DownloadMediaType => {
     const source = (task.fileName || task.filePath || task.url || '')
@@ -92,14 +92,12 @@ export default function DownloadsScreen() {
 
   const openDeviceRoot = useCallback(() => {
     setCurrentFolderPath(DEVICE_ROOT_PATH);
-    setIsScanningDevice(true);
-    scanDeviceDownloadFolder()
-      .catch(err => {
-        Alert.alert('Scan failed', err instanceof Error ? err.message : 'Unable to scan device download folder');
-      })
-      .finally(() => {
-        setIsScanningDevice(false);
-      });
+  }, []);
+
+  const handleRescanDevice = useCallback(() => {
+    scanDeviceDownloadFolder().catch(err => {
+      Alert.alert('Scan failed', err instanceof Error ? err.message : 'Unable to scan device download folder');
+    });
   }, [scanDeviceDownloadFolder]);
 
   const handleRename = useCallback((task: DownloadTask) => {
@@ -258,23 +256,12 @@ export default function DownloadsScreen() {
     }
 
     if (item.source === 'device') {
-      const relativePath = item.path.startsWith(`${DEVICE_ROOT_PATH}/`)
-        ? item.path.substring(DEVICE_ROOT_PATH.length + 1)
-        : '';
       setCurrentFolderPath(item.path);
-      setIsScanningDevice(true);
-      scanDeviceDownloadFolder(relativePath)
-        .catch(err => {
-          Alert.alert('Scan failed', err instanceof Error ? err.message : 'Unable to scan device folder');
-        })
-        .finally(() => {
-          setIsScanningDevice(false);
-        });
       return;
     }
 
     setCurrentFolderPath(item.path);
-  }, [openDeviceRoot, scanDeviceDownloadFolder]);
+  }, [openDeviceRoot]);
 
   const handleBackFolder = useCallback(() => {
     if (!currentFolderPath) {
@@ -414,7 +401,14 @@ export default function DownloadsScreen() {
           <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
             <Text style={styles.newFolderBtnText}>+ Folder</Text>
           </TouchableOpacity>
-        ) : null}
+        ) : (
+          <TouchableOpacity
+            style={[styles.rescanBtn, isDeviceScanRunning ? styles.rescanBtnDisabled : null]}
+            onPress={handleRescanDevice}
+            disabled={isDeviceScanRunning}>
+            <Text style={styles.rescanBtnText}>{isDeviceScanRunning ? 'Scanning...' : 'Rescan'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {currentFolderPath ? (
@@ -425,11 +419,19 @@ export default function DownloadsScreen() {
         </View>
       ) : null}
 
+      {isDevicePath ? (
+        <View style={styles.deviceScanStatusRow}>
+          <Text style={styles.deviceScanStatusText}>
+            {isDeviceScanRunning ? 'Device download scan is running...' : 'Showing last scanned device download results'}
+          </Text>
+        </View>
+      ) : null}
+
       {gridData.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📥</Text>
           <Text style={styles.emptyText}>
-            {isScanningDevice
+            {isDeviceScanRunning
               ? 'Scanning device folder...'
               : currentFolderPath
                 ? 'This folder is empty'
@@ -437,7 +439,7 @@ export default function DownloadsScreen() {
           </Text>
           <Text style={styles.emptySubtext}>
             {isDevicePath
-              ? 'Tap Device Download from root to rescan and refresh files/folders'
+              ? 'Use Rescan to refresh files and folders from device storage'
               : currentFolderPath
               ? 'Create a subfolder or move files here'
               : 'Browse a page with videos and tap the download button'}
@@ -458,7 +460,7 @@ export default function DownloadsScreen() {
                     <Text style={styles.folderIcon}>📁</Text>
                     <Text style={styles.folderName} numberOfLines={1}>{item.name}</Text>
                     <Text style={styles.folderMeta} numberOfLines={1}>
-                      {item.isDeviceRoot && isScanningDevice ? 'Scanning...' : 'Tap to open'}
+                      {item.isDeviceRoot && isDeviceScanRunning ? 'Scanning...' : 'Tap to open'}
                     </Text>
                   </TouchableOpacity>
                   {item.source === 'private' ? (
@@ -644,9 +646,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  rescanBtn: {
+    backgroundColor: '#E7F7ED',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  rescanBtnDisabled: {
+    opacity: 0.65,
+  },
+  rescanBtnText: {
+    color: '#1F8A4C',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   folderPathRow: {
     paddingHorizontal: 12,
     paddingTop: 8,
+  },
+  deviceScanStatusRow: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  deviceScanStatusText: {
+    fontSize: 12,
+    color: '#4A6A8A',
   },
   backFolderBtn: {
     alignSelf: 'flex-start',
