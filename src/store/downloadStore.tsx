@@ -34,7 +34,7 @@ interface DownloadContextValue extends DownloadState {
   createFolder: (folderName: string) => Promise<void>;
   renameFolder: (folderName: string, newFolderName: string) => Promise<void>;
   deleteFolder: (folderName: string, force?: boolean) => Promise<void>;
-  scanDeviceDownloadFolder: () => Promise<void>;
+  scanDeviceDownloadFolder: (folderPath?: string) => Promise<void>;
   moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<void>;
   removeDownload: (id: string) => void;
 }
@@ -165,16 +165,35 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       const privateFolders = await downloadManager.listPrivateFolders();
       const scannedDevice = await downloadManager.scanDeviceDownloadFolder();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
-      const merged = [...activeOrPending, ...privateFiles, ...scannedDevice.files].sort((a, b) => b.createdAt - a.createdAt);
+      const previousDeviceFiles = downloadsRef.current.filter(
+        d => d.status === 'completed' && d.source === 'device',
+      );
+      const mergedDeviceFileMap = new Map<string, DownloadTask>();
+      for (const file of previousDeviceFiles) {
+        mergedDeviceFileMap.set(file.id, file);
+      }
+      for (const file of scannedDevice.files) {
+        mergedDeviceFileMap.set(file.id, file);
+      }
+
+      const merged = [
+        ...activeOrPending,
+        ...privateFiles,
+        ...Array.from(mergedDeviceFileMap.values()),
+      ].sort((a, b) => b.createdAt - a.createdAt);
+
+      const mergedDeviceFolders = Array.from(
+        new Set([...state.deviceFolders, ...scannedDevice.folders]),
+      ).sort((a, b) => a.localeCompare(b));
 
       dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
       dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
-      dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: scannedDevice.folders } });
+      dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: mergedDeviceFolders } });
     } catch (err) {
       console.warn('Scan device download folder failed:', err);
       throw err;
     }
-  }, []);
+  }, [state.deviceFolders]);
 
   useEffect(() => {
     downloadManager.initializePrivateFolder().catch(err => {

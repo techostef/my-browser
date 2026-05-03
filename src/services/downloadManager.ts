@@ -147,25 +147,45 @@ class DownloadManager {
       }
 
       const scannedFiles: DownloadTask[] = [];
+      const scannedFolderSet = new Set<string>();
+      const seenAssetIds = new Set<string>();
 
-      const albums = await MediaLibrary.getAlbumsAsync({ includeSmartAlbums: true });
-      const downloadsAlbum = albums.find(album => /downloads?/i.test(album.title));
-      if (!downloadsAlbum) {
-        return { files: [], folders: [] };
-      }
+      const splitPathSegments = (path: string): string[] => {
+        return path.split('/').filter(Boolean);
+      };
+
+      const getDownloadRelativeFolder = (fileUri: string): string | null => {
+        const cleanUri = fileUri.split('?')[0];
+        const parts = splitPathSegments(cleanUri);
+        if (parts[4].toLowerCase() !== 'download') {
+          return null;
+        }
+        const downloadIndex = parts.findIndex(segment => segment.toLowerCase() === 'download');
+        if (downloadIndex < 0) {
+          return null;
+        }
+        console.log("parts", parts)
+        const afterDownload = parts.slice(downloadIndex + 1);
+        if (afterDownload.length <= 1) {
+          return '';
+        }
+        return afterDownload.slice(0, -1).join('/');
+      };
 
       let after: string | undefined;
       while (true) {
         const page = await MediaLibrary.getAssetsAsync({
-          album: downloadsAlbum,
-          first: 100,
+          first: 1000,
           after,
+          mediaType: ['audio', 'video', 'photo', 'unknown'],
           sortBy: [MediaLibrary.SortBy.creationTime],
         });
 
         for (const asset of page.assets) {
-          const createdAt = this.normalizeTimestamp(asset.creationTime);
-          const fileName = asset.filename || asset.uri.split('/').pop() || `device_${asset.id}`;
+          if (seenAssetIds.has(asset.id)) {
+            continue;
+          }
+          seenAssetIds.add(asset.id);
 
           let filePath = asset.uri;
           try {
@@ -177,6 +197,20 @@ class DownloadManager {
             filePath = asset.uri;
           }
 
+          const folderPath = getDownloadRelativeFolder(filePath);
+          if (folderPath === null) {
+            continue;
+          }
+
+          if (folderPath) {
+            const folderParts = folderPath.split('/').filter(Boolean);
+            for (let i = 0; i < folderParts.length; i++) {
+              const nestedPath = folderParts.slice(0, i + 1).join('/');
+              scannedFolderSet.add(nestedPath);
+            }
+          }
+
+          const fileName = asset.filename || filePath.split('/').pop() || `device_${asset.id}`;
           let sizeBytes = 0;
           try {
             const fileInfo = await FileSystem.getInfoAsync(filePath);
@@ -193,13 +227,13 @@ class DownloadManager {
             fileName,
             filePath,
             source: 'device',
-            folderPath: '',
+            folderPath,
             status: 'completed',
             progress: 100,
             bytesDownloaded: sizeBytes,
             totalBytes: sizeBytes,
             pageTitle: 'Device Download',
-            createdAt,
+            createdAt: this.normalizeTimestamp(asset.creationTime),
           });
         }
 
@@ -210,13 +244,14 @@ class DownloadManager {
       }
 
       scannedFiles.sort((a, b) => b.createdAt - a.createdAt);
+      const scannedFolders = Array.from(scannedFolderSet).sort((a, b) => a.localeCompare(b));
 
       return {
         files: scannedFiles,
-        folders: [],
+        folders: scannedFolders,
       };
     } catch (err) {
-      console.warn('Failed to scan device downloads from media library:', err);
+      console.warn('Failed to scan device downloads without SAF picker:', err);
       return { files: [], folders: [] };
     }
   }

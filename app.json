@@ -24,7 +24,9 @@
         "expo-media-library",
         {
           "photosPermission": "Allow MyBrowser to access your videos.",
-          "savePhotosPermission": "Allow MyBrowser to save downloaded videos."
+          "savePhotosPermission": "Allow MyBrowser to save downloaded videos.",
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["audio", "photo"]
         }
       ]
     ]

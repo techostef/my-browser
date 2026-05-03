@@ -256,8 +256,25 @@ export default function DownloadsScreen() {
       openDeviceRoot();
       return;
     }
+
+    if (item.source === 'device') {
+      const relativePath = item.path.startsWith(`${DEVICE_ROOT_PATH}/`)
+        ? item.path.substring(DEVICE_ROOT_PATH.length + 1)
+        : '';
+      setCurrentFolderPath(item.path);
+      setIsScanningDevice(true);
+      scanDeviceDownloadFolder(relativePath)
+        .catch(err => {
+          Alert.alert('Scan failed', err instanceof Error ? err.message : 'Unable to scan device folder');
+        })
+        .finally(() => {
+          setIsScanningDevice(false);
+        });
+      return;
+    }
+
     setCurrentFolderPath(item.path);
-  }, [openDeviceRoot]);
+  }, [openDeviceRoot, scanDeviceDownloadFolder]);
 
   const handleBackFolder = useCallback(() => {
     if (!currentFolderPath) {
