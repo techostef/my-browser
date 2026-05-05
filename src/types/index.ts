@@ -10,13 +10,15 @@ export interface BrowserTab {
 
 export interface DetectedVideo {
   url: string;
-  type: 'mp4' | 'webm' | 'hls' | 'blob' | 'blob-ready' | 'unknown';
+  type: 'mp4' | 'webm' | 'hls' | 'dash' | 'blob' | 'blob-ready' | 'unknown';
   pageUrl: string;
   pageTitle: string;
   timestamp: number;
   cookies?: string;
   blobSize?: number;
   videoWidth?: string;
+  isValid?: boolean;
+  startTime?: number;
 }
 
 export type DownloadStatus =

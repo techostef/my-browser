@@ -20,6 +20,10 @@ import {
 import { DetectedVideo } from '../types';
 import Browser from '@/components/Browser';
 
+// Injected into the browser WebView when the user taps Preview on a stream.
+// Posts the currentTime of the most-advanced playing video element.
+const GET_VIDEO_TIME_JS = `(function(){try{var vids=document.querySelectorAll('video');var t=0;for(var i=0;i<vids.length;i++){if(vids[i].currentTime>t)t=vids[i].currentTime;}window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_CURRENT_TIME',payload:{time:t}}));}catch(e){}})();true;`;
+
 export default function BrowserScreen() {
   // Subscribe ONLY to the narrow slices BrowserScreen itself needs. Heavy
   // state (tabs array, activeTab fields, download progress) is read inside
@@ -33,6 +37,11 @@ export default function BrowserScreen() {
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
+
+  // Used to hold a stream preview request while we wait for the current
+  // playback time to come back from the browser WebView.
+  const pendingPreviewVideoRef = useRef<DetectedVideo | null>(null);
+  const pendingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Per-tab video detection state
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
@@ -140,6 +149,26 @@ export default function BrowserScreen() {
   // Video preview modal state
   const [previewVideo, setPreviewVideo] = useState<DetectedVideo | null>(null);
 
+  // For DASH/HLS streams, capture the browser's current playback position before
+  // opening the preview so the modal can seek to the same spot.
+  const handlePreviewVideo = useCallback((video: DetectedVideo) => {
+    if (video.type === 'dash' || video.type === 'hls') {
+      pendingPreviewVideoRef.current = video;
+      if (pendingPreviewTimerRef.current) clearTimeout(pendingPreviewTimerRef.current);
+      webViewRefs.current[activeTabId]?.injectJavaScript(GET_VIDEO_TIME_JS);
+      // Fallback: open with startTime=0 if no reply within 400ms
+      pendingPreviewTimerRef.current = setTimeout(() => {
+        if (pendingPreviewVideoRef.current === video) {
+          pendingPreviewVideoRef.current = null;
+          pendingPreviewTimerRef.current = null;
+          setPreviewVideo(video);
+        }
+      }, 400);
+    } else {
+      setPreviewVideo(video);
+    }
+  }, [activeTabId]);
+
   // Inject a URL into the (memoized) WebView without causing a React re-render.
   const injectNavigation = useCallback((tabId: string, url: string) => {
     const esc = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -246,24 +275,51 @@ export default function BrowserScreen() {
           const newVideos: DetectedVideo[] = message.payload;
           setDetectedVideosMap(prev => {
             const existing = prev[tabId] || [];
-            // Dedup on (url + type). Also upgrade an existing 'blob' entry to
+            // console.log("prev", prev[tabId])
+            // Replace on (pageTitle + type) only for non-mp4 types. Also upgrade
+            // an existing 'blob' entry to
             // 'blob-ready' when MSE finishes buffering for the same URL — without
             // this, the upgrade is dropped and the banner shows the URL as
             // non-downloadable.
-            const existingKeys = new Set(existing.map(v => v.url + ':' + v.type));
-            const incoming = newVideos.filter(v => !existingKeys.has(v.url + ':' + v.type));
+            const getVideoKey = (video: DetectedVideo) => `${video.url}:${video.type}`;
+            const existingKeys = new Set(existing.map(getVideoKey));
+            const incomingByKey = new Map(newVideos.map(video => [getVideoKey(video), video]));
+            // console.log("incomingByKey", incomingByKey)
+            const incoming = Array.from(incomingByKey.values()).filter(
+              video => video.type !== 'mp4' || !existingKeys.has(getVideoKey(video)),
+            );
+            // console.log("incoming", incoming)
             if (incoming.length === 0) {
               return prev;
             }
+            const incomingReplacementKeys = new Set(
+              incoming.filter(v => v.type !== 'mp4').map(getVideoKey),
+            );
             const upgradedUrls = new Set(
               incoming.filter(v => v.type === 'blob-ready').map(v => v.url),
             );
-            const filtered = existing.filter(
-              v => !(v.type === 'blob' && upgradedUrls.has(v.url)),
+            // URLs that a loadedmetadata update confirmed are stale and should
+            // be replaced by the newly confirmed currentSrc.
+            const replacedUrls = new Set(
+              incoming.map(v => (v as any).replacesUrl).filter(Boolean),
+            );
+            const filtered = existing.filter(v => !incomingReplacementKeys.has(getVideoKey(v))).filter(
+              v => !(v.type === 'blob' && upgradedUrls.has(v.url))
+                && !replacedUrls.has(v.url),
             );
             return { ...prev, [tabId]: [...filtered, ...incoming] };
           });
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
+          break;
+        }
+        case 'VIDEO_CURRENT_TIME': {
+          const pending = pendingPreviewVideoRef.current;
+          if (pending) {
+            if (pendingPreviewTimerRef.current) clearTimeout(pendingPreviewTimerRef.current);
+            pendingPreviewTimerRef.current = null;
+            pendingPreviewVideoRef.current = null;
+            setPreviewVideo({ ...pending, startTime: message.payload?.time || 0 });
+          }
           break;
         }
         case 'DETECTOR_LOG':
@@ -356,6 +412,13 @@ export default function BrowserScreen() {
         Alert.alert(
           'Blob URL',
           'This video uses a blob URL and cannot be downloaded directly. It may be DRM-protected or streamed.',
+        );
+        return;
+      }
+      if (video.type === 'dash') {
+        Alert.alert(
+          'DASH Stream',
+          'DASH streams cannot be downloaded directly. Use Preview to watch it.',
         );
         return;
       }
@@ -469,7 +532,7 @@ export default function BrowserScreen() {
         {!activeBannerDismissed && (
           <VideoDetectedBanner
             videos={activeDetectedVideos}
-            onPreview={setPreviewVideo}
+            onPreview={handlePreviewVideo}
             onOpenInTab={(video) => addTab(video.url)}
             onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
           />

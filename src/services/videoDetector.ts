@@ -123,6 +123,9 @@ export const VIDEO_DETECTOR_JS = `
     var lower = url.toLowerCase();
     if (lower.startsWith('blob:')) return 'blob';
     if (lower.includes('.m3u8') || lower.includes('m3u8')) return 'hls';
+    if (lower.includes('.mpd') || lower.includes('application/dash')) return 'dash';
+    // .m4s files are DASH segment fragments — not standalone videos, skip them
+    if (lower.includes('.m4s')) return 'unknown';
     if (lower.includes('.mp4') || lower.includes('video/mp4')) return 'mp4';
     if (lower.includes('.webm') || lower.includes('video/webm')) return 'webm';
     // x.com / Twitter video CDN often serves mp4 without .mp4 extension
@@ -196,6 +199,39 @@ export const VIDEO_DETECTOR_JS = `
     }
   }
 
+  // Per-element loadedmetadata listener: fires when the browser confirms
+  // currentSrc is actually playable. If the element's URL changed since it
+  // was first detected (e.g. quality negotiation, redirect, signed-URL refresh),
+  // report the updated URL and signal RN to replace the stale one.
+  function attachVideoListeners(vEl) {
+    if (vEl.__detectorAttached) return;
+    vEl.__detectorAttached = true;
+    vEl.addEventListener('loadedmetadata', function() {
+      try {
+        var cur = vEl.currentSrc;
+        if (!cur || cur.trim() === '') return;
+        var url = toAbsoluteUrl(cur);
+        var prev = vEl.__detectorLastUrl || null;
+        if (url === prev) return;
+        vEl.__detectorLastUrl = url;
+        var type = classifyUrl(url);
+        if (type === 'unknown') return;
+        if (!detectedUrls.has(url)) detectedUrls.add(url);
+        var payload = {
+          url: url, type: type, downloadable: isDownloadable(type),
+          pageUrl: window.location.href, pageTitle: document.title,
+          timestamp: Date.now(), cookies: document.cookie || ''
+        };
+        if (prev && prev !== url) payload.replacesUrl = prev;
+        log('[LOADEDMETADATA] confirmed url=' + url.substring(0, 100) + (prev && prev !== url ? ' replaces=' + prev.substring(0, 80) : ''));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'VIDEO_DETECTED',
+          payload: [payload]
+        }));
+      } catch(e) {}
+    });
+  }
+
   var scanCount = 0;
   function scanForVideos() {
     var videos = document.querySelectorAll('video');
@@ -206,8 +242,14 @@ export const VIDEO_DETECTOR_JS = `
     scanCount++;
     var allUrls = [];
     for (var i = 0; i < videos.length; i++) {
-      var sources = extractVideoSources(videos[i]);
+      var vEl = videos[i];
+      var sources = extractVideoSources(vEl);
       allUrls = allUrls.concat(sources);
+      if (!vEl.__detectorLastUrl) {
+        var initSrc = vEl.currentSrc || vEl.src || '';
+        if (initSrc) vEl.__detectorLastUrl = toAbsoluteUrl(initSrc);
+      }
+      attachVideoListeners(vEl);
     }
 
     // Also look for iframes that might contain videos (same-origin only)
@@ -240,10 +282,14 @@ export const VIDEO_DETECTOR_JS = `
     if (typeof url === 'string') {
       var lower = url.toLowerCase();
       if (lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
+          lower.includes('.mpd') || lower.includes('application/dash') ||
           lower.includes('video/') || lower.includes('mime=video') ||
           lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
-        log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
-        sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
+        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
+        if (!lower.includes('.m4s')) {
+          log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
+          sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
+        }
       }
     }
     return origOpen.apply(this, arguments);
@@ -332,10 +378,14 @@ export const VIDEO_DETECTOR_JS = `
     if (url) {
       var lower = url.toLowerCase();
       if (lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
+          lower.includes('.mpd') || lower.includes('application/dash') ||
           lower.includes('video/') || lower.includes('mime=video') ||
           lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
-        log('[FETCH] Intercepted video URL: ' + url.substring(0, 150));
-        sendDetectedVideos([toAbsoluteUrl(url)], 'fetch');
+        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
+        if (!lower.includes('.m4s')) {
+          log('[FETCH] Intercepted video URL: ' + url.substring(0, 150));
+          sendDetectedVideos([toAbsoluteUrl(url)], 'fetch');
+        }
       }
     }
     // Also inspect fetch responses for x.com API video data

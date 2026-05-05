@@ -20,20 +20,21 @@ interface Props {
   onClose: () => void;
 }
 
+const IS_USE_LOG = true;
+
 function buildPlayerHtml(videoUrl: string, videoType: string): string {
   const mimeType = videoType === 'webm' ? 'video/webm' : 'video/mp4';
   const scriptLog = `
 <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
-      // DISABLED LOGGING
-      /*
-      var ts = new Date().toISOString().substr(11, 12);
-      var line = ts + ' ' + msg;
-      debugEl.innerHTML += line + '<br>';
-      debugEl.scrollTop = debugEl.scrollHeight;
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
-      */
+      ${IS_USE_LOG ? `
+        var ts = new Date().toISOString().substr(11, 12);
+        var line = ts + ' ' + msg;
+        debugEl.innerHTML += line + '<br>';
+        debugEl.scrollTop = debugEl.scrollHeight;
+        window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
+      ` : ''}
     }
 
     log('[INIT] Video URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 200)}');
@@ -115,7 +116,7 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
 </head>
 <body>
   <div class="wrapper">
-    <video id="player" controls autoplay playsinline crossorigin="anonymous">
+    <video id="player" controls autoplay playsinline>
       <source src="${videoUrl}" type="${mimeType}">
     </video>
   </div>
@@ -124,14 +125,13 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
   <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
-      // DISABLED LOGGING
-      /* 
+      ${IS_USE_LOG ? `
       var ts = new Date().toISOString().substr(11, 12);
       var line = ts + ' ' + msg;
       debugEl.innerHTML += line + '<br>';
       debugEl.scrollTop = debugEl.scrollHeight;
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
-      */
+      ` : ''}
     }
 
     log('[INIT] Video URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 200)}');
@@ -173,6 +173,7 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
     if (src) {
       src.addEventListener('error', function(e) {
         log('[SOURCE ERROR] The <source> element failed to load');
+        log('[SOURCE ERROR] ' + JSON.stringify(e));
       });
     }
 
@@ -185,7 +186,68 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
 </html>`;
 }
 
-function buildHlsPlayerHtml(videoUrl: string): string {
+function buildDashPlayerHtml(videoUrl: string, startTime: number): string {
+  const escapedUrl = videoUrl.replace(/'/g, "\\'");
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; background:#000; overflow:hidden; }
+    .wrapper { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    video { max-width:100%; max-height:100%; background:#000; }
+    .error { color:#fff; text-align:center; padding:24px; font-family:sans-serif; }
+    .error h2 { margin-bottom:8px; color:#ff6b6b; }
+    .error p { color:#999; font-size:14px; word-break:break-all; }
+  </style>
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+</head>
+<body>
+  <div class="wrapper">
+    <video id="player" controls autoplay playsinline></video>
+  </div>
+  <script>
+    var videoUrl = '${escapedUrl}';
+    var v = document.getElementById('player');
+
+    v.addEventListener('loadeddata', function() {
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOADED'}));
+    });
+    v.addEventListener('error', function() {
+      var code = v.error ? v.error.code : 'N/A';
+      var msg = v.error ? v.error.message : 'Unknown';
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: msg, code: code}));
+    });
+
+    if (typeof dashjs !== 'undefined') {
+      var player = dashjs.MediaPlayer().create();
+      player.initialize(v, videoUrl, true);
+      if (${startTime} > 0) {
+        player.on(dashjs.MediaPlayer.events['PLAYBACK_METADATA_LOADED'], function() {
+          player.seek(${startTime});
+        });
+      }
+      player.on(dashjs.MediaPlayer.events['ERROR'], function(e) {
+        var detail = e.error ? (e.error.message || e.error.code || JSON.stringify(e.error)) : 'Unknown';
+        window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: 'DASH: ' + detail}));
+        document.querySelector('.wrapper').innerHTML =
+          '<div class="error"><h2>Unable to play DASH stream</h2>'
+          + '<p>' + detail + '</p>'
+          + '<p style="margin-top:12px;font-size:12px;color:#666">' + videoUrl.substring(0, 120) + '</p></div>';
+      });
+    } else {
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message:'dash.js unavailable'}));
+      document.querySelector('.wrapper').innerHTML =
+        '<div class="error"><h2>DASH Not Supported</h2><p>Could not load dash.js player.</p></div>';
+    }
+  </script>
+</body>
+</html>`;
+}
+
+function buildHlsPlayerHtml(videoUrl: string, startTime: number): string {
   const escapedUrl = videoUrl.replace(/'/g, "\\'");
   return `
 <!DOCTYPE html>
@@ -225,14 +287,13 @@ function buildHlsPlayerHtml(videoUrl: string): string {
   <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
-      // DISABLED LOGGING
-      /*
+      ${IS_USE_LOG ? `
       var ts = new Date().toISOString().substr(11, 12);
       var line = ts + ' ' + msg;
       debugEl.innerHTML += line + '<br>';
       debugEl.scrollTop = debugEl.scrollHeight;
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
-      */
+      ` : ''}
     }
 
     var videoUrl = '${escapedUrl}';
@@ -268,6 +329,7 @@ function buildHlsPlayerHtml(videoUrl: string): string {
       hls.attachMedia(v);
       hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
         log('[HLS.js] Manifest parsed — ' + data.levels.length + ' quality level(s)');
+        if (${startTime} > 0) v.currentTime = ${startTime};
         v.play().catch(function(e) { log('[HLS.js] Autoplay blocked: ' + e.message); });
       });
       hls.on(Hls.Events.ERROR, function(event, data) {
@@ -298,6 +360,7 @@ function buildHlsPlayerHtml(videoUrl: string): string {
       log('[HLS] Native HLS support — setting src directly');
       v.src = videoUrl;
       v.addEventListener('loadedmetadata', function() {
+        if (${startTime} > 0) v.currentTime = ${startTime};
         v.play().catch(function(e) { log('[HLS] Autoplay blocked: ' + e.message); });
       });
     } else {
@@ -355,9 +418,12 @@ export default function VideoPreviewModal({
 
   if (!video) return null;
 
+  const startTime = video.startTime ?? 0;
   const html = video.type === 'hls'
-    ? buildHlsPlayerHtml(video.url)
-    : buildPlayerHtml(video.url, video.type);
+    ? buildHlsPlayerHtml(video.url, startTime)
+    : video.type === 'dash'
+      ? buildDashPlayerHtml(video.url, startTime)
+      : buildPlayerHtml(video.url, video.type);
 
   return (
     <Modal

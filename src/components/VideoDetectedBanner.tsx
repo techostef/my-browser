@@ -47,7 +47,6 @@ async function validateMp4Video(url: string): Promise<VideoValidationResult> {
     if (!url || !url.startsWith("http")) {
       return { isValid: false, error: "Invalid URL" };
     }
-
     // 2. HEAD request (fast check)
     const response = await fetch(url, {
       method: "HEAD",
@@ -112,7 +111,7 @@ export default function VideoDetectedBanner({
   if (videos.length === 0) return null;
   const isMounted = React.useRef(false);
 
-  const downloadableTypes = ["blob-ready", "hls", "mp4", "webm"];
+  const downloadableTypes = ["blob-ready", "hls", "dash", "mp4", "webm"];
   const downloadableVideos = videos.filter((v) => downloadableTypes.includes(v.type));
   const [filteredVideos, setFilteredVideos] = React.useState<
     DetectedVideo[]
@@ -121,9 +120,8 @@ export default function VideoDetectedBanner({
 
   const handleValidateVideos = async () => {
     const results = await Promise.all(
-      videos.map(async (video) => {
+      downloadableVideos.map(async (video) => {
         if (video.type !== 'mp4') return video;
-
         const validation = await validateMp4Video(video.url);
 
         return {
@@ -133,7 +131,7 @@ export default function VideoDetectedBanner({
       })
     );
 
-    setFilteredVideos(results);
+    setFilteredVideos(results.filter((item) => item.isValid !== false));
   };
 
   useEffect(() => {
@@ -144,10 +142,7 @@ export default function VideoDetectedBanner({
     return () => {
       isMounted.current = false;
     };
-  }, []);
-  // const nonDownloadable = videos.filter(
-  //   v => !downloadableTypes.includes(v.type),
-  // );
+  }, [downloadableVideos.length]);
 
   if (!isMounted.current) {
     return null;
@@ -163,6 +158,10 @@ export default function VideoDetectedBanner({
     onOpenInTab(video);
   };
 
+  if (filteredVideos.length === 0) {
+    return null
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -170,6 +169,19 @@ export default function VideoDetectedBanner({
           {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""} detected
         </Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => {
+              const list = filteredVideos.length > 0 ? filteredVideos : videos;
+              if (list.length === 1) {
+                onPreview(list[0]);
+              } else {
+                setIsDetailVisible(true);
+              }
+            }}
+            style={styles.previewHeaderBtn}
+          >
+            <Text style={styles.previewHeaderBtnText}>▶ Preview</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setIsDetailVisible(true)}
             style={styles.detailsBtn}
@@ -225,10 +237,12 @@ export default function VideoDetectedBanner({
                           ? `${item.pageTitle || "Video"} (${formatSize(item.blobSize || 0)})`
                           : item.type === "hls"
                             ? `${item.pageTitle || "HLS Stream"}`
-                            : item.videoWidth || item.pageTitle || "Video"}
+                            : item.type === "dash"
+                              ? `${item.pageTitle || "DASH Stream"}`
+                              : item.videoWidth || item.pageTitle || "Video"}
                       </Text>
                     </View>
-                    {item.type === "hls" && (
+                    {(item.type === "hls" || item.type === "dash") && (
                       <TouchableOpacity
                         style={styles.openTabBtn}
                         onPress={() => handleOpenInTabFromDetail(item)}
@@ -295,6 +309,18 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  previewHeaderBtn: {
+    backgroundColor: "#4ECDC4",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  previewHeaderBtnText: {
+    color: "#1A1A2E",
+    fontSize: 12,
+    fontWeight: "700",
   },
   detailsBtn: {
     backgroundColor: "rgba(78,205,196,0.2)",
