@@ -392,13 +392,58 @@ export default function BrowserScreen() {
             const replacedUrls = new Set(
               incoming.map(v => (v as any).replacesUrl).filter(Boolean),
             );
+            // Preserve hlsInfo from existing entries being replaced
+            const existingByKey = new Map(existing.map(v => [getVideoKey(v), v]));
+            const mergedIncoming = incoming.map(v => {
+              const old = existingByKey.get(getVideoKey(v));
+              if (old?.hlsInfo && !v.hlsInfo) {
+                return { ...v, hlsInfo: old.hlsInfo };
+              }
+              return v;
+            });
             const filtered = existing.filter(v => !incomingReplacementKeys.has(getVideoKey(v))).filter(
               v => !(v.type === 'blob' && upgradedUrls.has(v.url))
                 && !replacedUrls.has(v.url),
             );
-            return { ...prev, [tabId]: [...filtered, ...incoming] };
+            return { ...prev, [tabId]: [...filtered, ...mergedIncoming] };
           });
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
+          break;
+        }
+        case 'M3U8_INFO': {
+          const { url, variants, audioTracks, subtitleTracks, isMaster } = message.payload;
+          // Extract the video ID base path (e.g. ext_tw_video/123 or amplify_video/123)
+          // to match against all HLS entries from the same video
+          const getVideoBasePath = (u: string) => {
+            const match = u.match(/(ext_tw_video|amplify_video)\/(\d+)/);
+            return match ? match[0] : u;
+          };
+          const masterBase = getVideoBasePath(url);
+          setDetectedVideosMap(prev => {
+            const existing = prev[tabId] || [];
+            let changed = false;
+            const updated = existing.map(v => {
+              if (v.type === 'hls' && getVideoBasePath(v.url) === masterBase) {
+                // Merge: accumulate variants/audio/subs from multiple M3U8_INFO messages
+                const prev = v.hlsInfo || { variants: [], audioTracks: [], subtitleTracks: [] };
+                const merged = {
+                  variants: isMaster ? variants : [...prev.variants, ...variants],
+                  audioTracks: isMaster ? audioTracks : [...prev.audioTracks, ...audioTracks],
+                  subtitleTracks: isMaster ? subtitleTracks : [...prev.subtitleTracks, ...subtitleTracks],
+                };
+                // Skip if nothing new
+                if (
+                  merged.variants.length === prev.variants.length &&
+                  merged.audioTracks.length === prev.audioTracks.length &&
+                  merged.subtitleTracks.length === prev.subtitleTracks.length
+                ) return v;
+                changed = true;
+                return { ...v, hlsInfo: merged };
+              }
+              return v;
+            });
+            return changed ? { ...prev, [tabId]: updated } : prev;
+          });
           break;
         }
         case 'VIDEO_CURRENT_TIME': {
@@ -412,6 +457,11 @@ export default function BrowserScreen() {
           break;
         }
         case 'DETECTOR_LOG':
+          const filterLogs = ['[M3U8]'];
+          const log = message.payload;
+          if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
+            // console.log('[Detector]', log);
+          }
           break;
         case 'PAGE_INFO':
           break;

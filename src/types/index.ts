@@ -8,6 +8,32 @@ export interface BrowserTab {
   historyIndex: number;
 }
 
+export interface HlsVariant {
+  bandwidth: number;
+  averageBandwidth?: number;
+  resolution?: string; // e.g. "720x1280"
+  codecs?: string;
+  audio?: string; // audio group ID
+  subtitles?: string; // subtitles group ID
+  uri: string; // relative or absolute URI of the variant playlist
+}
+
+export interface HlsMediaTrack {
+  type: 'AUDIO' | 'SUBTITLES' | 'VIDEO' | 'CLOSED-CAPTIONS';
+  groupId: string;
+  name: string;
+  language?: string;
+  uri?: string;
+  default?: boolean;
+  autoselect?: boolean;
+}
+
+export interface HlsMasterInfo {
+  variants: HlsVariant[];
+  audioTracks: HlsMediaTrack[];
+  subtitleTracks: HlsMediaTrack[];
+}
+
 export interface DetectedVideo {
   url: string;
   type: 'mp4' | 'webm' | 'hls' | 'dash' | 'blob' | 'blob-ready' | 'unknown';
@@ -23,6 +49,8 @@ export interface DetectedVideo {
   // preview modal can play the captured bytes via file:// (the original
   // blob: URL is scoped to the page that created it and is unusable elsewhere).
   localUri?: string;
+  // Populated when an M3U8 master playlist is fetched and parsed
+  hlsInfo?: HlsMasterInfo;
 }
 
 export type DownloadStatus =

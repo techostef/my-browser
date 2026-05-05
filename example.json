@@ -1,120 +1,252 @@
 [
   {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978651232,
-    "type": "mp4",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/vid/avc1/480x270/3lmGqTLaoEo4gjDn.mp4?tag=12"
+    "variants": [
+      {
+        "bandwidth": 2003621,
+        "averageBandwidth": 1677657,
+        "resolution": "720x1280",
+        "codecs": "mp4a.40.2,avc1.64001F",
+        "audio": "audio-128000",
+        "uri": "/amplify_video/2050393252256501760/pl/avc1/720x1280/vYcsmQ78C4pxpWB_.m3u8"
+      },
+      {
+        "bandwidth": 899608,
+        "averageBandwidth": 774160,
+        "resolution": "480x852",
+        "codecs": "mp4a.40.2,avc1.4D401F",
+        "audio": "audio-64000",
+        "uri": "/amplify_video/2050393252256501760/pl/avc1/480x852/zM5-JCh7qGIywx30.m3u8"
+      },
+      {
+        "bandwidth": 439951,
+        "averageBandwidth": 374390,
+        "resolution": "320x568",
+        "codecs": "mp4a.40.2,avc1.4D401E",
+        "audio": "audio-32000",
+        "uri": "/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
+      },
+      {
+        "bandwidth": 0,
+        "resolution": "320x568",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
+      }
+    ],
+    "audioTracks": [
+      {
+        "type": "AUDIO",
+        "groupId": "audio-128000",
+        "name": "Audio",
+        "uri": "/amplify_video/2050393252256501760/pl/mp4a/128000/y6QYZgUc3EPx8UHY.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-64000",
+        "name": "Audio",
+        "uri": "/amplify_video/2050393252256501760/pl/mp4a/64000/Ov53scp70XCirQBw.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-32000",
+        "name": "Audio",
+        "uri": "/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-32000",
+        "name": "Audio 32kbps",
+        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
+        "default": false,
+        "autoselect": true
+      }
+    ],
+    "subtitleTracks": []
   },
   {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978651232,
-    "type": "mp4",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/vid/avc1/640x360/GlPmnohawaSm1mWm.mp4?tag=12"
+    "variants": [
+      {
+        "bandwidth": 2003621,
+        "averageBandwidth": 1677657,
+        "resolution": "720x1280",
+        "codecs": "mp4a.40.2,avc1.64001F",
+        "audio": "audio-128000",
+        "uri": "/amplify_video/2050393252256501760/pl/avc1/720x1280/vYcsmQ78C4pxpWB_.m3u8"
+      },
+      {
+        "bandwidth": 899608,
+        "averageBandwidth": 774160,
+        "resolution": "480x852",
+        "codecs": "mp4a.40.2,avc1.4D401F",
+        "audio": "audio-64000",
+        "uri": "/amplify_video/2050393252256501760/pl/avc1/480x852/zM5-JCh7qGIywx30.m3u8"
+      },
+      {
+        "bandwidth": 439951,
+        "averageBandwidth": 374390,
+        "resolution": "320x568",
+        "codecs": "mp4a.40.2,avc1.4D401E",
+        "audio": "audio-32000",
+        "uri": "/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
+      },
+      {
+        "bandwidth": 0,
+        "resolution": "320x568",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
+      }
+    ],
+    "audioTracks": [
+      {
+        "type": "AUDIO",
+        "groupId": "audio-128000",
+        "name": "Audio",
+        "uri": "/amplify_video/2050393252256501760/pl/mp4a/128000/y6QYZgUc3EPx8UHY.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-64000",
+        "name": "Audio",
+        "uri": "/amplify_video/2050393252256501760/pl/mp4a/64000/Ov53scp70XCirQBw.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-32000",
+        "name": "Audio",
+        "uri": "/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-32000",
+        "name": "Audio 32kbps",
+        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
+        "default": false,
+        "autoselect": true
+      }
+    ],
+    "subtitleTracks": []
   },
   {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978651233,
-    "type": "mp4",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/vid/avc1/1280x720/0tOWWfq5XQ6K0RnT.mp4?tag=12"
+    "variants": [
+      {
+        "bandwidth": 0,
+        "resolution": "960x720",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/960x720/9KKirYq1sK5k5BfX.m3u8"
+      },
+      {
+        "bandwidth": 0,
+        "resolution": "480x360",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
+      }
+    ],
+    "audioTracks": [
+      {
+        "type": "AUDIO",
+        "groupId": "audio-128000",
+        "name": "Audio 128kbps",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/128000/1PKXJm6gSo8wOCGu.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-64000",
+        "name": "Audio 64kbps",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
+        "default": false,
+        "autoselect": true
+      }
+    ],
+    "subtitleTracks": []
   },
   {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": false,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654562,
-    "type": "hls",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/pl/V1PV8-FAl1bmrCyb.m3u8?tag=12&variant_version=1"
+    "variants": [
+      {
+        "bandwidth": 0,
+        "resolution": "960x720",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/960x720/9KKirYq1sK5k5BfX.m3u8"
+      },
+      {
+        "bandwidth": 0,
+        "resolution": "480x360",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
+      }
+    ],
+    "audioTracks": [
+      {
+        "type": "AUDIO",
+        "groupId": "audio-128000",
+        "name": "Audio 128kbps",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/128000/1PKXJm6gSo8wOCGu.m3u8",
+        "default": false,
+        "autoselect": true
+      },
+      {
+        "type": "AUDIO",
+        "groupId": "audio-64000",
+        "name": "Audio 64kbps",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
+        "default": false,
+        "autoselect": true
+      }
+    ],
+    "subtitleTracks": []
   },
   {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": false,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654665,
-    "type": "hls",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/pl/avc1/480x270/0IdW-gdKf_PlYKLU.m3u8"
+    "variants": [
+      {
+        "bandwidth": 0,
+        "resolution": "480x360",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
+      }
+    ],
+    "audioTracks": [
+      {
+        "type": "AUDIO",
+        "groupId": "audio-64000",
+        "name": "Audio 64kbps",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
+        "default": false,
+        "autoselect": true
+      }
+    ],
+    "subtitleTracks": []
   },
   {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": false,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654666,
-    "type": "hls",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/pl/mp4a/32000/iThtVefn5tEWdxZE.m3u8"
-  },
-  {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654793,
-    "type": "mp4",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/aud/mp4a/0/0/32000/0MfKDIsm2ySfPVRA.mp4"
-  },
-  {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": false,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654871,
-    "type": "hls",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/pl/mp4a/128000/hMhcW-YADx9Zho_V.m3u8"
-  },
-  {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": false,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654872,
-    "type": "hls",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/pl/avc1/1280x720/N7S5C1cRWcxpaqNa.m3u8"
-  },
-  {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654880,
-    "type": "mp4",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/aud/mp4a/0/0/128000/gCFQcBfeIJDgGEX0.mp4"
-  },
-  {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978654881,
-    "type": "mp4",
-    "url": "https://video.twimg.com/ext_tw_video/2051166464103661568/pu/vid/avc1/0/0/1280x720/hwlZAKzRriThWvmE.mp4"
-  },
-  {
-    "blobSize": 1225987,
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": true,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978655004,
-    "type": "blob-ready",
-    "url": "blob:https://x.com/bba4b8ef-3d52-4eda-9dcc-0c0229897eae"
-  },
-  {
-    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-    "downloadable": false,
-    "pageTitle": "Fontinho on X: \"Essa dupla me tirava umas risada sincera\" / X",
-    "pageUrl": "https://x.com/Mah_Fontes3/status/2051247239880708240",
-    "timestamp": 1777978655110,
-    "type": "blob",
-    "url": "blob:https://x.com/bba4b8ef-3d52-4eda-9dcc-0c0229897eae"
+    "variants": [
+      {
+        "bandwidth": 0,
+        "resolution": "480x360",
+        "codecs": "avc1",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
+      }
+    ],
+    "audioTracks": [
+      {
+        "type": "AUDIO",
+        "groupId": "audio-64000",
+        "name": "Audio 64kbps",
+        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
+        "default": false,
+        "autoselect": true
+      }
+    ],
+    "subtitleTracks": []
   }
 ]

@@ -28,7 +28,7 @@ interface VideoValidationResult {
   contentType?: string;
   size?: number | null;
   canPlay?: boolean;
-  videoWidth?: string
+  videoWidth?: string;
   duration?: number | null;
   error?: string;
 }
@@ -112,26 +112,38 @@ export default function VideoDetectedBanner({
   const isMounted = React.useRef(false);
 
   const downloadableTypes = ["blob-ready", "hls", "dash", "mp4", "webm"];
-  const downloadableVideos = videos.filter((v) => downloadableTypes.includes(v.type));
-  const [filteredVideos, setFilteredVideos] = React.useState<
-    DetectedVideo[]
-  >([]);
+  const downloadableVideos = videos.filter((v) =>
+    downloadableTypes.includes(v.type),
+  );
+  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
+    [],
+  );
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
 
   const handleValidateVideos = async () => {
     const results = await Promise.all(
       downloadableVideos.map(async (video) => {
-        if (video.type !== 'mp4') return video;
+        if (video.type !== "mp4") return video;
         const validation = await validateMp4Video(video.url);
 
         return {
           ...video,
           ...validation,
         };
-      })
+      }),
     );
 
-    setFilteredVideos(results.filter((item) => item.isValid !== false));
+    setFilteredVideos(
+      results.filter((item) => {
+        if (item.type === "mp4") {
+          return item.isValid !== false;
+        }
+        if (item.type === "hls") {
+          return !!item.hlsInfo;
+        }
+        return true;
+      }),
+    );
   };
 
   useEffect(() => {
@@ -158,15 +170,25 @@ export default function VideoDetectedBanner({
     onOpenInTab(video);
   };
 
+  console.log(
+    "filteredVideos",
+    JSON.stringify(
+      videos.filter((video) => video.hlsInfo).map((video) => video.hlsInfo),
+      null,
+      2,
+    ),
+  );
+
   if (filteredVideos.length === 0) {
-    return null
+    return null;
   }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""} detected
+          {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""}{" "}
+          detected
         </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
@@ -193,7 +215,6 @@ export default function VideoDetectedBanner({
           </TouchableOpacity>
         </View>
       </View>
-    
 
       <Modal
         visible={isDetailVisible}
@@ -232,15 +253,31 @@ export default function VideoDetectedBanner({
                             ? "M3U8"
                             : item.type.toUpperCase()}
                       </Text>
-                      <Text style={styles.videoUrl} numberOfLines={1}>
-                        {item.type === "blob-ready"
-                          ? `${item.pageTitle || "Video"} (${formatSize(item.blobSize || 0)})`
-                          : item.type === "hls"
-                            ? `${item.pageTitle || "HLS Stream"}`
-                            : item.type === "dash"
-                              ? `${item.pageTitle || "DASH Stream"}`
-                              : item.videoWidth || item.pageTitle || "Video"}
-                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.videoUrl} numberOfLines={1}>
+                          {item.type === "blob-ready"
+                            ? `${item.pageTitle || "Video"} (${formatSize(item.blobSize || 0)})`
+                            : item.type === "hls"
+                              ? `${item.pageTitle || "HLS Stream"}`
+                              : item.type === "dash"
+                                ? `${item.pageTitle || "DASH Stream"}`
+                                : item.videoWidth || item.pageTitle || "Video"}
+                        </Text>
+                        {item.hlsInfo && item.hlsInfo.variants.length > 0 && (
+                          <Text style={styles.hlsVariantText} numberOfLines={1}>
+                            {item.hlsInfo.variants
+                              .filter((v) => v.resolution)
+                              .map((v) => v.resolution)
+                              .join(" | ")}
+                            {item.hlsInfo.audioTracks.length > 0
+                              ? ` · ${item.hlsInfo.audioTracks.length} audio`
+                              : ""}
+                            {item.hlsInfo.subtitleTracks.length > 0
+                              ? ` · ${item.hlsInfo.subtitleTracks.length} subs`
+                              : ""}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                     {(item.type === "hls" || item.type === "dash") && (
                       <TouchableOpacity
@@ -258,7 +295,9 @@ export default function VideoDetectedBanner({
               />
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No downloadable videos found</Text>
+                <Text style={styles.emptyStateText}>
+                  No downloadable videos found
+                </Text>
               </View>
             )}
           </View>
@@ -455,5 +494,10 @@ const styles = StyleSheet.create({
   emptyStateText: {
     color: "#AAA",
     fontSize: 13,
+  },
+  hlsVariantText: {
+    color: "#8AB4F8",
+    fontSize: 10,
+    marginTop: 2,
   },
 });

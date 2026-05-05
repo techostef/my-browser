@@ -1,8 +1,3 @@
-/**
- * JavaScript code injected into the WebView to detect <video> elements
- * and extract their source URLs. Uses MutationObserver for dynamic content.
- */
-export const VIDEO_DETECTOR_JS = `
 (function() {
   'use strict';
 
@@ -198,45 +193,10 @@ export const VIDEO_DETECTOR_JS = `
       }));
     }
   }
-  
-  // Parse M3U8 attribute string like: KEY="value",KEY2=value2
-  function parseM3U8Attributes(attrStr) {
-    var result = {};
-    var pos = 0;
-    var len = attrStr.length;
-    while (pos < len) {
-      // Skip whitespace and commas
-      while (pos < len && (attrStr.charAt(pos) === ',' || attrStr.charAt(pos) === ' ')) pos++;
-      if (pos >= len) break;
-      // Read key
-      var eqIdx = attrStr.indexOf('=', pos);
-      if (eqIdx === -1) break;
-      var key = attrStr.substring(pos, eqIdx).trim();
-      pos = eqIdx + 1;
-      // Read value (quoted or unquoted)
-      var value = '';
-      if (pos < len && attrStr.charAt(pos) === '"') {
-        pos++; // skip opening quote
-        var closeQuote = attrStr.indexOf('"', pos);
-        if (closeQuote === -1) closeQuote = len;
-        value = attrStr.substring(pos, closeQuote);
-        pos = closeQuote + 1;
-      } else {
-        var commaIdx = attrStr.indexOf(',', pos);
-        if (commaIdx === -1) commaIdx = len;
-        value = attrStr.substring(pos, commaIdx).trim();
-        pos = commaIdx;
-      }
-      result[key] = value;
-    }
-    return result;
-  }
-  // ==============================================
-  
+
   // ===== M3U8 PLAYLIST PARSE (from intercepted responses) =====
   var m3u8Parsed = {};
   function parseM3U8Content(m3u8Url, text) {
-    log('[M3U8] m3u8Url :' + JSON.stringify(m3u8Url) )
     if (!text || m3u8Parsed[m3u8Url]) return;
     m3u8Parsed[m3u8Url] = true;
 
@@ -290,57 +250,53 @@ export const VIDEO_DETECTOR_JS = `
     } else {
       // === VARIANT/MEDIA PLAYLIST: extract info from URL pattern ===
       // Twitter URL patterns: /avc1/720x1280/... (video), /mp4a/64000/... (audio), /s0/... (subtitles)
-      try {
-        var resMatch = m3u8Url.match(/\\/(\\d{2,4}x\\d{2,4})\\//);
-        var codecMatch = m3u8Url.match(/\\/(avc1|hevc|vp9|mp4a|ac-3|ec-3)\\//i);
-        var bitrateMatch = m3u8Url.match(/\\/mp4a\\/(\\d+)\\//);
-        var isSubtitle = m3u8Url.match(/\\/s\\d+\\//);
+      var resMatch = m3u8Url.match(/\/(\d{2,4}x\d{2,4})\//);
+      var codecMatch = m3u8Url.match(/\/(avc1|hevc|vp9|mp4a|ac-3|ec-3)\//i);
+      var bitrateMatch = m3u8Url.match(/\/mp4a\/(\d+)\//);
+      var isSubtitle = m3u8Url.match(/\/s\d+\//);
 
-        // Calculate total duration from #EXTINF lines
-        var totalDuration = 0;
-        var segLines = text.split(String.fromCharCode(10));
-        for (var si = 0; si < segLines.length; si++) {
-          if (segLines[si].indexOf('#EXTINF:') === 0) {
-            var dur = parseFloat(segLines[si].substring(8));
-            if (!isNaN(dur)) totalDuration += dur;
-          }
+      // Calculate total duration from #EXTINF lines
+      var totalDuration = 0;
+      var segLines = text.split(String.fromCharCode(10));
+      for (var si = 0; si < segLines.length; si++) {
+        if (segLines[si].indexOf('#EXTINF:') === 0) {
+          var dur = parseFloat(segLines[si].substring(8));
+          if (!isNaN(dur)) totalDuration += dur;
         }
+      }
 
-        var codec = codecMatch ? codecMatch[1].toLowerCase() : '';
-        var resolution = resMatch ? resMatch[1] : undefined;
-        var bitrate = bitrateMatch ? parseInt(bitrateMatch[1], 10) : 0;
+      var codec = codecMatch ? codecMatch[1].toLowerCase() : '';
+      var resolution = resMatch ? resMatch[1] : undefined;
+      var bitrate = bitrateMatch ? parseInt(bitrateMatch[1], 10) : 0;
 
-        if (isSubtitle) {
-          subtitleTracks.push({
-            type: 'SUBTITLES',
-            groupId: 'subs',
-            name: 'Subtitles',
-            uri: m3u8Url,
-            default: false,
-            autoselect: true
-          });
-          log('[M3U8] Variant playlist (subtitle, ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
-        } else if (codec === 'mp4a' || codec === 'ac-3' || codec === 'ec-3' || (bitrateMatch && !resMatch)) {
-          audioTracks.push({
-            type: 'AUDIO',
-            groupId: 'audio-' + (bitrate || 'unknown'),
-            name: 'Audio ' + (bitrate ? (bitrate / 1000) + 'kbps' : ''),
-            uri: m3u8Url,
-            default: false,
-            autoselect: true
-          });
-          log('[M3U8] Variant playlist (audio ' + (bitrate / 1000) + 'kbps, ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
-        } else {
-          variants.push({
-            bandwidth: bitrate || 0,
-            resolution: resolution,
-            codecs: codec || undefined,
-            uri: m3u8Url
-          });
-          log('[M3U8] Variant playlist (video ' + (resolution || 'unknown') + ', ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
-        }
-      } catch (e) {
-        log('[M3U8] Error parsing variant playlist: ' + JSON.stringify(e));
+      if (isSubtitle) {
+        subtitleTracks.push({
+          type: 'SUBTITLES',
+          groupId: 'subs',
+          name: 'Subtitles',
+          uri: m3u8Url,
+          default: false,
+          autoselect: true
+        });
+        log('[M3U8] Variant playlist (subtitle, ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
+      } else if (codec === 'mp4a' || codec === 'ac-3' || codec === 'ec-3' || (bitrateMatch && !resMatch)) {
+        audioTracks.push({
+          type: 'AUDIO',
+          groupId: 'audio-' + (bitrate || 'unknown'),
+          name: 'Audio ' + (bitrate ? (bitrate / 1000) + 'kbps' : ''),
+          uri: m3u8Url,
+          default: false,
+          autoselect: true
+        });
+        log('[M3U8] Variant playlist (audio ' + (bitrate / 1000) + 'kbps, ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
+      } else {
+        variants.push({
+          bandwidth: bitrate || 0,
+          resolution: resolution,
+          codecs: codec || undefined,
+          uri: m3u8Url
+        });
+        log('[M3U8] Variant playlist (video ' + (resolution || 'unknown') + ', ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
       }
     }
 
@@ -364,6 +320,40 @@ export const VIDEO_DETECTOR_JS = `
   function isM3U8Url(url) {
     return url && url.toLowerCase().indexOf('.m3u8') !== -1;
   }
+
+  // Parse M3U8 attribute string like: KEY="value",KEY2=value2
+  function parseM3U8Attributes(attrStr) {
+    var result = {};
+    var pos = 0;
+    var len = attrStr.length;
+    while (pos < len) {
+      // Skip whitespace and commas
+      while (pos < len && (attrStr.charAt(pos) === ',' || attrStr.charAt(pos) === ' ')) pos++;
+      if (pos >= len) break;
+      // Read key
+      var eqIdx = attrStr.indexOf('=', pos);
+      if (eqIdx === -1) break;
+      var key = attrStr.substring(pos, eqIdx).trim();
+      pos = eqIdx + 1;
+      // Read value (quoted or unquoted)
+      var value = '';
+      if (pos < len && attrStr.charAt(pos) === '"') {
+        pos++; // skip opening quote
+        var closeQuote = attrStr.indexOf('"', pos);
+        if (closeQuote === -1) closeQuote = len;
+        value = attrStr.substring(pos, closeQuote);
+        pos = closeQuote + 1;
+      } else {
+        var commaIdx = attrStr.indexOf(',', pos);
+        if (commaIdx === -1) commaIdx = len;
+        value = attrStr.substring(pos, commaIdx).trim();
+        pos = commaIdx;
+      }
+      result[key] = value;
+    }
+    return result;
+  }
+  // ==============================================
 
   // Per-element loadedmetadata listener: fires when the browser confirms
   // currentSrc is actually playable. If the element's URL changed since it
@@ -1506,4 +1496,3 @@ export const VIDEO_DETECTOR_JS = `
 
   true; // Required to avoid silent failures
 })();
-`;
