@@ -4,6 +4,7 @@ import { WebView, WebViewNavigation } from 'react-native-webview';
 import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
 
 import AddressBar from '../components/AddressBar';
 import TabBar from '../components/TabBar';
@@ -51,12 +52,30 @@ export default function BrowserScreen() {
   const blobChunksMap = useRef<Map<string, string[]>>(new Map());
   const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number; tabId: string }>>(new Map());
 
+  // Parallel pipeline for blob *previews*: extracts the same captured bytes
+  // via __extractBlobVideo, but writes them to cache (file://) instead of the
+  // private downloads folder, then plays the temp file in the preview modal.
+  // The extraction message handlers below check this map first so a blob being
+  // previewed doesn't get treated as a download.
+  const blobPreviewChunksMap = useRef<Map<string, string[]>>(new Map());
+  const activeBlobPreviewMap = useRef<
+    Map<string, { previewId: string; tabId: string; totalSize: number; video: DetectedVideo; cancelled?: boolean }>
+  >(new Map());
+  const previewTempFileRef = useRef<string | null>(null);
+  const [blobPreviewProgress, setBlobPreviewProgress] = useState<
+    { bytesReceived: number; totalBytes: number } | null
+  >(null);
+  const [blobPreviewError, setBlobPreviewError] = useState<string | null>(null);
+
   // Set to true before any programmatic navigation (back/forward/address-bar) so
   // handleNavigationStateChange knows not to push the resulting URL to history again.
   const isHistoryNavRef = useRef<Record<string, boolean>>({});
 
   const tabHasActiveExtraction = useCallback((tabId: string) => {
     for (const info of activeBlobMap.current.values()) {
+      if (info.tabId === tabId) return true;
+    }
+    for (const info of activeBlobPreviewMap.current.values()) {
       if (info.tabId === tabId) return true;
     }
     return false;
@@ -78,6 +97,11 @@ export default function BrowserScreen() {
     const KICK_JS = `(function(){try{var vs=document.querySelectorAll('video');for(var i=0;i<vs.length;i++){var v=vs[i];v.muted=true;if(v.paused&&v.readyState>0){var p=v.play();if(p&&typeof p.catch==='function')p.catch(function(){});}}}catch(e){}})();true;`;
     const seen = new Set<string>();
     for (const info of activeBlobMap.current.values()) {
+      if (seen.has(info.tabId)) continue;
+      seen.add(info.tabId);
+      webViewRefs.current[info.tabId]?.injectJavaScript(KICK_JS);
+    }
+    for (const info of activeBlobPreviewMap.current.values()) {
       if (seen.has(info.tabId)) continue;
       seen.add(info.tabId);
       webViewRefs.current[info.tabId]?.injectJavaScript(KICK_JS);
@@ -164,10 +188,75 @@ export default function BrowserScreen() {
           setPreviewVideo(video);
         }
       }, 400);
-    } else {
-      setPreviewVideo(video);
+      return;
     }
+
+    if (video.type === 'blob-ready') {
+      // Already extracting this blob (download or another preview) — just open
+      // modal in extracting state and let messages drive the UI.
+      const alreadyExtracting =
+        activeBlobMap.current.has(video.url) ||
+        activeBlobPreviewMap.current.has(video.url);
+      if (alreadyExtracting) {
+        setBlobPreviewError(
+          'This blob is already being extracted. Wait for it to finish, then try Preview again.',
+        );
+        setPreviewVideo(video);
+        return;
+      }
+      const webView = webViewRefs.current[activeTabId];
+      if (!webView) {
+        setBlobPreviewError('Browser tab is not available for extraction.');
+        setPreviewVideo(video);
+        return;
+      }
+      const previewId = `preview_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      activeBlobPreviewMap.current.set(video.url, {
+        previewId,
+        tabId: activeTabId,
+        totalSize: video.blobSize || 0,
+        video,
+      });
+      setBlobPreviewError(null);
+      setBlobPreviewProgress({
+        bytesReceived: 0,
+        totalBytes: video.blobSize || 0,
+      });
+      setPreviewVideo(video);
+      const escUrl = video.url.replace(/'/g, "\\'");
+      webView.injectJavaScript(
+        `window.__extractionGuardCount = (window.__extractionGuardCount||0) + 1; window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
+      );
+      return;
+    }
+
+    if (video.type === 'blob') {
+      // Raw blob URL with no captured bytes yet — just open the modal which
+      // shows a "still buffering" message.
+      setBlobPreviewError(null);
+      setBlobPreviewProgress(null);
+      setPreviewVideo(video);
+      return;
+    }
+
+    setPreviewVideo(video);
   }, [activeTabId]);
+
+  const handleClosePreview = useCallback(() => {
+    // If extraction is still in flight, mark it cancelled so the END handler
+    // skips writing to disk but still decrements the page's guard counter.
+    for (const info of activeBlobPreviewMap.current.values()) {
+      info.cancelled = true;
+    }
+    setPreviewVideo(null);
+    setBlobPreviewProgress(null);
+    setBlobPreviewError(null);
+    const tempPath = previewTempFileRef.current;
+    previewTempFileRef.current = null;
+    if (tempPath) {
+      FileSystem.deleteAsync(tempPath, { idempotent: true }).catch(() => {});
+    }
+  }, []);
 
   // Inject a URL into the (memoized) WebView without causing a React re-render.
   const injectNavigation = useCallback((tabId: string, url: string) => {
@@ -328,16 +417,29 @@ export default function BrowserScreen() {
           break;
         case 'BLOB_BUFFERING': {
           const { blobUrl, bytesBuffered } = message.payload;
+          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
+          if (previewInfo) {
+            setBlobPreviewProgress({
+              bytesReceived: bytesBuffered,
+              totalBytes: previewInfo.totalSize,
+            });
+            break;
+          }
           const info = activeBlobMap.current.get(blobUrl);
           if (info) {
-            // console.log(`[BrowserScreen] BLOB_BUFFERING: url=${blobUrl} bytes=${bytesBuffered}/${info.totalSize}`);
             updateBlobProgress(info.downloadId, bytesBuffered, info.totalSize);
           }
           break;
         }
         case 'BLOB_DATA_START': {
           const { blobUrl, totalSize } = message.payload;
-          // console.log(`[BrowserScreen] BLOB_DATA_START: url=${blobUrl} size=${totalSize}`);
+          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
+          if (previewInfo) {
+            blobPreviewChunksMap.current.set(blobUrl, []);
+            previewInfo.totalSize = totalSize;
+            setBlobPreviewProgress({ bytesReceived: 0, totalBytes: totalSize });
+            break;
+          }
           blobChunksMap.current.set(blobUrl, []);
           const info = activeBlobMap.current.get(blobUrl);
           if (info) {
@@ -348,6 +450,19 @@ export default function BrowserScreen() {
         }
         case 'BLOB_DATA_CHUNK': {
           const { blobUrl, index, data } = message.payload;
+          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
+          if (previewInfo) {
+            const chunks = blobPreviewChunksMap.current.get(blobUrl);
+            if (chunks) {
+              chunks.push(data);
+              const CHUNK_BYTES = 768 * 1024;
+              setBlobPreviewProgress({
+                bytesReceived: Math.min((index + 1) * CHUNK_BYTES, previewInfo.totalSize),
+                totalBytes: previewInfo.totalSize,
+              });
+            }
+            break;
+          }
           const chunks = blobChunksMap.current.get(blobUrl);
           if (chunks) {
             chunks.push(data);
@@ -360,8 +475,46 @@ export default function BrowserScreen() {
           break;
         }
         case 'BLOB_DATA_END': {
-          const { blobUrl, totalChunks } = message.payload;
-          // console.log(`[BrowserScreen] BLOB_DATA_END: ${totalChunks} chunks for ${blobUrl}`);
+          const { blobUrl } = message.payload;
+          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
+          if (previewInfo) {
+            const chunks = blobPreviewChunksMap.current.get(blobUrl) || [];
+            const wasCancelled = !!previewInfo.cancelled;
+            blobPreviewChunksMap.current.delete(blobUrl);
+            activeBlobPreviewMap.current.delete(blobUrl);
+            webViewRefs.current[previewInfo.tabId]?.injectJavaScript(
+              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
+            );
+            finalizeExtractionForTab(previewInfo.tabId);
+            if (wasCancelled) break;
+            if (chunks.length === 0) {
+              setBlobPreviewError('No video data was captured.');
+              break;
+            }
+            const cacheDir = FileSystem.cacheDirectory;
+            if (!cacheDir) {
+              setBlobPreviewError('No cache directory available.');
+              break;
+            }
+            const tempPath = `${cacheDir}preview_${previewInfo.previewId}.mp4`;
+            previewTempFileRef.current = tempPath;
+            FileSystem.writeAsStringAsync(tempPath, chunks.join(''), {
+              encoding: FileSystem.EncodingType.Base64,
+            })
+              .then(() => {
+                setBlobPreviewProgress(null);
+                setPreviewVideo(prev =>
+                  prev && prev.url === previewInfo.video.url
+                    ? { ...prev, localUri: tempPath }
+                    : prev,
+                );
+              })
+              .catch(err => {
+                console.warn('[BrowserScreen] preview write failed:', err);
+                setBlobPreviewError(err?.message || 'Failed to save preview file.');
+              });
+            break;
+          }
           const chunks = blobChunksMap.current.get(blobUrl) || [];
           const info = activeBlobMap.current.get(blobUrl);
           blobChunksMap.current.delete(blobUrl);
@@ -379,7 +532,17 @@ export default function BrowserScreen() {
         }
         case 'BLOB_DATA_ERROR': {
           const { blobUrl } = message.payload;
-          // console.error(`[BrowserScreen] BLOB_DATA_ERROR:`, message.payload);
+          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
+          if (previewInfo) {
+            blobPreviewChunksMap.current.delete(blobUrl);
+            activeBlobPreviewMap.current.delete(blobUrl);
+            webViewRefs.current[previewInfo.tabId]?.injectJavaScript(
+              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
+            );
+            finalizeExtractionForTab(previewInfo.tabId);
+            setBlobPreviewError(message.payload?.error || 'Failed to extract blob video data.');
+            break;
+          }
           const info = activeBlobMap.current.get(blobUrl);
           blobChunksMap.current.delete(blobUrl);
           activeBlobMap.current.delete(blobUrl);
@@ -543,7 +706,9 @@ export default function BrowserScreen() {
         visible={previewVideo !== null}
         video={previewVideo}
         onDownload={handleDownload}
-        onClose={() => setPreviewVideo(null)}
+        onClose={handleClosePreview}
+        blobPreviewProgress={blobPreviewProgress}
+        blobPreviewError={blobPreviewError}
       />
 
     </SafeAreaView>

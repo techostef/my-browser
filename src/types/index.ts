@@ -19,6 +19,10 @@ export interface DetectedVideo {
   videoWidth?: string;
   isValid?: boolean;
   startTime?: number;
+  // Populated for blob/blob-ready videos after extraction-to-cache so the
+  // preview modal can play the captured bytes via file:// (the original
+  // blob: URL is scoped to the page that created it and is unusable elsewhere).
+  localUri?: string;
 }
 
 export type DownloadStatus =

@@ -18,6 +18,10 @@ interface Props {
   video: DetectedVideo | null;
   onDownload: (video: DetectedVideo) => void;
   onClose: () => void;
+  // Progress for blob-preview extraction (raw bytes buffered → bytes copied
+  // to cache file). Null when no extraction is active.
+  blobPreviewProgress?: { bytesReceived: number; totalBytes: number } | null;
+  blobPreviewError?: string | null;
 }
 
 const IS_USE_LOG = true;
@@ -374,11 +378,20 @@ function buildHlsPlayerHtml(videoUrl: string, startTime: number): string {
 </html>`;
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes < 1024) return `${bytes || 0} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 export default function VideoPreviewModal({
   visible,
   video,
   onDownload,
   onClose,
+  blobPreviewProgress,
+  blobPreviewError,
 }: Props) {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -418,12 +431,20 @@ export default function VideoPreviewModal({
 
   if (!video) return null;
 
+  const blobNeedsExtraction =
+    (video.type === 'blob' || video.type === 'blob-ready') && !video.localUri;
   const startTime = video.startTime ?? 0;
-  const html = video.type === 'hls'
-    ? buildHlsPlayerHtml(video.url, startTime)
-    : video.type === 'dash'
-      ? buildDashPlayerHtml(video.url, startTime)
-      : buildPlayerHtml(video.url, video.type);
+  // For blob types we play the extracted file from cache (file://...). For
+  // everything else we use the original URL.
+  const playbackUrl = video.localUri ? video.localUri : video.url;
+  const playbackType = video.localUri
+    ? (video.type === 'webm' ? 'webm' : 'mp4')
+    : video.type;
+  const html = playbackType === 'hls'
+    ? buildHlsPlayerHtml(playbackUrl, startTime)
+    : playbackType === 'dash'
+      ? buildDashPlayerHtml(playbackUrl, startTime)
+      : buildPlayerHtml(playbackUrl, playbackType);
 
   return (
     <Modal
@@ -451,43 +472,91 @@ export default function VideoPreviewModal({
 
         {/* Video Player via WebView */}
         <View style={styles.videoContainer}>
-          {isLoading && !hasError && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#4ECDC4" />
-              <Text style={styles.loadingText}>Loading video...</Text>
+          {blobNeedsExtraction ? (
+            <View style={styles.blobUnsupported}>
+              {blobPreviewError ? (
+                <>
+                  <Text style={styles.blobIcon}>⚠️</Text>
+                  <Text style={styles.blobTitle}>Preview Failed</Text>
+                  <Text style={styles.blobBody}>{blobPreviewError}</Text>
+                </>
+              ) : video.type === 'blob' ? (
+                <>
+                  <Text style={styles.blobIcon}>⏳</Text>
+                  <Text style={styles.blobTitle}>Still Buffering</Text>
+                  <Text style={styles.blobBody}>
+                    This blob video is still being assembled by the page. Wait
+                    for it to be ready (banner will mark it BLOB) and try
+                    Preview again.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <ActivityIndicator size="large" color="#4ECDC4" />
+                  <Text style={[styles.blobTitle, { marginTop: 16 }]}>
+                    Preparing Preview
+                  </Text>
+                  <Text style={styles.blobBody}>
+                    {blobPreviewProgress
+                      ? `Copying video from page… ${formatBytes(blobPreviewProgress.bytesReceived)} / ${formatBytes(blobPreviewProgress.totalBytes)}`
+                      : 'Extracting captured video bytes…'}
+                  </Text>
+                </>
+              )}
             </View>
-          )}
+          ) : (
+            <>
+              {isLoading && !hasError && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="large" color="#4ECDC4" />
+                  <Text style={styles.loadingText}>Loading video...</Text>
+                </View>
+              )}
 
-          <WebView
-            ref={webViewRef}
-            source={{ html, baseUrl: video.pageUrl }}
-            style={styles.webview}
-            onMessage={handleMessage}
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.error(`${TAG} WebView onError:`, nativeEvent);
-              setHasError(true);
-              setIsLoading(false);
-            }}
-            onHttpError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.error(`${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`);
-            }}
-            onLoadEnd={() => {
-              // console.log(`${TAG} WebView HTML loaded`);
-            }}
-            javaScriptEnabled
-            domStorageEnabled
-            mediaPlaybackRequiresUserAction={false}
-            allowsInlineMediaPlayback
-            mixedContentMode="always"
-            allowsFullscreenVideo
-            thirdPartyCookiesEnabled
-            sharedCookiesEnabled
-            originWhitelist={['*']}
-            allowsProtectedMedia
-            userAgent="Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-          />
+              <WebView
+                ref={webViewRef}
+                source={{
+                  html,
+                  // For locally-extracted blob previews, the HTML must share
+                  // the file:// origin with the video file so the <video> tag
+                  // is allowed to load it. For remote URLs, keep the original
+                  // page origin so cookies/CORS continue to work.
+                  baseUrl: video.localUri
+                    ? video.localUri.replace(/[^/]+$/, '')
+                    : video.pageUrl,
+                }}
+                style={styles.webview}
+                onMessage={handleMessage}
+                onError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.error(`${TAG} WebView onError:`, nativeEvent);
+                  setHasError(true);
+                  setIsLoading(false);
+                }}
+                onHttpError={(syntheticEvent) => {
+                  const { nativeEvent } = syntheticEvent;
+                  console.error(`${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`);
+                }}
+                onLoadEnd={() => {
+                  // console.log(`${TAG} WebView HTML loaded`);
+                }}
+                javaScriptEnabled
+                domStorageEnabled
+                mediaPlaybackRequiresUserAction={false}
+                allowsInlineMediaPlayback
+                mixedContentMode="always"
+                allowsFullscreenVideo
+                thirdPartyCookiesEnabled
+                sharedCookiesEnabled
+                originWhitelist={['*']}
+                allowFileAccess
+                allowFileAccessFromFileURLs
+                allowUniversalAccessFromFileURLs
+                allowsProtectedMedia
+                userAgent="Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+              />
+            </>
+          )}
         </View>
 
         {/* Bottom Actions */}
@@ -584,5 +653,28 @@ const styles = StyleSheet.create({
     color: '#1A1A2E',
     fontWeight: '700',
     fontSize: 16,
+  },
+  blobUnsupported: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  blobIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  blobTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  blobBody: {
+    color: '#999',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
