@@ -686,6 +686,124 @@ class DownloadManager {
     return 'unknown';
   }
 
+  // Returns the byte offset of the first ISO BMFF box with the given 4-char
+  // type found in data[start..end), or -1 if not found.
+  private findMp4Box(data: Uint8Array, type: string, start: number, end: number): number {
+    let i = start;
+    while (i + 8 <= end) {
+      const size = ((data[i] << 24) | (data[i + 1] << 16) | (data[i + 2] << 8) | data[i + 3]) >>> 0;
+      if (size < 8) break;
+      if (
+        data[i + 4] === type.charCodeAt(0) &&
+        data[i + 5] === type.charCodeAt(1) &&
+        data[i + 6] === type.charCodeAt(2) &&
+        data[i + 7] === type.charCodeAt(3)
+      ) {
+        return i;
+      }
+      i += size;
+    }
+    return -1;
+  }
+
+  // Rewrites track_id in tkhd (inside moov) and tfhd (inside moof/traf) boxes.
+  private patchTrackId(data: Uint8Array, fromId: number, toId: number): void {
+    const ru32 = (o: number) =>
+      ((data[o] << 24) | (data[o + 1] << 16) | (data[o + 2] << 8) | data[o + 3]) >>> 0;
+    const wu32 = (o: number, v: number) => {
+      data[o] = (v >>> 24) & 0xff;
+      data[o + 1] = (v >>> 16) & 0xff;
+      data[o + 2] = (v >>> 8) & 0xff;
+      data[o + 3] = v & 0xff;
+    };
+
+    // Patch tkhd inside moov (init segment)
+    const moovOff = this.findMp4Box(data, 'moov', 0, data.length);
+    if (moovOff >= 0) {
+      const moovEnd = moovOff + ru32(moovOff);
+      let search = moovOff + 8;
+      while (search < moovEnd) {
+        const trakOff = this.findMp4Box(data, 'trak', search, moovEnd);
+        if (trakOff < 0) break;
+        const trakEnd = trakOff + ru32(trakOff);
+        const tkhdOff = this.findMp4Box(data, 'tkhd', trakOff + 8, trakEnd);
+        if (tkhdOff >= 0) {
+          const ver = data[tkhdOff + 8];
+          const tidOff = ver === 0 ? tkhdOff + 20 : tkhdOff + 28;
+          if (ru32(tidOff) === fromId) wu32(tidOff, toId);
+        }
+        search = trakEnd;
+      }
+    }
+
+    // Patch tfhd inside moof → traf (fragment headers)
+    let pos = 0;
+    while (pos + 8 <= data.length) {
+      const boxSize = ru32(pos);
+      if (boxSize < 8) break;
+      const bt = String.fromCharCode(data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]);
+      if (bt === 'moof') {
+        const moofEnd = pos + boxSize;
+        const trafOff = this.findMp4Box(data, 'traf', pos + 8, moofEnd);
+        if (trafOff >= 0) {
+          const trafEnd = trafOff + ru32(trafOff);
+          const tfhdOff = this.findMp4Box(data, 'tfhd', trafOff + 8, trafEnd);
+          if (tfhdOff >= 0 && ru32(tfhdOff + 12) === fromId) {
+            wu32(tfhdOff + 12, toId);
+          }
+        }
+      }
+      pos += boxSize;
+    }
+  }
+
+  // Merges two fMP4 init segments (one video-only, one audio-only) into a
+  // single init segment containing both tracks. Audio trak is appended to the
+  // video moov box.
+  private mergeVideoAudioInit(videoInit: Uint8Array, audioInit: Uint8Array): Uint8Array {
+    const ru32 = (d: Uint8Array, o: number) =>
+      ((d[o] << 24) | (d[o + 1] << 16) | (d[o + 2] << 8) | d[o + 3]) >>> 0;
+
+    const vMoovOff = this.findMp4Box(videoInit, 'moov', 0, videoInit.length);
+    if (vMoovOff < 0) return videoInit;
+    const vMoovSize = ru32(videoInit, vMoovOff);
+    const vMoovData = videoInit.slice(vMoovOff, vMoovOff + vMoovSize);
+
+    const aMoovOff = this.findMp4Box(audioInit, 'moov', 0, audioInit.length);
+    if (aMoovOff < 0) return videoInit;
+    const aMoovEnd = aMoovOff + ru32(audioInit, aMoovOff);
+    const aTrakOff = this.findMp4Box(audioInit, 'trak', aMoovOff + 8, aMoovEnd);
+    if (aTrakOff < 0) return videoInit;
+    const aTrakSize = ru32(audioInit, aTrakOff);
+    const audioTrak = audioInit.slice(aTrakOff, aTrakOff + aTrakSize);
+
+    // new moov = original video moov bytes + audio trak appended
+    const newMoovSize = vMoovSize + aTrakSize;
+    const newMoov = new Uint8Array(newMoovSize);
+    newMoov.set(vMoovData, 0);
+    newMoov.set(audioTrak, vMoovSize);
+    // patch moov box size
+    newMoov[0] = (newMoovSize >>> 24) & 0xff;
+    newMoov[1] = (newMoovSize >>> 16) & 0xff;
+    newMoov[2] = (newMoovSize >>> 8) & 0xff;
+    newMoov[3] = newMoovSize & 0xff;
+
+    // grab ftyp from video init
+    const vFtypOff = this.findMp4Box(videoInit, 'ftyp', 0, videoInit.length);
+    let ftyp: Uint8Array;
+    if (vFtypOff >= 0) {
+      const ftypSize = ru32(videoInit, vFtypOff);
+      ftyp = videoInit.slice(vFtypOff, vFtypOff + ftypSize);
+    } else {
+      ftyp = new Uint8Array(0);
+    }
+
+    const result = new Uint8Array(ftyp.length + newMoovSize);
+    result.set(ftyp, 0);
+    result.set(newMoov, ftyp.length);
+    return result;
+  }
+
   private async startHlsDownload(
     id: string,
     url: string,
@@ -734,50 +852,84 @@ class DownloadManager {
         parsed = this.parseM3u8(manifestText, manifestUrl);
       }
 
-      const segmentUrls = parsed.segments.filter(
+      const videoSegmentUrls = parsed.segments.filter(
         s => !s.includes('.m3u8') && s.length > 0,
       );
 
-      if (segmentUrls.length === 0) {
+      if (videoSegmentUrls.length === 0) {
         throw new Error('No video segments found in HLS playlist');
       }
 
-      // console.log(`${TAG} Found ${segmentUrls.length} segments to download${parsed.initUri ? ' (with fMP4 init segment)' : ''}`);
+      // Step 2b: If the master playlist declared a separate audio rendition
+      // with its own URI, fetch that playlist so we can download audio segments.
+      let audioSegmentUrls: string[] = [];
+      let audioParsed: ReturnType<typeof this.parseM3u8> | undefined;
+      if (audioRendition?.uri) {
+        console.log(`${TAG} Fetching separate audio playlist`);
+        const audioResp = await fetch(audioRendition.uri, { headers });
+        if (audioResp.ok) {
+          const audioText = await audioResp.text();
+          audioParsed = this.parseM3u8(audioText, audioRendition.uri);
+          audioSegmentUrls = audioParsed.segments.filter(
+            s => !s.includes('.m3u8') && s.length > 0,
+          );
+          console.log(`${TAG} Found ${audioSegmentUrls.length} audio segments`);
+        } else {
+          console.warn(`${TAG} Failed to fetch audio playlist (HTTP ${audioResp.status}), proceeding without separate audio`);
+        }
+      }
 
-      // Step 3: Download segments (and fMP4 init segment if the playlist had #EXT-X-MAP)
-      const totalSegments = segmentUrls.length;
-      const segmentPaths: string[] = [];
+      const hasSeparateAudio = audioSegmentUrls.length > 0;
+      const totalSegments = videoSegmentUrls.length + audioSegmentUrls.length;
+      let downloadedCount = 0;
+
+      // Step 3: Download video (and optionally audio) segments
       const tempDir = `${privateDir}hls_${id}/`;
       await FileSystem.makeDirectoryAsync(tempDir, { intermediates: true });
 
-      let initSegPath: string | undefined;
+      // Video init segment (fMP4)
+      let videoInitSegPath: string | undefined;
       if (parsed.initUri) {
-        initSegPath = `${tempDir}init.mp4`;
-        const initDl = await FileSystem.downloadAsync(parsed.initUri, initSegPath, { headers });
-        if (!initDl?.uri) {
-          throw new Error('Failed to download fMP4 init segment');
+        videoInitSegPath = `${tempDir}video_init.mp4`;
+        const dl = await FileSystem.downloadAsync(parsed.initUri, videoInitSegPath, { headers });
+        if (!dl?.uri) throw new Error('Failed to download video fMP4 init segment');
+      }
+
+      // Audio init segment (fMP4)
+      let audioInitSegPath: string | undefined;
+      if (hasSeparateAudio && audioParsed?.initUri) {
+        audioInitSegPath = `${tempDir}audio_init.mp4`;
+        const dl = await FileSystem.downloadAsync(audioParsed.initUri, audioInitSegPath, { headers });
+        if (!dl?.uri) throw new Error('Failed to download audio fMP4 init segment');
+      }
+
+      // Download video segments
+      const videoSegPaths: string[] = [];
+      for (let i = 0; i < videoSegmentUrls.length; i++) {
+        const segPath = `${tempDir}vseg_${String(i).padStart(5, '0')}.ts`;
+        const dl = await FileSystem.downloadAsync(videoSegmentUrls[i], segPath, { headers });
+        if (!dl?.uri) throw new Error(`Failed to download video segment ${i + 1}/${videoSegmentUrls.length}`);
+        videoSegPaths.push(dl.uri);
+        downloadedCount++;
+        this.onProgress?.(id, downloadedCount, totalSegments);
+      }
+
+      // Download audio segments (if separate)
+      const audioSegPaths: string[] = [];
+      if (hasSeparateAudio) {
+        for (let i = 0; i < audioSegmentUrls.length; i++) {
+          const segPath = `${tempDir}aseg_${String(i).padStart(5, '0')}.ts`;
+          const dl = await FileSystem.downloadAsync(audioSegmentUrls[i], segPath, { headers });
+          if (!dl?.uri) throw new Error(`Failed to download audio segment ${i + 1}/${audioSegmentUrls.length}`);
+          audioSegPaths.push(dl.uri);
+          downloadedCount++;
+          this.onProgress?.(id, downloadedCount, totalSegments);
         }
       }
 
-      for (let i = 0; i < totalSegments; i++) {
-        const segUrl = segmentUrls[i];
-        const segPath = `${tempDir}seg_${String(i).padStart(5, '0')}.ts`;
-
-        const dlResult = await FileSystem.downloadAsync(segUrl, segPath, { headers });
-        if (!dlResult?.uri) {
-          throw new Error(`Failed to download segment ${i + 1}/${totalSegments}`);
-        }
-        segmentPaths.push(dlResult.uri);
-
-        // Report progress based on segments completed
-        this.onProgress?.(id, i + 1, totalSegments);
-      }
-
-      // Step 4: Detect segment format. Some HLS streams use MPEG-TS; newer ones
-      // (CMAF) use fMP4 fragments. We pick a different assembly path for each.
-      const probeBytes = await this.readFileBytes(segmentPaths[0]);
+      // Step 4: Detect segment format and assemble into a seekable MP4.
+      const probeBytes = await this.readFileBytes(videoSegPaths[0]);
       const format = this.detectSegmentFormat(probeBytes);
-      // console.log(`${TAG} All ${totalSegments} segments downloaded, format=${format}`);
 
       const safe = (pageTitle || 'video')
         .replace(/[^a-zA-Z0-9 ]/g, '')
@@ -789,69 +941,147 @@ class DownloadManager {
       let merged: Uint8Array;
 
       if (format === 'ts') {
-        // MPEG-TS path: demux PES packets and remux into fMP4 via mux.js.
-        const transmuxer = new muxjs.mp4.Transmuxer({ remux: true });
-        let muxInit: Uint8Array | null = null;
-        const mp4Chunks: Uint8Array[] = [];
-        let mp4Bytes = 0;
-        const typeCounts: Record<string, number> = {};
+        // --- Transmux video ---
+        const videoTx = new muxjs.mp4.Transmuxer({ remux: true });
+        let videoInit: Uint8Array | null = null;
+        const videoChunks: Uint8Array[] = [];
+        let videoBytes = 0;
 
-        transmuxer.on('data', (segment: { type?: string; initSegment?: Uint8Array; data: Uint8Array }) => {
-          const segType = segment.type || 'unknown';
-          typeCounts[segType] = (typeCounts[segType] || 0) + 1;
-          if (!muxInit && segment.initSegment && segment.initSegment.length > 0) {
-            muxInit = segment.initSegment;
+        videoTx.on('data', (seg: { type?: string; initSegment?: Uint8Array; data: Uint8Array }) => {
+          if (!videoInit && seg.initSegment && seg.initSegment.length > 0) {
+            videoInit = seg.initSegment;
           }
-          if (segment.data && segment.data.length > 0) {
-            mp4Chunks.push(segment.data);
-            mp4Bytes += segment.data.length;
+          if (seg.data && seg.data.length > 0) {
+            videoChunks.push(seg.data);
+            videoBytes += seg.data.length;
           }
         });
 
-        // Feed segment 0 (already in memory) and the rest one at a time.
-        transmuxer.push(probeBytes);
-        for (let i = 1; i < segmentPaths.length; i++) {
-          transmuxer.push(await this.readFileBytes(segmentPaths[i]));
+        videoTx.push(probeBytes);
+        for (let i = 1; i < videoSegPaths.length; i++) {
+          videoTx.push(await this.readFileBytes(videoSegPaths[i]));
         }
-        transmuxer.flush();
+        videoTx.flush();
 
-        // console.log(`${TAG} mux.js emitted segment types: ${JSON.stringify(typeCounts)}, totalBytes=${mp4Bytes}`);
-
-        if (!muxInit || mp4Chunks.length === 0) {
-          throw new Error('Transmux produced no MP4 data');
+        if (!videoInit || videoChunks.length === 0) {
+          throw new Error('Video transmux produced no MP4 data');
         }
 
-        const initBytes: Uint8Array = muxInit;
-        merged = new Uint8Array(initBytes.length + mp4Bytes);
-        merged.set(initBytes, 0);
-        let writeOffset = initBytes.length;
-        for (const chunk of mp4Chunks) {
-          merged.set(chunk, writeOffset);
-          writeOffset += chunk.length;
+        if (hasSeparateAudio) {
+          // --- Transmux audio separately ---
+          const audioTx = new muxjs.mp4.Transmuxer({ remux: true });
+          let audioInit: Uint8Array | null = null;
+          const audioChunks: Uint8Array[] = [];
+          let audioBytes = 0;
+
+          audioTx.on('data', (seg: { type?: string; initSegment?: Uint8Array; data: Uint8Array }) => {
+            if (!audioInit && seg.initSegment && seg.initSegment.length > 0) {
+              audioInit = seg.initSegment;
+            }
+            if (seg.data && seg.data.length > 0) {
+              audioChunks.push(seg.data);
+              audioBytes += seg.data.length;
+            }
+          });
+
+          for (const aPath of audioSegPaths) {
+            audioTx.push(await this.readFileBytes(aPath));
+          }
+          audioTx.flush();
+
+          if (audioInit && audioChunks.length > 0) {
+            // Patch audio track_id → 2 (mux.js assigns 1 to the only track)
+            this.patchTrackId(audioInit, 1, 2);
+            const audioData = new Uint8Array(audioBytes);
+            let aOff = 0;
+            for (const c of audioChunks) { audioData.set(c, aOff); aOff += c.length; }
+            this.patchTrackId(audioData, 1, 2);
+
+            // Merge init segments: video moov + audio trak
+            const mergedInit = this.mergeVideoAudioInit(videoInit, audioInit);
+
+            // Assemble: merged init + video fragments + audio fragments
+            merged = new Uint8Array(mergedInit.length + videoBytes + audioBytes);
+            merged.set(mergedInit, 0);
+            let off = mergedInit.length;
+            for (const c of videoChunks) { merged.set(c, off); off += c.length; }
+            merged.set(audioData, off);
+            console.log(`${TAG} Merged video+audio: ${merged.length} bytes`);
+          } else {
+            console.warn(`${TAG} Audio transmux produced no data, falling back to video-only`);
+            const initBytes: Uint8Array = videoInit;
+            merged = new Uint8Array(initBytes.length + videoBytes);
+            merged.set(initBytes, 0);
+            let off = initBytes.length;
+            for (const c of videoChunks) { merged.set(c, off); off += c.length; }
+          }
+        } else {
+          // No separate audio — TS segments already contain muxed audio+video
+          const initBytes: Uint8Array = videoInit;
+          merged = new Uint8Array(initBytes.length + videoBytes);
+          merged.set(initBytes, 0);
+          let off = initBytes.length;
+          for (const c of videoChunks) { merged.set(c, off); off += c.length; }
         }
       } else if (format === 'fmp4') {
-        // fMP4 path: segments are already valid MP4 fragments. Concatenate the
-        // init segment (from #EXT-X-MAP) followed by all media segments.
-        const fragments: Uint8Array[] = [];
-        let totalLen = 0;
-        if (initSegPath) {
-          const init = await this.readFileBytes(initSegPath);
-          fragments.push(init);
-          totalLen += init.length;
+        // fMP4: concatenate init + fragments; handle separate audio if present
+        const videoFrags: Uint8Array[] = [];
+        let vLen = 0;
+        if (videoInitSegPath) {
+          const init = await this.readFileBytes(videoInitSegPath);
+          videoFrags.push(init);
+          vLen += init.length;
         }
-        // Segment 0 already read for format detection
-        fragments.push(probeBytes);
-        totalLen += probeBytes.length;
-        for (let i = 1; i < segmentPaths.length; i++) {
-          const seg = await this.readFileBytes(segmentPaths[i]);
-          fragments.push(seg);
-          totalLen += seg.length;
+        videoFrags.push(probeBytes);
+        vLen += probeBytes.length;
+        for (let i = 1; i < videoSegPaths.length; i++) {
+          const seg = await this.readFileBytes(videoSegPaths[i]);
+          videoFrags.push(seg);
+          vLen += seg.length;
         }
-        merged = new Uint8Array(totalLen);
-        let writeOffset = 0;
-        for (const frag of fragments) {
-          merged.set(frag, writeOffset);
-          writeOffset += frag.length;
+
+        if (hasSeparateAudio) {
+          const audioFrags: Uint8Array[] = [];
+          let aLen = 0;
+          if (audioInitSegPath) {
+            const init = await this.readFileBytes(audioInitSegPath);
+            audioFrags.push(init);
+            aLen += init.length;
+          }
+          for (const aPath of audioSegPaths) {
+            const seg = await this.readFileBytes(aPath);
+            audioFrags.push(seg);
+            aLen += seg.length;
+          }
+
+          // Concat audio into one buffer and patch track_id
+          const audioAll = new Uint8Array(aLen);
+          let aOff = 0;
+          for (const f of audioFrags) { audioAll.set(f, aOff); aOff += f.length; }
+          this.patchTrackId(audioAll, 1, 2);
+
+          // Merge init segments
+          const vInitData = videoInitSegPath ? await this.readFileBytes(videoInitSegPath) : videoFrags[0];
+          const aInitData = audioInitSegPath ? await this.readFileBytes(audioInitSegPath) : audioFrags[0];
+          const mergedInit = this.mergeVideoAudioInit(vInitData, aInitData);
+
+          // Skip init data from raw buffers (use only media fragments)
+          const vInitSize = videoInitSegPath ? (await this.readFileBytes(videoInitSegPath)).length : 0;
+          const aInitSize = audioInitSegPath ? (await this.readFileBytes(audioInitSegPath)).length : 0;
+          const videoAll = new Uint8Array(vLen);
+          let vOff = 0;
+          for (const f of videoFrags) { videoAll.set(f, vOff); vOff += f.length; }
+          const vData = videoAll.subarray(vInitSize);
+          const aData = audioAll.subarray(aInitSize);
+
+          merged = new Uint8Array(mergedInit.length + vData.length + aData.length);
+          merged.set(mergedInit, 0);
+          merged.set(vData, mergedInit.length);
+          merged.set(aData, mergedInit.length + vData.length);
+        } else {
+          merged = new Uint8Array(vLen);
+          let off = 0;
+          for (const f of videoFrags) { merged.set(f, off); off += f.length; }
         }
       } else {
         const head = Array.from(probeBytes.slice(0, 16))
