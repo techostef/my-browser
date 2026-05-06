@@ -20,6 +20,7 @@ interface Props {
   onPreview: (video: DetectedVideo) => void;
   onOpenInTab: (video: DetectedVideo) => void;
   onDismiss: () => void;
+  onToggleFullscreen?: () => void;
 }
 
 interface VideoValidationResult {
@@ -107,6 +108,7 @@ export default function VideoDetectedBanner({
   onPreview,
   onOpenInTab,
   onDismiss,
+  onToggleFullscreen,
 }: Props) {
   if (videos.length === 0) return null;
   const isMounted = React.useRef(false);
@@ -170,14 +172,14 @@ export default function VideoDetectedBanner({
     onOpenInTab(video);
   };
 
-  console.log(
-    "filteredVideos",
-    JSON.stringify(
-      videos.filter((video) => video.hlsInfo).map((video) => video.hlsInfo),
-      null,
-      2,
-    ),
-  );
+  // console.log(
+  //   "filteredVideos",
+  //   JSON.stringify(
+  //     videos.filter((video) => video.hlsInfo).map((video) => video.hlsInfo),
+  //     null,
+  //     2,
+  //   ),
+  // );
 
   if (filteredVideos.length === 0) {
     return null;
@@ -193,12 +195,7 @@ export default function VideoDetectedBanner({
         <View style={styles.headerActions}>
           <TouchableOpacity
             onPress={() => {
-              const list = filteredVideos.length > 0 ? filteredVideos : videos;
-              if (list.length === 1) {
-                onPreview(list[0]);
-              } else {
-                setIsDetailVisible(true);
-              }
+              onToggleFullscreen?.();
             }}
             style={styles.previewHeaderBtn}
           >

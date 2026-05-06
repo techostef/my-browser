@@ -118,6 +118,33 @@ export const VIDEO_DETECTOR_JS = `
     } catch(e) {}
   }
 
+  window.__removeVideoPlayingStyles = function() {
+    try {
+      var vids = document.querySelectorAll('.__rn-playing');
+      for (var i = 0; i < vids.length; i++) {
+        var v = vids[i];
+        var parent = window.__rnPlayingParent;
+        var sibling = window.__rnPlayingNextSibling;
+        try { v.pause(); } catch(_) {}
+        var backdrop = document.getElementById('__rn-playing-backdrop');
+        if (backdrop) backdrop.parentNode.removeChild(backdrop);
+        if (parent) {
+          if (sibling && sibling.parentNode === parent) {
+            parent.insertBefore(v, sibling);
+          } else {
+            parent.appendChild(v);
+          }
+          window.__rnPlayingParent = null;
+          window.__rnPlayingNextSibling = null;
+        }
+        if (v.dataset.rnOrigHadControls === '0') v.removeAttribute('controls');
+        v.setAttribute('style', v.dataset.rnOrigStyle || '');
+        v.classList.remove('__rn-playing');
+        delete v.dataset.rnOrigStyle;
+      }
+    } catch(e) {}
+  };
+
   function classifyUrl(url) {
     if (!url) return 'unknown';
     var lower = url.toLowerCase();
@@ -395,6 +422,9 @@ export const VIDEO_DETECTOR_JS = `
           payload: [payload]
         }));
       } catch(e) {}
+    });
+    vEl.addEventListener('play', function() {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING' }));
     });
   }
 

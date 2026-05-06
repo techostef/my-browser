@@ -10,6 +10,7 @@ import AddressBar from '../components/AddressBar';
 import TabBar from '../components/TabBar';
 import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
+import VideoPlayingNavbar from '../components/VideoPlayingNavbar';
 import { useDownloadActions } from '../store/downloadStore';
 import {
   useActiveTab,
@@ -24,6 +25,64 @@ import Browser from '@/components/Browser';
 // Injected into the browser WebView when the user taps Preview on a stream.
 // Posts the currentTime of the most-advanced playing video element.
 const GET_VIDEO_TIME_JS = `(function(){try{var vids=document.querySelectorAll('video');var t=0;for(var i=0;i<vids.length;i++){if(vids[i].currentTime>t)t=vids[i].currentTime;}window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_CURRENT_TIME',payload:{time:t}}));}catch(e){}})();true;`;
+
+// Toggles the first actively-playing video between fullscreen (position:fixed)
+// and its original position. Relies on __removeVideoPlayingStyles defined by
+// videoDetector.ts when the script is injected.
+const TOGGLE_FULLSCREEN_JS = `(function(){
+  function rnLog(msg) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'DETECTOR_LOG', payload: msg})); } catch(_){}
+  }
+  try {
+    var playing = document.querySelectorAll('.__rn-playing');
+    rnLog('[FULLSCREEN] toggle — playing count=' + playing.length);
+    if (playing.length > 0) {
+      window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles();
+      rnLog('[FULLSCREEN] restored original styles');
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_CHANGED',payload:{active:false}}));
+    } else {
+      var vids = document.querySelectorAll('video');
+      rnLog('[FULLSCREEN] total videos=' + vids.length);
+      for (var i = 0; i < vids.length; i++) {
+        var v = vids[i];
+        rnLog('[FULLSCREEN] video[' + i + '] paused=' + v.paused + ' src=' + (v.currentSrc || v.src).substring(0, 80));
+        if (!v.paused) {
+          if (!v.dataset.rnOrigStyle) {
+            v.dataset.rnOrigStyle = v.getAttribute('style') || '';
+          }
+          window.__rnPlayingParent = v.parentNode;
+          window.__rnPlayingNextSibling = v.nextSibling;
+          var backdrop = document.createElement('div');
+          backdrop.id = '__rn-playing-backdrop';
+          backdrop.style.setProperty('position', 'fixed', 'important');
+          backdrop.style.setProperty('top', '0', 'important');
+          backdrop.style.setProperty('left', '0', 'important');
+          backdrop.style.setProperty('width', '100%', 'important');
+          backdrop.style.setProperty('height', '100%', 'important');
+          backdrop.style.setProperty('z-index', '9998', 'important');
+          backdrop.style.setProperty('background', 'black', 'important');
+          v.dataset.rnOrigHadControls = v.hasAttribute('controls') ? '1' : '0';
+          document.body.appendChild(backdrop);
+          document.body.appendChild(v);
+          if (!v.hasAttribute('controls')) v.setAttribute('controls', '');
+          v.style.setProperty('position', 'fixed', 'important');
+          v.style.setProperty('top', '0', 'important');
+          v.style.setProperty('left', '0', 'important');
+          v.style.setProperty('width', '100%', 'important');
+          v.style.setProperty('height', '100%', 'important');
+          v.style.setProperty('z-index', '9999', 'important');
+          v.style.setProperty('transform', 'none', 'important');
+          v.classList.add('__rn-playing');
+          rnLog('[FULLSCREEN] moved to body and applied fullscreen to video[' + i + ']');
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_CHANGED',payload:{active:true}}));
+          break;
+        }
+      }
+    }
+  } catch(e) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'DETECTOR_LOG', payload: '[FULLSCREEN] error: ' + e.message})); } catch(_){}
+  }
+})(); true;`;
 
 export default function BrowserScreen() {
   // Subscribe ONLY to the narrow slices BrowserScreen itself needs. Heavy
@@ -169,9 +228,12 @@ export default function BrowserScreen() {
 
   const activeDetectedVideos = detectedVideosMap[activeTabId] || [];
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
+  const activeTab = useActiveTab();
+  const navbarTitle = activeDetectedVideos[0]?.pageTitle || activeTab?.title || 'Video';
 
   // Video preview modal state
   const [previewVideo, setPreviewVideo] = useState<DetectedVideo | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   // For DASH/HLS streams, capture the browser's current playback position before
   // opening the preview so the modal can seek to the same spot.
@@ -242,6 +304,11 @@ export default function BrowserScreen() {
     setPreviewVideo(video);
   }, [activeTabId]);
 
+  const handleToggleFullscreen = useCallback(() => {
+    console.log("handleToggleFullscreen");
+    webViewRefs.current[activeTabId]?.injectJavaScript(TOGGLE_FULLSCREEN_JS);
+  }, [activeTabId]);
+
   const handleClosePreview = useCallback(() => {
     // If extraction is still in flight, mark it cancelled so the END handler
     // skips writing to disk but still decrements the page's guard counter.
@@ -249,8 +316,11 @@ export default function BrowserScreen() {
       info.cancelled = true;
     }
     setPreviewVideo(null);
+    setIsVideoPlaying(false);
     setBlobPreviewProgress(null);
     setBlobPreviewError(null);
+    const REMOVE_JS = `window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles(); true;`;
+    Object.values(webViewRefs.current).forEach(ref => ref?.injectJavaScript(REMOVE_JS));
     const tempPath = previewTempFileRef.current;
     previewTempFileRef.current = null;
     if (tempPath) {
@@ -314,6 +384,15 @@ export default function BrowserScreen() {
       return () => sub.remove();
     }, [handleGoBack]),
   );
+
+  useEffect(() => {
+    if (!isVideoPlaying) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleToggleFullscreen();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isVideoPlaying, handleToggleFullscreen]);
 
   const handleGoForward = useCallback((tabId: string) => {
     const tab = getTabsSnapshot().find(t => t.id === tabId);
@@ -456,11 +535,19 @@ export default function BrowserScreen() {
           }
           break;
         }
+        case 'VIDEO_FULLSCREEN_CHANGED': {
+          const active = message.payload?.active === true;
+          setIsVideoPlaying(active);
+          if (!active) {
+            setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
+          }
+          break;
+        }
         case 'DETECTOR_LOG':
-          const filterLogs = ['[M3U8]'];
+          const filterLogs = ['[FULLSCREEN]'];
           const log = message.payload;
           if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
-            // console.log('[Detector]', log);
+            console.log('[Detector]', log);
           }
           break;
         case 'PAGE_INFO':
@@ -742,12 +829,20 @@ export default function BrowserScreen() {
           handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
         />
 
-        {!activeBannerDismissed && (
+        {!isVideoPlaying && !activeBannerDismissed && (
           <VideoDetectedBanner
             videos={activeDetectedVideos}
             onPreview={handlePreviewVideo}
             onOpenInTab={(video) => addTab(video.url)}
             onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
+            onToggleFullscreen={handleToggleFullscreen}
+          />
+        )}
+
+        {isVideoPlaying && (
+          <VideoPlayingNavbar
+            title={navbarTitle}
+            onMinimize={handleToggleFullscreen}
           />
         )}
       </View>
