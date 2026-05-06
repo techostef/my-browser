@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import { DownloadTask } from '../types';
+import { DownloadTask, HlsMasterInfo, HlsVariant, HlsMediaTrack } from '../types';
 
 type ProgressCallback = (
   id: string,
@@ -492,15 +492,36 @@ class DownloadManager {
     return lower.includes('.m3u8') || lower.includes('m3u8');
   }
 
+  private pickBestVariant(variants: HlsVariant[]): HlsVariant {
+    const byBandwidth = variants.filter(v => v.bandwidth > 0);
+    if (byBandwidth.length > 0) {
+      return byBandwidth.reduce((best, v) => v.bandwidth > best.bandwidth ? v : best);
+    }
+    const ranked = variants.map(v => {
+      const m = v.resolution?.match(/^(\d+)x(\d+)$/);
+      return { v, px: m ? parseInt(m[1], 10) * parseInt(m[2], 10) : 0 };
+    });
+    return ranked.reduce((best, cur) => cur.px > best.px ? cur : best, ranked[0]).v;
+  }
+
+  private pickBestAudioTrack(tracks: HlsMediaTrack[]): HlsMediaTrack {
+    const ranked = tracks.map(t => {
+      const m = t.groupId.match(/(\d+)$/);
+      return { t, bitrate: m ? parseInt(m[1], 10) : 0 };
+    });
+    return ranked.reduce((best, cur) => cur.bitrate > best.bitrate ? cur : best, ranked[0]).t;
+  }
+
   async startDownload(
     id: string,
     url: string,
     pageTitle: string,
     pageUrl?: string,
     cookies?: string,
+    hlsInfo?: HlsMasterInfo,
   ): Promise<string> {
-    if (this.isHlsUrl(url)) {
-      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies);
+    if (this.isHlsUrl(url) || (hlsInfo?.variants && hlsInfo.variants.length > 0)) {
+      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo);
     }
 
     const fileName = this.sanitizeFileName(url, pageTitle);
@@ -906,6 +927,7 @@ class DownloadManager {
     pageTitle: string,
     pageUrl?: string,
     cookies?: string,
+    hlsInfo?: HlsMasterInfo,
   ): Promise<string> {
     const TAG = '[HLS-DL]';
     const headers = this.buildHeaders(pageUrl, cookies);
@@ -915,37 +937,67 @@ class DownloadManager {
     this.onProgress?.(id, 0, 0);
 
     try {
-      // Step 1: Fetch the m3u8 manifest
-      console.log(`${TAG} Fetching manifest: ${url.substring(0, 150)}`);
       let manifestUrl = url;
-      let response = await fetch(manifestUrl, { headers });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch manifest: HTTP ${response.status}`);
-      }
-      let manifestText = await response.text();
-
-      // Step 2: Parse manifest — resolve master playlist to media playlist
-      let parsed = this.parseM3u8(manifestText, manifestUrl);
+      let manifestText: string;
+      let parsed: ReturnType<typeof this.parseM3u8>;
       let audioRendition: { uri?: string } | undefined;
-      if (parsed.isMaster && parsed.bestVariant) {
-        // console.log(`${TAG} Master playlist: ${parsed.audioRenditions.length} audio rendition(s), variant audio group=${parsed.bestVariantAudioGroup ?? '(none)'}`);
-        if (parsed.audioRenditions.length > 0) {
-          // Prefer the rendition whose GROUP-ID matches the chosen variant's AUDIO attribute,
-          // falling back to the DEFAULT=YES rendition, then the first one.
-          audioRendition =
-            parsed.audioRenditions.find(r => r.groupId === parsed.bestVariantAudioGroup) ||
-            parsed.audioRenditions.find(r => r.isDefault) ||
-            parsed.audioRenditions[0];
-          // console.log(`${TAG} Selected audio rendition: groupId=${(audioRendition as any).groupId} name=${(audioRendition as any).name} uri=${audioRendition.uri?.substring(0, 100) ?? '(inline in variant)'}`);
+      console.log("hlsInfo?.variants", hlsInfo?.variants)
+      if (hlsInfo?.variants && hlsInfo.variants.length > 0) {
+        // Use pre-parsed hlsInfo: skip master manifest fetch and pick directly.
+        const bestVariant = this.pickBestVariant(hlsInfo.variants);
+        manifestUrl = bestVariant.uri;
+        console.log(`${TAG} hlsInfo: using best variant ${manifestUrl.substring(0, 150)}`);
+
+        const variantResp = await fetch(manifestUrl, { headers });
+        if (!variantResp.ok) {
+          throw new Error(`Failed to fetch variant playlist: HTTP ${variantResp.status}`);
         }
-        // console.log(`${TAG} Picking best variant: ${parsed.bestVariant.substring(0, 150)}`);
-        manifestUrl = parsed.bestVariant;
-        response = await fetch(manifestUrl, { headers });
+        manifestText = await variantResp.text();
+        parsed = this.parseM3u8(manifestText, manifestUrl);
+
+        // Only attach a separate audio track for fMP4 variants (detected via
+        // presence of #EXT-X-MAP). MPEG-TS variants already carry audio inline
+        // in the TS PES packets — adding a separate AAC playlist would require
+        // transmuxing. Critically, the videoDetector stitches hlsInfo from
+        // URL patterns rather than a real master playlist, so we can't trust
+        // variant.audio as a signal that audio is missing from the variant.
+        if (parsed.initUri) {
+          const audioWithUri = hlsInfo.audioTracks.filter(t => t.type === 'AUDIO' && !!t.uri);
+          if (audioWithUri.length > 0) {
+            const bestAudio = this.pickBestAudioTrack(audioWithUri);
+            if (bestAudio.uri) {
+              audioRendition = { uri: bestAudio.uri };
+              console.log(`${TAG} hlsInfo: using audio track ${bestAudio.groupId} (${bestAudio.name})`);
+            }
+          }
+        } else {
+          console.log(`${TAG} hlsInfo: variant is MPEG-TS, audio is muxed into segments (skipping separate audio track)`);
+        }
+      } else {
+        // Standard path: fetch URL, detect and resolve master playlist.
+        console.log(`${TAG} Fetching manifest: ${url.substring(0, 150)}`);
+        const response = await fetch(manifestUrl, { headers });
         if (!response.ok) {
-          throw new Error(`Failed to fetch variant playlist: HTTP ${response.status}`);
+          throw new Error(`Failed to fetch manifest: HTTP ${response.status}`);
         }
         manifestText = await response.text();
         parsed = this.parseM3u8(manifestText, manifestUrl);
+
+        if (parsed.isMaster && parsed.bestVariant) {
+          if (parsed.audioRenditions.length > 0) {
+            audioRendition =
+              parsed.audioRenditions.find(r => r.groupId === parsed.bestVariantAudioGroup) ||
+              parsed.audioRenditions.find(r => r.isDefault) ||
+              parsed.audioRenditions[0];
+          }
+          manifestUrl = parsed.bestVariant;
+          const variantResp = await fetch(manifestUrl, { headers });
+          if (!variantResp.ok) {
+            throw new Error(`Failed to fetch variant playlist: HTTP ${variantResp.status}`);
+          }
+          manifestText = await variantResp.text();
+          parsed = this.parseM3u8(manifestText, manifestUrl);
+        }
       }
 
       const videoSegmentUrls = parsed.segments.filter(
@@ -959,7 +1011,7 @@ class DownloadManager {
       // Step 2b: If the master playlist declared a separate audio rendition
       // with its own URI, fetch that playlist so we can download audio segments.
       let audioSegmentUrls: string[] = [];
-      let audioParsed: ReturnType<typeof this.parseM3u8> | undefined;
+      let audioParsed: typeof parsed | undefined;
       if (audioRendition?.uri) {
         console.log(`${TAG} Fetching separate audio playlist`);
         const audioResp = await fetch(audioRendition.uri, { headers });

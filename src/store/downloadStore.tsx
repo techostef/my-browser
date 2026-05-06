@@ -374,7 +374,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     dispatchRef.current({ type: 'ADD_DOWNLOAD', payload: task });
 
-    downloadManager.startDownload(id, video.url, video.pageTitle, video.pageUrl, video.cookies).catch(err => {
+    downloadManager.startDownload(id, video.url, video.pageTitle, video.pageUrl, video.cookies, video.hlsInfo).catch(err => {
       console.warn('Download failed to start:', err);
     });
   }, []);
