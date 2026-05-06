@@ -181,7 +181,7 @@ export default function VideoDetectedBanner({
   //   ),
   // );
 
-  if (filteredVideos.length === 0) {
+  if (videos.length === 0) {
     return null;
   }
 
