@@ -113,74 +113,8 @@ export default function VideoDetectedBanner({
   onToggleFullscreen,
 }: Props) {
   if (videos.length === 0) return null;
-  const isMounted = React.useRef(false);
-  const validationCache = React.useRef<Map<string, VideoValidationResult>>(new Map());
 
-  const downloadableTypes = ["blob-ready", "hls", "dash", "mp4", "webm"];
-  const downloadableVideos = videos.filter((v) =>
-    downloadableTypes.includes(v.type),
-  );
-  const downloadableUrls = downloadableVideos.map((v) => v.url).join(",");
-  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
-    [],
-  );
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
-
-  const handleValidateVideos = async () => {
-    // const results = await Promise.all(
-    //   downloadableVideos.map(async (video) => {
-    //     if (video.type !== "mp4") return video;
-
-    //     const cached = validationCache.current.get(video.url);
-    //     if (cached) return { ...video, ...cached };
-
-    //     const validation = await validateMp4Video(video.url);
-    //     validationCache.current.set(video.url, validation);
-    //     return { ...video, ...validation };
-    //   }),
-    // );
-
-    // const filtered = results.filter((item) => {
-    //   if (item.type === "mp4") {
-    //     return false;
-    //     // return item.isValid !== false;
-    //   }
-    //   if (item.type === "hls") {
-    //     return !!item.hlsInfo;
-    //   }
-    //   return true;
-    // });
-
-    // const seenVariants = new Set<string>();
-    // const hlsItems = filtered.filter((item) => item.type === "hls" && item.hlsInfo);
-    // const nonHlsItems = filtered.filter((item) => item.type !== "hls" || !item.hlsInfo);
-    // hlsItems.sort((a, b) => (b.hlsInfo!.variants.length - a.hlsInfo!.variants.length));
-    // const deduped = [
-    //   ...nonHlsItems,
-    //   ...hlsItems.filter((item) => {
-    //     const filenames = item.hlsInfo!.variants.map((v) => v.uri.split("/").pop() ?? v.uri);
-    //     if (filenames.every((f) => seenVariants.has(f))) return false;
-    //     filenames.forEach((f) => seenVariants.add(f));
-    //     return true;
-    //   }),
-    // ];
-
-    setFilteredVideos(videos);
-  };
-
-  useEffect(() => {
-    isMounted.current = true;
-
-    handleValidateVideos();
-
-    return () => {
-      isMounted.current = false;
-    };
-  }, [downloadableUrls]);
-
-  if (!isMounted.current) {
-    return null;
-  }
 
   const handlePreviewFromDetail = (video: DetectedVideo) => {
     setIsDetailVisible(false);
@@ -197,7 +131,7 @@ export default function VideoDetectedBanner({
     JSON.stringify(
       videos.filter((video) => video.hlsInfo).map((video) => video),
       null,
-      4,
+      2,
     ),
   );
 
@@ -209,7 +143,7 @@ export default function VideoDetectedBanner({
     <View style={[styles.container, !visible && { display: "none" }]}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""}{" "}
+          {videos.length} video{videos.length > 1 ? "s" : ""}{" "}
           detected
         </Text>
         <View style={styles.headerActions}>
@@ -251,9 +185,9 @@ export default function VideoDetectedBanner({
               </TouchableOpacity>
             </View>
 
-            {filteredVideos.length > 0 ? (
+            {videos.length > 0 ? (
               <FlatList
-                data={filteredVideos}
+                data={videos}
                 keyExtractor={(item, index) => `${item.url}-${index}`}
                 style={styles.list}
                 renderItem={({ item }) => (

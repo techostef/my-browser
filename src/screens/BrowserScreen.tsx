@@ -324,7 +324,6 @@ export default function BrowserScreen() {
   }, [activeTabId]);
 
   const handleToggleFullscreen = useCallback(() => {
-    console.log("handleToggleFullscreen");
     webViewRefs.current[activeTabId]?.injectJavaScript(TOGGLE_FULLSCREEN_JS);
   }, [activeTabId]);
 
@@ -740,20 +739,18 @@ export default function BrowserScreen() {
     [startDownload, activeTabId],
   );
 
-  const handleLoadStart = useCallback((tabId: string) => () => {
-      setTimeout(() => {
-        setDetectedVideosMap(prev => {
-          const existing = prev[tabId];
-          // Avoid re-renders when there's nothing to clear.
-          if (!existing || existing.length === 0) return prev;
-          return { ...prev, [tabId]: [] };
-        });
-        setBannerDismissedMap(prev => {
-          if (prev[tabId] === false || prev[tabId] === undefined) return prev;
-          return { ...prev, [tabId]: false };
-        });
-    }, 500)
-  }, []);
+  // const handleLoadStart = useCallback((tabId: string) => () => {
+  //   setDetectedVideosMap(prev => {
+  //     const existing = prev[tabId];
+  //     // Avoid re-renders when there's nothing to clear.
+  //     if (!existing || existing.length === 0) return prev;
+  //     return { ...prev, [tabId]: [] };
+  //   });
+  //   setBannerDismissedMap(prev => {
+  //     if (prev[tabId] === false || prev[tabId] === undefined) return prev;
+  //     return { ...prev, [tabId]: false };
+  //   });
+  // }, []);
 
   // Stable wrappers so memoized children don't invalidate on every render.
   const handleAddTab = useCallback(() => addTab(), [addTab]);
@@ -791,8 +788,6 @@ export default function BrowserScreen() {
     );
   }
 
-  console.log("activeDetectedVideos", activeDetectedVideos)
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8F8F8" />
@@ -815,7 +810,6 @@ export default function BrowserScreen() {
           setWebViewRef={setWebViewRef}
           handleMessage={handleMessage}
           handleNavigationStateChange={handleNavigationStateChange}
-          handleLoadStart={handleLoadStart}
           handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
         />
 
@@ -937,7 +931,6 @@ interface WebViewListProps {
   setWebViewRef: (tabId: string, ref: WebView | null) => void;
   handleMessage: (tabId: string) => (event: { nativeEvent: { data: string } }) => void;
   handleNavigationStateChange: (tabId: string) => (navState: WebViewNavigation) => void;
-  handleLoadStart: (tabId: string) => () => void;
   handleShouldStartLoadWithRequest: (tabId: string) => (request: ShouldStartLoadRequest) => boolean;
 }
 
@@ -945,7 +938,6 @@ function WebViewListInner({
   setWebViewRef,
   handleMessage,
   handleNavigationStateChange,
-  handleLoadStart,
   handleShouldStartLoadWithRequest,
 }: WebViewListProps) {
   const tabs = useTabList();
@@ -965,7 +957,6 @@ function WebViewListInner({
             currentUrl={tab.url}
             handleMessage={handleMessage(tab.id)}
             handleNavigationStateChange={handleNavigationStateChange(tab.id)}
-            handleLoadStart={handleLoadStart(tab.id)}
             handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
           />
         </View>
