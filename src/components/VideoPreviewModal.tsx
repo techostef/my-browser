@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { DetectedVideo } from '../types';
+import VideoPlayerController from './VideoPlayerController';
 
 const TAG = '[VideoPreview]';
 
@@ -120,7 +121,7 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
 </head>
 <body>
   <div class="wrapper">
-    <video id="player" controls autoplay playsinline>
+    <video id="player" autoplay playsinline>
       <source src="${videoUrl}" type="${mimeType}">
     </video>
   </div>
@@ -185,6 +186,18 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
     fetch('${videoUrl.replace(/'/g, "\\'")}', { method: 'HEAD', mode: 'no-cors' })
       .then(function(r) { log('[FETCH HEAD] status=' + r.status + ' type=' + r.type); })
       .catch(function(e) { log('[FETCH HEAD ERROR] ' + e.message); });
+
+    setInterval(function() {
+      var v = document.getElementById('player');
+      if (!v) return;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'VIDEO_STATE',
+        currentTime: v.currentTime || 0,
+        duration: isFinite(v.duration) ? v.duration : 0,
+        paused: v.paused,
+        muted: v.muted,
+      }));
+    }, 250);
   </script>
 </body>
 </html>`;
@@ -210,7 +223,7 @@ function buildDashPlayerHtml(videoUrl: string, startTime: number): string {
 </head>
 <body>
   <div class="wrapper">
-    <video id="player" controls autoplay playsinline></video>
+    <video id="player" autoplay playsinline></video>
   </div>
   <script>
     var videoUrl = '${escapedUrl}';
@@ -224,6 +237,18 @@ function buildDashPlayerHtml(videoUrl: string, startTime: number): string {
       var msg = v.error ? v.error.message : 'Unknown';
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'ERROR', message: msg, code: code}));
     });
+
+    setInterval(function() {
+      var v = document.getElementById('player');
+      if (!v) return;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'VIDEO_STATE',
+        currentTime: v.currentTime || 0,
+        duration: isFinite(v.duration) ? v.duration : 0,
+        paused: v.paused,
+        muted: v.muted,
+      }));
+    }, 250);
 
     if (typeof dashjs !== 'undefined') {
       var player = dashjs.MediaPlayer().create();
@@ -285,7 +310,7 @@ function buildHlsPlayerHtml(videoUrl: string, startTime: number): string {
 </head>
 <body>
   <div class="wrapper">
-    <video id="player" controls autoplay playsinline></video>
+    <video id="player" autoplay playsinline></video>
   </div>
   <div id="debugLog" class="debug"></div>
   <script>
@@ -373,6 +398,18 @@ function buildHlsPlayerHtml(videoUrl: string, startTime: number): string {
       document.querySelector('.wrapper').innerHTML =
         '<div class="error"><h2>HLS Not Supported</h2><p>This browser does not support HLS playback.</p></div>';
     }
+
+    setInterval(function() {
+      var v = document.getElementById('player');
+      if (!v) return;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'VIDEO_STATE',
+        currentTime: v.currentTime || 0,
+        duration: isFinite(v.duration) ? v.duration : 0,
+        paused: v.paused,
+        muted: v.muted,
+      }));
+    }, 250);
   </script>
 </body>
 </html>`;
@@ -397,19 +434,59 @@ export default function VideoPreviewModal({
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
+  // Video playback state — driven by VIDEO_STATE messages from the HTML player
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoIsPaused, setVideoIsPaused] = useState(true);
+  const [videoIsMuted, setVideoIsMuted] = useState(false);
+
+  const injectTogglePlay = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      "(function(){var v=document.getElementById('player');if(v){v.paused?v.play().catch(function(){}):v.pause();}})();true;",
+    );
+  }, []);
+
+  const injectToggleMute = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      "(function(){var v=document.getElementById('player');if(v)v.muted=!v.muted;})();true;",
+    );
+  }, []);
+
+  const injectSeek = useCallback((time: number) => {
+    webViewRef.current?.injectJavaScript(
+      `(function(){var v=document.getElementById('player');if(v)v.currentTime=${time};})();true;`,
+    );
+  }, []);
+
+  const injectSkipBack = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      "(function(){var v=document.getElementById('player');if(v)v.currentTime=Math.max(0,v.currentTime-10);})();true;",
+    );
+  }, []);
+
+  const injectSkipForward = useCallback(() => {
+    webViewRef.current?.injectJavaScript(
+      "(function(){var v=document.getElementById('player');if(v)v.currentTime=Math.min(v.duration||0,v.currentTime+10);})();true;",
+    );
+  }, []);
+
   const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'LOG') {
         // console.log(`${TAG} [Player] ${msg.message}`);
       } else if (msg.type === 'LOADED') {
-        // console.log(`${TAG} Video loaded successfully`);
         setIsLoading(false);
         setHasError(false);
       } else if (msg.type === 'ERROR') {
         console.error(`${TAG} Video playback error: code=${msg.code} msg=${msg.message}`);
         setIsLoading(false);
         setHasError(true);
+      } else if (msg.type === 'VIDEO_STATE') {
+        setVideoCurrentTime(msg.currentTime);
+        setVideoDuration(msg.duration);
+        setVideoIsPaused(msg.paused);
+        setVideoIsMuted(msg.muted);
       }
     } catch (e) {
       console.warn(`${TAG} Non-JSON message from player:`, event.nativeEvent.data);
@@ -426,6 +503,10 @@ export default function VideoPreviewModal({
   const handleClose = useCallback(() => {
     setIsLoading(true);
     setHasError(false);
+    setVideoDuration(0);
+    setVideoCurrentTime(0);
+    setVideoIsPaused(true);
+    setVideoIsMuted(false);
     onClose();
   }, [onClose]);
 
@@ -555,6 +636,20 @@ export default function VideoPreviewModal({
                 allowsProtectedMedia
                 userAgent="Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
               />
+
+              {!hasError && (
+                <VideoPlayerController
+                  currentTime={videoCurrentTime}
+                  duration={videoDuration}
+                  isPaused={videoIsPaused}
+                  isMuted={videoIsMuted}
+                  onTogglePlay={injectTogglePlay}
+                  onToggleMute={injectToggleMute}
+                  onSeek={injectSeek}
+                  onSkipBack={injectSkipBack}
+                  onSkipForward={injectSkipForward}
+                />
+              )}
             </>
           )}
         </View>
