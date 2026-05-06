@@ -17,6 +17,7 @@ function formatSize(bytes: number): string {
 
 interface Props {
   videos: DetectedVideo[];
+  visible?: boolean;
   onPreview: (video: DetectedVideo) => void;
   onOpenInTab: (video: DetectedVideo) => void;
   onDismiss: () => void;
@@ -105,6 +106,7 @@ async function validateMp4Video(url: string): Promise<VideoValidationResult> {
 
 export default function VideoDetectedBanner({
   videos,
+  visible = true,
   onPreview,
   onOpenInTab,
   onDismiss,
@@ -112,11 +114,13 @@ export default function VideoDetectedBanner({
 }: Props) {
   if (videos.length === 0) return null;
   const isMounted = React.useRef(false);
+  const validationCache = React.useRef<Map<string, VideoValidationResult>>(new Map());
 
   const downloadableTypes = ["blob-ready", "hls", "dash", "mp4", "webm"];
   const downloadableVideos = videos.filter((v) =>
     downloadableTypes.includes(v.type),
   );
+  const downloadableUrls = downloadableVideos.map((v) => v.url).join(",");
   const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
     [],
   );
@@ -126,12 +130,13 @@ export default function VideoDetectedBanner({
     const results = await Promise.all(
       downloadableVideos.map(async (video) => {
         if (video.type !== "mp4") return video;
-        const validation = await validateMp4Video(video.url);
 
-        return {
-          ...video,
-          ...validation,
-        };
+        const cached = validationCache.current.get(video.url);
+        if (cached) return { ...video, ...cached };
+
+        const validation = await validateMp4Video(video.url);
+        validationCache.current.set(video.url, validation);
+        return { ...video, ...validation };
       }),
     );
 
@@ -156,7 +161,7 @@ export default function VideoDetectedBanner({
     return () => {
       isMounted.current = false;
     };
-  }, [downloadableVideos.length]);
+  }, [downloadableUrls]);
 
   if (!isMounted.current) {
     return null;
@@ -186,7 +191,7 @@ export default function VideoDetectedBanner({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !visible && { display: "none" }]}>
       <View style={styles.header}>
         <Text style={styles.title}>
           {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""}{" "}

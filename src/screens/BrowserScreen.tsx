@@ -829,15 +829,14 @@ export default function BrowserScreen() {
           handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
         />
 
-        {!isVideoPlaying && !activeBannerDismissed && (
-          <VideoDetectedBanner
-            videos={activeDetectedVideos}
-            onPreview={handlePreviewVideo}
-            onOpenInTab={(video) => addTab(video.url)}
-            onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
-            onToggleFullscreen={handleToggleFullscreen}
-          />
-        )}
+        <VideoDetectedBanner
+          visible={!isVideoPlaying && !activeBannerDismissed}
+          videos={activeDetectedVideos}
+          onPreview={handlePreviewVideo}
+          onOpenInTab={(video) => addTab(video.url)}
+          onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
+          onToggleFullscreen={handleToggleFullscreen}
+        />
 
         {isVideoPlaying && (
           <VideoPlayingNavbar
