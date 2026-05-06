@@ -403,7 +403,7 @@ export default function BrowserScreen() {
     }
     isHistoryNavRef.current[activeTabId] = true;
     pushUrl(activeTabId, url);
-    setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
+    // setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
     setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: false }));
     injectNavigation(activeTabId, url);
   }, [activeTabId, pushUrl, tabHasActiveExtraction, setTabHidden, addTab, injectNavigation, getTabsSnapshot, getBaseUrl]);
@@ -489,89 +489,16 @@ export default function BrowserScreen() {
 
       switch (message.type) {
         case 'VIDEO_DETECTED': {
-          const newVideos: DetectedVideo[] = message.payload;
-          setDetectedVideosMap(prev => {
-            const existing = prev[tabId] || [];
-            // console.log("prev", prev[tabId])
-            // Replace on (pageTitle + type) only for non-mp4 types. Also upgrade
-            // an existing 'blob' entry to
-            // 'blob-ready' when MSE finishes buffering for the same URL — without
-            // this, the upgrade is dropped and the banner shows the URL as
-            // non-downloadable.
-            const getVideoKey = (video: DetectedVideo) => `${video.url}:${video.type}`;
-            const existingKeys = new Set(existing.map(getVideoKey));
-            const incomingByKey = new Map(newVideos.map(video => [getVideoKey(video), video]));
-            // console.log("incomingByKey", incomingByKey)
-            const incoming = Array.from(incomingByKey.values()).filter(
-              video => video.type !== 'mp4' || !existingKeys.has(getVideoKey(video)),
-            );
-            // console.log("incoming", incoming)
-            if (incoming.length === 0) {
-              return prev;
-            }
-            const incomingReplacementKeys = new Set(
-              incoming.filter(v => v.type !== 'mp4').map(getVideoKey),
-            );
-            const upgradedUrls = new Set(
-              incoming.filter(v => v.type === 'blob-ready').map(v => v.url),
-            );
-            // URLs that a loadedmetadata update confirmed are stale and should
-            // be replaced by the newly confirmed currentSrc.
-            const replacedUrls = new Set(
-              incoming.map(v => (v as any).replacesUrl).filter(Boolean),
-            );
-            // Preserve hlsInfo from existing entries being replaced
-            const existingByKey = new Map(existing.map(v => [getVideoKey(v), v]));
-            const mergedIncoming = incoming.map(v => {
-              const old = existingByKey.get(getVideoKey(v));
-              if (old?.hlsInfo && !v.hlsInfo) {
-                return { ...v, hlsInfo: old.hlsInfo };
-              }
-              return v;
-            });
-            const filtered = existing.filter(v => !incomingReplacementKeys.has(getVideoKey(v))).filter(
-              v => !(v.type === 'blob' && upgradedUrls.has(v.url))
-                && !replacedUrls.has(v.url),
-            );
-            return { ...prev, [tabId]: [...filtered, ...mergedIncoming] };
-          });
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
           break;
         }
         case 'M3U8_INFO': {
-          const { url, variants, audioTracks, subtitleTracks, isMaster } = message.payload;
-          // Extract the video ID base path (e.g. ext_tw_video/123 or amplify_video/123)
-          // to match against all HLS entries from the same video
-          const getVideoBasePath = (u: string) => {
-            const match = u.match(/(ext_tw_video|amplify_video)\/(\d+)/);
-            return match ? match[0] : u;
-          };
-          const masterBase = getVideoBasePath(url);
+          const item = message.payload;
           setDetectedVideosMap(prev => {
             const existing = prev[tabId] || [];
-            let changed = false;
-            const updated = existing.map(v => {
-              if (v.type === 'hls' && getVideoBasePath(v.url) === masterBase) {
-                // Merge: accumulate variants/audio/subs from multiple M3U8_INFO messages
-                const prev = v.hlsInfo || { variants: [], audioTracks: [], subtitleTracks: [] };
-                const merged = {
-                  variants: isMaster ? variants : [...prev.variants, ...variants],
-                  audioTracks: isMaster ? audioTracks : [...prev.audioTracks, ...audioTracks],
-                  subtitleTracks: isMaster ? subtitleTracks : [...prev.subtitleTracks, ...subtitleTracks],
-                };
-                // Skip if nothing new
-                if (
-                  merged.variants.length === prev.variants.length &&
-                  merged.audioTracks.length === prev.audioTracks.length &&
-                  merged.subtitleTracks.length === prev.subtitleTracks.length
-                ) return v;
-                changed = true;
-                return { ...v, hlsInfo: merged };
-              }
-              return v;
-            });
-            return changed ? { ...prev, [tabId]: updated } : prev;
+            return { ...prev, [tabId]: [...existing, item] };
           });
+          setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
           break;
         }
         case 'VIDEO_CURRENT_TIME': {
@@ -604,7 +531,7 @@ export default function BrowserScreen() {
           break;
         }
         case 'DETECTOR_LOG':
-          const filterLogs = ['[FULLSCREEN]'];
+          const filterLogs = ['[M3U8]'];
           const log = message.payload;
           if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
             // console.log('[Detector]', log);
@@ -814,16 +741,18 @@ export default function BrowserScreen() {
   );
 
   const handleLoadStart = useCallback((tabId: string) => () => {
-    setDetectedVideosMap(prev => {
-      const existing = prev[tabId];
-      // Avoid re-renders when there's nothing to clear.
-      if (!existing || existing.length === 0) return prev;
-      return { ...prev, [tabId]: [] };
-    });
-    setBannerDismissedMap(prev => {
-      if (prev[tabId] === false || prev[tabId] === undefined) return prev;
-      return { ...prev, [tabId]: false };
-    });
+      setTimeout(() => {
+        setDetectedVideosMap(prev => {
+          const existing = prev[tabId];
+          // Avoid re-renders when there's nothing to clear.
+          if (!existing || existing.length === 0) return prev;
+          return { ...prev, [tabId]: [] };
+        });
+        setBannerDismissedMap(prev => {
+          if (prev[tabId] === false || prev[tabId] === undefined) return prev;
+          return { ...prev, [tabId]: false };
+        });
+    }, 500)
   }, []);
 
   // Stable wrappers so memoized children don't invalidate on every render.
@@ -862,6 +791,7 @@ export default function BrowserScreen() {
     );
   }
 
+  console.log("activeDetectedVideos", activeDetectedVideos)
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

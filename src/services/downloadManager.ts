@@ -503,7 +503,7 @@ class DownloadManager {
     hlsInfo?: HlsMasterInfo,
   ): Promise<string> {
     if (this.isHlsUrl(url) || (hlsInfo?.variants && hlsInfo.variants.length > 0)) {
-      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies);
+      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo);
     }
 
     const fileName = this.sanitizeFileName(url, pageTitle);
@@ -559,29 +559,34 @@ class DownloadManager {
 
   // ===== HLS (.m3u8) Download via FFmpegKit =====
 
+  private resolveHlsUri(base: string, uri: string): string {
+    if (/^https?:\/\//i.test(uri)) return uri;
+    try {
+      const { origin } = new URL(base);
+      return uri.startsWith('/') ? `${origin}${uri}` : `${base.replace(/\/[^/]*$/, '/')}${uri}`;
+    } catch {
+      return uri;
+    }
+  }
+
   private async startHlsDownload(
     id: string,
     url: string,
     pageTitle: string,
     pageUrl?: string,
     cookies?: string,
+    hslInfo?: HlsMasterInfo
   ): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
 
     this.onStatusChange?.(id, 'downloading');
     this.onProgress?.(id, 0, 0);
 
-    // Pass the master playlist URL directly — FFmpeg resolves variants and
-    // audio renditions natively, so passing a pre-selected variant URL would
-    // cause FFmpeg to skip the master playlist and miss separate audio tracks.
-    const manifestUrl = url;
-
     const safe = (pageTitle || 'video')
       .replace(/[^a-zA-Z0-9 ]/g, '')
       .replace(/\s+/g, '_')
       .substring(0, 40);
     const outputPath = `${privateDir}${safe}_${Date.now()}.mp4`;
-    // FFmpeg needs a real file path, not a file:// URI
     const outputFsPath = outputPath.replace(/^file:\/\//, '');
 
     // Build headers argument
@@ -597,14 +602,49 @@ class DownloadManager {
     }
     const headersValue = headerLines.join('\r\n') + '\r\n';
 
-    const args = [
-      '-headers', headersValue,
-      '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
-      '-i', manifestUrl,
-      '-c', 'copy',
-      '-y',
-      outputFsPath,
-    ];
+    let args: string[];
+    if (hslInfo && hslInfo.variants.length > 0) {
+      const best = hslInfo.variants.reduce((a, b) => b.bandwidth > a.bandwidth ? b : a);
+      const videoUrl = this.resolveHlsUri(url, best.uri);
+
+      const audioTrack = best.audio
+        ? hslInfo.audioTracks.find(t => t.groupId === best.audio && t.uri)
+        : undefined;
+
+      if (audioTrack?.uri) {
+        const audioUrl = this.resolveHlsUri(url, audioTrack.uri);
+        args = [
+          '-headers', headersValue,
+          '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+          '-i', videoUrl,
+          '-headers', headersValue,
+          '-i', audioUrl,
+          '-map', '0:v',
+          '-map', '1:a',
+          '-c', 'copy',
+          '-y',
+          outputFsPath,
+        ];
+      } else {
+        args = [
+          '-headers', headersValue,
+          '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+          '-i', videoUrl,
+          '-c', 'copy',
+          '-y',
+          outputFsPath,
+        ];
+      }
+    } else {
+      args = [
+        '-headers', headersValue,
+        '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+        '-i', url,
+        '-c', 'copy',
+        '-y',
+        outputFsPath,
+      ];
+    }
 
     try {
       let resolveCompletion!: () => void;

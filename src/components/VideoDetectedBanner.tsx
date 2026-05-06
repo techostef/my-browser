@@ -127,45 +127,45 @@ export default function VideoDetectedBanner({
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
 
   const handleValidateVideos = async () => {
-    const results = await Promise.all(
-      downloadableVideos.map(async (video) => {
-        if (video.type !== "mp4") return video;
+    // const results = await Promise.all(
+    //   downloadableVideos.map(async (video) => {
+    //     if (video.type !== "mp4") return video;
 
-        const cached = validationCache.current.get(video.url);
-        if (cached) return { ...video, ...cached };
+    //     const cached = validationCache.current.get(video.url);
+    //     if (cached) return { ...video, ...cached };
 
-        const validation = await validateMp4Video(video.url);
-        validationCache.current.set(video.url, validation);
-        return { ...video, ...validation };
-      }),
-    );
+    //     const validation = await validateMp4Video(video.url);
+    //     validationCache.current.set(video.url, validation);
+    //     return { ...video, ...validation };
+    //   }),
+    // );
 
-    const filtered = results.filter((item) => {
-      if (item.type === "mp4") {
-        return false;
-        // return item.isValid !== false;
-      }
-      if (item.type === "hls") {
-        return !!item.hlsInfo;
-      }
-      return true;
-    });
+    // const filtered = results.filter((item) => {
+    //   if (item.type === "mp4") {
+    //     return false;
+    //     // return item.isValid !== false;
+    //   }
+    //   if (item.type === "hls") {
+    //     return !!item.hlsInfo;
+    //   }
+    //   return true;
+    // });
 
-    const seenVariants = new Set<string>();
-    const hlsItems = filtered.filter((item) => item.type === "hls" && item.hlsInfo);
-    const nonHlsItems = filtered.filter((item) => item.type !== "hls" || !item.hlsInfo);
-    hlsItems.sort((a, b) => (b.hlsInfo!.variants.length - a.hlsInfo!.variants.length));
-    const deduped = [
-      ...nonHlsItems,
-      ...hlsItems.filter((item) => {
-        const filenames = item.hlsInfo!.variants.map((v) => v.uri.split("/").pop() ?? v.uri);
-        if (filenames.every((f) => seenVariants.has(f))) return false;
-        filenames.forEach((f) => seenVariants.add(f));
-        return true;
-      }),
-    ];
+    // const seenVariants = new Set<string>();
+    // const hlsItems = filtered.filter((item) => item.type === "hls" && item.hlsInfo);
+    // const nonHlsItems = filtered.filter((item) => item.type !== "hls" || !item.hlsInfo);
+    // hlsItems.sort((a, b) => (b.hlsInfo!.variants.length - a.hlsInfo!.variants.length));
+    // const deduped = [
+    //   ...nonHlsItems,
+    //   ...hlsItems.filter((item) => {
+    //     const filenames = item.hlsInfo!.variants.map((v) => v.uri.split("/").pop() ?? v.uri);
+    //     if (filenames.every((f) => seenVariants.has(f))) return false;
+    //     filenames.forEach((f) => seenVariants.add(f));
+    //     return true;
+    //   }),
+    // ];
 
-    setFilteredVideos(deduped);
+    setFilteredVideos(videos);
   };
 
   useEffect(() => {
@@ -192,14 +192,14 @@ export default function VideoDetectedBanner({
     onOpenInTab(video);
   };
 
-  // console.log(
-  //   "filteredVideos",
-  //   JSON.stringify(
-  //     videos.filter((video) => video.hlsInfo).map((video) => video),
-  //     null,
-  //     2,
-  //   ),
-  // );
+  console.log(
+    "filteredVideos",
+    JSON.stringify(
+      videos.filter((video) => video.hlsInfo).map((video) => video),
+      null,
+      4,
+    ),
+  );
 
   if (videos.length === 0) {
     return null;

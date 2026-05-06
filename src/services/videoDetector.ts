@@ -314,61 +314,6 @@ export const VIDEO_DETECTOR_JS = `
         }
       }
       log('[M3U8] Parsed master: ' + variants.length + ' variants, ' + audioTracks.length + ' audio, ' + subtitleTracks.length + ' subs');
-    } else {
-      // === VARIANT/MEDIA PLAYLIST: extract info from URL pattern ===
-      // Twitter URL patterns: /avc1/720x1280/... (video), /mp4a/64000/... (audio), /s0/... (subtitles)
-      try {
-        var resMatch = m3u8Url.match(/\\/(\\d{2,4}x\\d{2,4})\\//);
-        var codecMatch = m3u8Url.match(/\\/(avc1|hevc|vp9|mp4a|ac-3|ec-3)\\//i);
-        var bitrateMatch = m3u8Url.match(/\\/mp4a\\/(\\d+)\\//);
-        var isSubtitle = m3u8Url.match(/\\/s\\d+\\//);
-
-        // Calculate total duration from #EXTINF lines
-        var totalDuration = 0;
-        var segLines = text.split(String.fromCharCode(10));
-        for (var si = 0; si < segLines.length; si++) {
-          if (segLines[si].indexOf('#EXTINF:') === 0) {
-            var dur = parseFloat(segLines[si].substring(8));
-            if (!isNaN(dur)) totalDuration += dur;
-          }
-        }
-
-        var codec = codecMatch ? codecMatch[1].toLowerCase() : '';
-        var resolution = resMatch ? resMatch[1] : undefined;
-        var bitrate = bitrateMatch ? parseInt(bitrateMatch[1], 10) : 0;
-
-        if (isSubtitle) {
-          subtitleTracks.push({
-            type: 'SUBTITLES',
-            groupId: 'subs',
-            name: 'Subtitles',
-            uri: m3u8Url,
-            default: false,
-            autoselect: true
-          });
-          log('[M3U8] Variant playlist (subtitle, ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
-        } else if (codec === 'mp4a' || codec === 'ac-3' || codec === 'ec-3' || (bitrateMatch && !resMatch)) {
-          audioTracks.push({
-            type: 'AUDIO',
-            groupId: 'audio-' + (bitrate || 'unknown'),
-            name: 'Audio ' + (bitrate ? (bitrate / 1000) + 'kbps' : ''),
-            uri: m3u8Url,
-            default: false,
-            autoselect: true
-          });
-          log('[M3U8] Variant playlist (audio ' + (bitrate / 1000) + 'kbps, ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
-        } else {
-          variants.push({
-            bandwidth: bitrate || 0,
-            resolution: resolution,
-            codecs: codec || undefined,
-            uri: m3u8Url
-          });
-          log('[M3U8] Variant playlist (video ' + (resolution || 'unknown') + ', ' + Math.round(totalDuration) + 's): ' + m3u8Url.substring(0, 100));
-        }
-      } catch (e) {
-        log('[M3U8] Error parsing variant playlist: ' + JSON.stringify(e));
-      }
     }
 
     // Only send if we have useful data
@@ -378,10 +323,18 @@ export const VIDEO_DETECTOR_JS = `
           type: 'M3U8_INFO',
           payload: {
             url: m3u8Url,
-            isMaster: isMaster,
-            variants: variants,
-            audioTracks: audioTracks,
-            subtitleTracks: subtitleTracks
+            type: 'hsl',
+            pageUrl: window.location.href,
+            pageTitle: document.title,
+            timestamp: Date.now(),
+            cookies: document.cookie || '',
+            hslInfo: {
+              url: m3u8Url,
+              isMaster: isMaster,
+              variants: variants,
+              audioTracks: audioTracks,
+              subtitleTracks: subtitleTracks
+            }
           }
         }));
       }
@@ -735,7 +688,6 @@ export const VIDEO_DETECTOR_JS = `
     try { pageTitle = document.title || ''; } catch(e2) {}
     var cookies = '';
     try { cookies = document.cookie || ''; } catch(e2) {}
-    log('[SENDING] confirmed url=' + blobUrl.substring(0, 100) + (prev && prev !== url ? ' replaces=' + prev.substring(0, 80) : ''));
     window.ReactNativeWebView.postMessage(JSON.stringify({
       type: 'VIDEO_DETECTED',
       payload: [{
