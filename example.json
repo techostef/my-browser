@@ -1,252 +1,150 @@
 [
   {
-    "variants": [
-      {
-        "bandwidth": 2003621,
-        "averageBandwidth": 1677657,
-        "resolution": "720x1280",
-        "codecs": "mp4a.40.2,avc1.64001F",
-        "audio": "audio-128000",
-        "uri": "/amplify_video/2050393252256501760/pl/avc1/720x1280/vYcsmQ78C4pxpWB_.m3u8"
-      },
-      {
-        "bandwidth": 899608,
-        "averageBandwidth": 774160,
-        "resolution": "480x852",
-        "codecs": "mp4a.40.2,avc1.4D401F",
-        "audio": "audio-64000",
-        "uri": "/amplify_video/2050393252256501760/pl/avc1/480x852/zM5-JCh7qGIywx30.m3u8"
-      },
-      {
-        "bandwidth": 439951,
-        "averageBandwidth": 374390,
-        "resolution": "320x568",
-        "codecs": "mp4a.40.2,avc1.4D401E",
-        "audio": "audio-32000",
-        "uri": "/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
-      },
-      {
-        "bandwidth": 0,
-        "resolution": "320x568",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-128000",
-        "name": "Audio",
-        "uri": "/amplify_video/2050393252256501760/pl/mp4a/128000/y6QYZgUc3EPx8UHY.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio",
-        "uri": "/amplify_video/2050393252256501760/pl/mp4a/64000/Ov53scp70XCirQBw.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-32000",
-        "name": "Audio",
-        "uri": "/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-32000",
-        "name": "Audio 32kbps",
-        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
+    "url": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/128000/kXxRsuoGz1RgkiaH.m3u8",
+    "type": "hls",
+    "downloadable": false,
+    "pageUrl": "https://x.com/WileECoyoteToon/status/2051857238009286878/mediaViewer?currentTweet=2050582401114689830&currentTweetUser=Jendeukiess1",
+    "pageTitle": "X",
+    "timestamp": 1778058972700,
+    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
+    "hlsInfo": {
+      "variants": [
+        {
+          "bandwidth": 0,
+          "resolution": "1206x678",
+          "codecs": "avc1",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/1206x678/74x4LGolcGOyqtjQ.m3u8"
+        },
+        {
+          "bandwidth": 0,
+          "resolution": "640x360",
+          "codecs": "avc1",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/640x360/_7-dZKVXhWeTH8Fy.m3u8"
+        }
+      ],
+      "audioTracks": [
+        {
+          "type": "AUDIO",
+          "groupId": "audio-128000",
+          "name": "Audio 128kbps",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/128000/kXxRsuoGz1RgkiaH.m3u8",
+          "default": false,
+          "autoselect": true
+        },
+        {
+          "type": "AUDIO",
+          "groupId": "audio-64000",
+          "name": "Audio 64kbps",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/64000/QCZrno8U7t5nqDrY.m3u8",
+          "default": false,
+          "autoselect": true
+        }
+      ],
+      "subtitleTracks": []
+    }
   },
   {
-    "variants": [
-      {
-        "bandwidth": 2003621,
-        "averageBandwidth": 1677657,
-        "resolution": "720x1280",
-        "codecs": "mp4a.40.2,avc1.64001F",
-        "audio": "audio-128000",
-        "uri": "/amplify_video/2050393252256501760/pl/avc1/720x1280/vYcsmQ78C4pxpWB_.m3u8"
-      },
-      {
-        "bandwidth": 899608,
-        "averageBandwidth": 774160,
-        "resolution": "480x852",
-        "codecs": "mp4a.40.2,avc1.4D401F",
-        "audio": "audio-64000",
-        "uri": "/amplify_video/2050393252256501760/pl/avc1/480x852/zM5-JCh7qGIywx30.m3u8"
-      },
-      {
-        "bandwidth": 439951,
-        "averageBandwidth": 374390,
-        "resolution": "320x568",
-        "codecs": "mp4a.40.2,avc1.4D401E",
-        "audio": "audio-32000",
-        "uri": "/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
-      },
-      {
-        "bandwidth": 0,
-        "resolution": "320x568",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/avc1/320x568/nSJDGApkWhcPHbSN.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-128000",
-        "name": "Audio",
-        "uri": "/amplify_video/2050393252256501760/pl/mp4a/128000/y6QYZgUc3EPx8UHY.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio",
-        "uri": "/amplify_video/2050393252256501760/pl/mp4a/64000/Ov53scp70XCirQBw.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-32000",
-        "name": "Audio",
-        "uri": "/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-32000",
-        "name": "Audio 32kbps",
-        "uri": "https://video.twimg.com/amplify_video/2050393252256501760/pl/mp4a/32000/jlmICH6Z_OZ14jAH.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
+    "url": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/1206x678/74x4LGolcGOyqtjQ.m3u8",
+    "type": "hls",
+    "downloadable": false,
+    "pageUrl": "https://x.com/WileECoyoteToon/status/2051857238009286878/mediaViewer?currentTweet=2050582401114689830&currentTweetUser=Jendeukiess1",
+    "pageTitle": "X",
+    "timestamp": 1778058972701,
+    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
+    "hlsInfo": {
+      "variants": [
+        {
+          "bandwidth": 0,
+          "resolution": "1206x678",
+          "codecs": "avc1",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/1206x678/74x4LGolcGOyqtjQ.m3u8"
+        },
+        {
+          "bandwidth": 0,
+          "resolution": "640x360",
+          "codecs": "avc1",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/640x360/_7-dZKVXhWeTH8Fy.m3u8"
+        }
+      ],
+      "audioTracks": [
+        {
+          "type": "AUDIO",
+          "groupId": "audio-128000",
+          "name": "Audio 128kbps",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/128000/kXxRsuoGz1RgkiaH.m3u8",
+          "default": false,
+          "autoselect": true
+        },
+        {
+          "type": "AUDIO",
+          "groupId": "audio-64000",
+          "name": "Audio 64kbps",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/64000/QCZrno8U7t5nqDrY.m3u8",
+          "default": false,
+          "autoselect": true
+        }
+      ],
+      "subtitleTracks": []
+    }
   },
   {
-    "variants": [
-      {
-        "bandwidth": 0,
-        "resolution": "960x720",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/960x720/9KKirYq1sK5k5BfX.m3u8"
-      },
-      {
-        "bandwidth": 0,
-        "resolution": "480x360",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-128000",
-        "name": "Audio 128kbps",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/128000/1PKXJm6gSo8wOCGu.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio 64kbps",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
+    "url": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/64000/QCZrno8U7t5nqDrY.m3u8",
+    "type": "hls",
+    "downloadable": false,
+    "pageUrl": "https://x.com/WileECoyoteToon/status/2051857238009286878/mediaViewer?currentTweet=2050582401114689830&currentTweetUser=Jendeukiess1",
+    "pageTitle": "X",
+    "timestamp": 1778058972810,
+    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
+    "hlsInfo": {
+      "variants": [
+        {
+          "bandwidth": 0,
+          "resolution": "640x360",
+          "codecs": "avc1",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/640x360/_7-dZKVXhWeTH8Fy.m3u8"
+        }
+      ],
+      "audioTracks": [
+        {
+          "type": "AUDIO",
+          "groupId": "audio-64000",
+          "name": "Audio 64kbps",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/64000/QCZrno8U7t5nqDrY.m3u8",
+          "default": false,
+          "autoselect": true
+        }
+      ],
+      "subtitleTracks": []
+    }
   },
   {
-    "variants": [
-      {
-        "bandwidth": 0,
-        "resolution": "960x720",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/960x720/9KKirYq1sK5k5BfX.m3u8"
-      },
-      {
-        "bandwidth": 0,
-        "resolution": "480x360",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-128000",
-        "name": "Audio 128kbps",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/128000/1PKXJm6gSo8wOCGu.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio 64kbps",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
-  },
-  {
-    "variants": [
-      {
-        "bandwidth": 0,
-        "resolution": "480x360",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio 64kbps",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
-  },
-  {
-    "variants": [
-      {
-        "bandwidth": 0,
-        "resolution": "480x360",
-        "codecs": "avc1",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/avc1/480x360/VOOA-RdQtoTMhIgz.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio 64kbps",
-        "uri": "https://video.twimg.com/ext_tw_video/2051681156614258689/pu/pl/mp4a/64000/OUVsp9epIWSNm1cD.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
+    "url": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/640x360/_7-dZKVXhWeTH8Fy.m3u8",
+    "type": "hls",
+    "downloadable": false,
+    "pageUrl": "https://x.com/WileECoyoteToon/status/2051857238009286878/mediaViewer?currentTweet=2050582401114689830&currentTweetUser=Jendeukiess1",
+    "pageTitle": "X",
+    "timestamp": 1778058972811,
+    "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
+    "hlsInfo": {
+      "variants": [
+        {
+          "bandwidth": 0,
+          "resolution": "640x360",
+          "codecs": "avc1",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/avc1/640x360/_7-dZKVXhWeTH8Fy.m3u8"
+        }
+      ],
+      "audioTracks": [
+        {
+          "type": "AUDIO",
+          "groupId": "audio-64000",
+          "name": "Audio 64kbps",
+          "uri": "https://video.twimg.com/amplify_video/2050580605348569088/pl/mp4a/64000/QCZrno8U7t5nqDrY.m3u8",
+          "default": false,
+          "autoselect": true
+        }
+      ],
+      "subtitleTracks": []
+    }
   }
 ]

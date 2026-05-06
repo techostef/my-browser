@@ -607,7 +607,7 @@ export default function BrowserScreen() {
           const filterLogs = ['[FULLSCREEN]'];
           const log = message.payload;
           if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
-            console.log('[Detector]', log);
+            // console.log('[Detector]', log);
           }
           break;
         case 'PAGE_INFO':
