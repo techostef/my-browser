@@ -140,17 +140,32 @@ export default function VideoDetectedBanner({
       }),
     );
 
-    setFilteredVideos(
-      results.filter((item) => {
-        if (item.type === "mp4") {
-          return item.isValid !== false;
-        }
-        if (item.type === "hls") {
-          return !!item.hlsInfo;
-        }
+    const filtered = results.filter((item) => {
+      if (item.type === "mp4") {
+        return false;
+        // return item.isValid !== false;
+      }
+      if (item.type === "hls") {
+        return !!item.hlsInfo;
+      }
+      return true;
+    });
+
+    const seenVariants = new Set<string>();
+    const hlsItems = filtered.filter((item) => item.type === "hls" && item.hlsInfo);
+    const nonHlsItems = filtered.filter((item) => item.type !== "hls" || !item.hlsInfo);
+    hlsItems.sort((a, b) => (b.hlsInfo!.variants.length - a.hlsInfo!.variants.length));
+    const deduped = [
+      ...nonHlsItems,
+      ...hlsItems.filter((item) => {
+        const filenames = item.hlsInfo!.variants.map((v) => v.uri.split("/").pop() ?? v.uri);
+        if (filenames.every((f) => seenVariants.has(f))) return false;
+        filenames.forEach((f) => seenVariants.add(f));
         return true;
       }),
-    );
+    ];
+
+    setFilteredVideos(deduped);
   };
 
   useEffect(() => {
@@ -180,7 +195,7 @@ export default function VideoDetectedBanner({
   // console.log(
   //   "filteredVideos",
   //   JSON.stringify(
-  //     videos.filter((video) => video.hlsInfo).map((video) => video.hlsInfo),
+  //     videos.filter((video) => video.hlsInfo).map((video) => video),
   //     null,
   //     2,
   //   ),
