@@ -126,15 +126,6 @@ export default function VideoDetectedBanner({
     onOpenInTab(video);
   };
 
-  console.log(
-    "filteredVideos",
-    JSON.stringify(
-      videos.filter((video) => video.hlsInfo).map((video) => video),
-      null,
-      2,
-    ),
-  );
-
   if (videos.length === 0) {
     return null;
   }

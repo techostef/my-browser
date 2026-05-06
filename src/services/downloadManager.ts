@@ -669,8 +669,7 @@ class DownloadManager {
         },
         undefined,
         (stats) => {
-          // Report bytes written so the UI shows activity
-          this.onProgress?.(id, stats.getSize() * 1024, 0);
+          this.onProgress?.(id, stats.getSize(), 0);
         },
       );
 
