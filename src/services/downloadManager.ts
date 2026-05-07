@@ -562,6 +562,19 @@ class DownloadManager {
     }
   }
 
+  readonly trashFolderName = '__trash__';
+
+  async movePrivateFileToTrash(filePath: string): Promise<string> {
+    const privateDir = await this.ensurePrivateFolder();
+    const trashDir = `${privateDir}${this.trashFolderName}/`;
+    await FileSystem.makeDirectoryAsync(trashDir, { intermediates: true });
+    const fileName = filePath.split('/').pop();
+    if (!fileName) { throw new Error('Invalid file path'); }
+    const targetPath = await this.getUniqueFilePath(`${trashDir}${fileName}`);
+    await FileSystem.moveAsync({ from: filePath, to: targetPath });
+    return targetPath;
+  }
+
   async deletePrivateFile(filePath: string): Promise<void> {
     await FileSystem.deleteAsync(filePath, { idempotent: true });
   }

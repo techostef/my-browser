@@ -22,7 +22,8 @@ interface Props {
   onRename: (task: DownloadTask) => void;
   onMove?: (task: DownloadTask) => void;
   onMoveInPrivate?: (task: DownloadTask) => void;
-  onRemove: (id: string) => void;
+  onRemove?: (id: string) => void;
+  onDeletePermanently?: (id: string) => void;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onLongPress?: (task: DownloadTask) => void;
@@ -78,6 +79,7 @@ const DownloadItem = memo(function DownloadItem({
   onMove,
   onMoveInPrivate,
   onRemove,
+  onDeletePermanently,
   isSelectionMode = false,
   isSelected = false,
   onLongPress,
@@ -352,7 +354,7 @@ const DownloadItem = memo(function DownloadItem({
                   <Text style={styles.actionBtnText}>✏ Rename</Text>
                 </TouchableOpacity>
               )}
-              {canManageCompletedFile && (
+              {canManageCompletedFile && onRemove && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.removeBtn]}
                   onPress={() => {
@@ -360,7 +362,18 @@ const DownloadItem = memo(function DownloadItem({
                     setActionsVisible(false);
                   }}
                 >
-                  <Text style={styles.actionBtnText}>🗑 Delete</Text>
+                  <Text style={styles.actionBtnText}>🗑 Move to Trash</Text>
+                </TouchableOpacity>
+              )}
+              {canManageCompletedFile && onDeletePermanently && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.deletePermanentlyBtn]}
+                  onPress={() => {
+                    onDeletePermanently(task.id);
+                    setActionsVisible(false);
+                  }}
+                >
+                  <Text style={[styles.actionBtnText, styles.deletePermanentlyText]}>🗑 Delete Permanently</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -632,6 +645,12 @@ const styles = StyleSheet.create({
   },
   removeBtn: {
     backgroundColor: "#F5F5F5",
+  },
+  deletePermanentlyBtn: {
+    backgroundColor: "#FFEBEE",
+  },
+  deletePermanentlyText: {
+    color: "#C62828",
   },
   selectionOverlay: {
     position: "absolute",

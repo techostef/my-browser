@@ -43,10 +43,12 @@ export default function DownloadsScreen() {
     moveDownloadToFolder,
     bulkMoveDownloadsToFolder,
     removeDownload,
+    deleteFromTrash,
     prefetchDeviceFileSizes,
   } = useDownloads();
 
   const DEVICE_ROOT_PATH = '__device_download__';
+  const TRASH_FOLDER_PATH = '__trash__';
 
   type DownloadGridItem =
     | { type: 'folder'; path: string; name: string; source: 'private' | 'device'; isDeviceRoot?: boolean }
@@ -269,16 +271,30 @@ export default function DownloadsScreen() {
       });
   }, [closeBulkMoveToPrivateModal, bulkMoveDownloadsToFolder, selectedIds]);
 
+  const isInTrash = currentFolderPath === TRASH_FOLDER_PATH ||
+    currentFolderPath.startsWith(`${TRASH_FOLDER_PATH}/`);
+
   const handleRemove = useCallback((id: string) => {
-    Alert.alert('Delete file', 'Remove this download from private folder?', [
+    Alert.alert('Move to Trash', 'Move this file to the Trash folder?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Move to Trash',
         style: 'destructive',
         onPress: () => removeDownload(id),
       },
     ]);
   }, [removeDownload]);
+
+  const handleDeletePermanently = useCallback((id: string) => {
+    Alert.alert('Delete Permanently', 'This file will be deleted forever and cannot be recovered.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => deleteFromTrash(id),
+      },
+    ]);
+  }, [deleteFromTrash]);
 
   const handleOpenMedia = useCallback((task: DownloadTask) => {
     if (task.status !== 'completed' || !task.filePath) {
@@ -701,7 +717,8 @@ export default function DownloadsScreen() {
           onRename={handleRename}
           onMove={handleCopyRequest}
           onMoveInPrivate={handleMoveInPrivateRequest}
-          onRemove={handleRemove}
+          onRemove={isInTrash ? undefined : handleRemove}
+          onDeletePermanently={isInTrash ? handleDeletePermanently : undefined}
           isSelectionMode={isSelectionMode}
           isSelected={selectedIdsRef.current.has(item.task.id)}
           onLongPress={handleEnterSelection}
@@ -726,6 +743,8 @@ export default function DownloadsScreen() {
     handleRemove,
     handleEnterSelection,
     handleToggleSelect,
+    isInTrash,
+    handleDeletePermanently,
   ]);
 
   const visibleFileIds = useMemo(

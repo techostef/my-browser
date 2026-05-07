@@ -46,6 +46,7 @@ interface DownloadContextValue extends DownloadState {
   moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<void>;
   bulkMoveDownloadsToFolder: (ids: string[], folderName?: string | null) => Promise<void>;
   removeDownload: (id: string) => void;
+  deleteFromTrash: (id: string) => void;
   prefetchDeviceFileSizes: (ids: string[]) => void;
 }
 
@@ -170,6 +171,7 @@ interface DownloadActions {
   moveDownloadToFolder: DownloadContextValue['moveDownloadToFolder'];
   bulkMoveDownloadsToFolder: DownloadContextValue['bulkMoveDownloadsToFolder'];
   removeDownload: DownloadContextValue['removeDownload'];
+  deleteFromTrash: DownloadContextValue['deleteFromTrash'];
   prefetchDeviceFileSizes: DownloadContextValue['prefetchDeviceFileSizes'];
 }
 
@@ -685,13 +687,33 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     const task = downloadsRef.current.find(d => d.id === id);
 
     if (task?.status === 'completed' && task.filePath && task.source !== 'device') {
-      downloadManager.deletePrivateFile(task.filePath).catch(err => {
-        console.warn('Delete private file failed:', err);
-      });
+      const isInTrash = (task.folderPath || '').split('/')[0] === downloadManager.trashFolderName;
+      if (isInTrash) {
+        downloadManager.deletePrivateFile(task.filePath).catch(err => {
+          console.warn('Delete from trash failed:', err);
+        });
+      } else {
+        downloadManager.movePrivateFileToTrash(task.filePath)
+          .then(() => refreshDownloads())
+          .catch(err => {
+            console.warn('Move to trash failed:', err);
+          });
+        return;
+      }
     } else {
       downloadManager.cancelDownload(id);
     }
 
+    dispatchRef.current({ type: 'REMOVE_DOWNLOAD', payload: { id } });
+  }, [refreshDownloads]);
+
+  const deleteFromTrash = useCallback((id: string) => {
+    const task = downloadsRef.current.find(d => d.id === id);
+    if (task?.status === 'completed' && task.filePath && task.source !== 'device') {
+      downloadManager.deletePrivateFile(task.filePath).catch(err => {
+        console.warn('Delete from trash permanently failed:', err);
+      });
+    }
     dispatchRef.current({ type: 'REMOVE_DOWNLOAD', payload: { id } });
   }, []);
 
@@ -713,6 +735,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       moveDownloadToFolder,
       bulkMoveDownloadsToFolder,
       removeDownload,
+      deleteFromTrash,
       prefetchDeviceFileSizes,
     }),
     [
@@ -732,6 +755,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       moveDownloadToFolder,
       bulkMoveDownloadsToFolder,
       removeDownload,
+      deleteFromTrash,
       prefetchDeviceFileSizes,
     ],
   );
