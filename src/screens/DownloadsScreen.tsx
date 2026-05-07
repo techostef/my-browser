@@ -56,6 +56,8 @@ export default function DownloadsScreen() {
   const [currentFolderPath, setCurrentFolderPath] = useState('');
   const [copyTask, setCopyTask] = useState<DownloadTask | null>(null);
   const [moveTaskInPrivate, setMoveTaskInPrivate] = useState<DownloadTask | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMoveModalVisible, setBulkMoveModalVisible] = useState(false);
   const currentFolderPathRef = useRef(currentFolderPath);
 
   useEffect(() => {
@@ -140,6 +142,72 @@ export default function DownloadsScreen() {
         closeRenameModal();
       });
   }, [closeRenameModal, renameDownload, renameTask, renameText]);
+
+  const isSelectionMode = selectedIds.size > 0;
+
+  const handleEnterSelection = useCallback((task: DownloadTask) => {
+    setSelectedIds(new Set([task.id]));
+  }, []);
+
+  const handleToggleSelect = useCallback((task: DownloadTask) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (!next.has(task.id)) {
+        next.add(task.id);
+      } else {
+        next.delete(task.id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    Alert.alert(
+      `Delete ${count} item${count !== 1 ? 's' : ''}`,
+      'Remove selected downloads? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            selectedIds.forEach(id => removeDownload(id));
+            setSelectedIds(new Set());
+          },
+        },
+      ],
+    );
+  }, [removeDownload, selectedIds]);
+
+  const handleBulkMoveRequest = useCallback(() => {
+    setBulkMoveModalVisible(true);
+  }, []);
+
+  const closeBulkMoveModal = useCallback(() => {
+    setBulkMoveModalVisible(false);
+  }, []);
+
+  const handleBulkMoveTo = useCallback((folderPath?: string | null) => {
+    const ids = Array.from(selectedIds);
+    closeBulkMoveModal();
+    setSelectedIds(new Set());
+    Promise.all(ids.map(id => moveDownloadToFolder(id, folderPath))).catch(err => {
+      Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
+    });
+  }, [closeBulkMoveModal, moveDownloadToFolder, selectedIds]);
+
+  const selectedTasks = useMemo(
+    () => downloads.filter(t => selectedIds.has(t.id)),
+    [downloads, selectedIds],
+  );
+  const canBulkMove = selectedTasks.length > 0 && selectedTasks.every(
+    t => t.status === 'completed' && !!t.filePath && t.source !== 'device',
+  );
 
   const handleRemove = useCallback((id: string) => {
     Alert.alert('Delete file', 'Remove this download from private folder?', [
@@ -496,29 +564,52 @@ export default function DownloadsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        {currentFolderPath ? (
-          <View style={styles.folderPathRow}>
-            <TouchableOpacity style={styles.backFolderBtn} onPress={handleBackFolder}>
-              <Text style={styles.backFolderText}>←</Text>
+        {isSelectionMode ? (
+          <>
+            <TouchableOpacity style={styles.backFolderBtn} onPress={handleCancelSelection}>
+              <Text style={styles.backFolderText}>✕</Text>
             </TouchableOpacity>
-          </View>
-        ) : null}
-        <View style={{ marginRight: 'auto'}}>
-          <Text style={styles.headerTitle}>
-            {(currentFolderPath || 'Root').replace(DEVICE_ROOT_PATH, 'Device Download')} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-        {!isDevicePath ? (
-          <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
-            <Text style={styles.newFolderBtnText}>+ Folder</Text>
-          </TouchableOpacity>
+            <View style={{ marginRight: 'auto' }}>
+              <Text style={styles.headerTitle}>
+                {selectedIds.size} selected
+              </Text>
+            </View>
+            {canBulkMove && (
+              <TouchableOpacity style={styles.newFolderBtn} onPress={handleBulkMoveRequest}>
+                <Text style={styles.newFolderBtnText}>Move</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={[styles.newFolderBtn, styles.deleteSelectionBtn]} onPress={handleBulkDelete}>
+              <Text style={[styles.newFolderBtnText, styles.deleteSelectionBtnText]}>Delete</Text>
+            </TouchableOpacity>
+          </>
         ) : (
-          <TouchableOpacity
-            style={[styles.rescanBtn, isDeviceScanRunning ? styles.rescanBtnDisabled : null]}
-            onPress={handleRescanDevice}
-            disabled={isDeviceScanRunning}>
-            <Text style={styles.rescanBtnText}>{isDeviceScanRunning ? 'Scanning...' : 'Rescan'}</Text>
-          </TouchableOpacity>
+          <>
+            {currentFolderPath ? (
+              <View style={styles.folderPathRow}>
+                <TouchableOpacity style={styles.backFolderBtn} onPress={handleBackFolder}>
+                  <Text style={styles.backFolderText}>←</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            <View style={{ marginRight: 'auto' }}>
+              <Text style={styles.headerTitle}>
+                {(currentFolderPath || 'Root').replace(DEVICE_ROOT_PATH, 'Device Download')} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            {!isDevicePath ? (
+              <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
+                <Text style={styles.newFolderBtnText}>+ Folder</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.rescanBtn, isDeviceScanRunning ? styles.rescanBtnDisabled : null]}
+                onPress={handleRescanDevice}
+                disabled={isDeviceScanRunning}>
+                <Text style={styles.rescanBtnText}>{isDeviceScanRunning ? 'Scanning...' : 'Rescan'}</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
 
@@ -594,6 +685,10 @@ export default function DownloadsScreen() {
                   onMove={handleCopyRequest}
                   onMoveInPrivate={handleMoveInPrivateRequest}
                   onRemove={handleRemove}
+                  isSelectionMode={isSelectionMode}
+                  isSelected={selectedIds.has(item.task.id)}
+                  onLongPress={handleEnterSelection}
+                  onSelect={handleToggleSelect}
                 />
               )}
             </View>
@@ -760,6 +855,32 @@ export default function DownloadsScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      <Modal
+        visible={bulkMoveModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeBulkMoveModal}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeBulkMoveModal}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Move {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} to folder</Text>
+            <View style={styles.moveOptions}>
+              <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleBulkMoveTo(null)}>
+                <Text style={styles.moveOptionText}>Root</Text>
+              </TouchableOpacity>
+              {privateFolderTreeOptions.map(folder => (
+                <TouchableOpacity
+                  key={`bulk_move_${folder.path}`}
+                  style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
+                  onPress={() => handleBulkMoveTo(folder.path)}>
+                  <View style={{ width: folder.depth * 16 }} />
+                  <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -798,6 +919,13 @@ const styles = StyleSheet.create({
     color: '#1A73E8',
     fontSize: 12,
     fontWeight: '700',
+  },
+  deleteSelectionBtn: {
+    backgroundColor: '#FFEBEE',
+    marginLeft: 8,
+  },
+  deleteSelectionBtnText: {
+    color: '#C62828',
   },
   rescanBtn: {
     backgroundColor: '#E7F7ED',

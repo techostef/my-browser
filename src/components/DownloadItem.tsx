@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, Modal } from 'react-native';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { DownloadTask } from '../types';
@@ -16,6 +16,10 @@ interface Props {
   onMove?: (task: DownloadTask) => void;
   onMoveInPrivate?: (task: DownloadTask) => void;
   onRemove: (id: string) => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onLongPress?: (task: DownloadTask) => void;
+  onSelect?: (task: DownloadTask) => void;
 }
 
 const videoThumbnailCache = new Map<string, string>();
@@ -58,6 +62,10 @@ export default function DownloadItem({
   onMove,
   onMoveInPrivate,
   onRemove,
+  isSelectionMode = false,
+  isSelected = false,
+  onLongPress,
+  onSelect,
 }: Props) {
   const statusColor = getStatusColor(task.status);
   const isPlayableMedia =
@@ -69,6 +77,7 @@ export default function DownloadItem({
     (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled');
   const [videoThumbnailUri, setVideoThumbnailUri] = useState<string | null>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
+  const justEnteredSelectionRef = useRef(false);
   const sizeBytes = task.totalBytes > 0 ? task.totalBytes : task.bytesDownloaded;
 
   useEffect(() => {
@@ -107,11 +116,30 @@ export default function DownloadItem({
   }, [mediaType, task.filePath, task.status]);
 
   return (
-    <View style={styles.container}>
+    <TouchableOpacity
+      activeOpacity={isSelectionMode ? 0.7 : 1}
+      onPress={isSelectionMode ? () => {
+        if (justEnteredSelectionRef.current) {
+          justEnteredSelectionRef.current = false;
+          return;
+        }
+        onSelect?.(task);
+      } : undefined}
+      onLongPress={!isSelectionMode ? () => {
+        justEnteredSelectionRef.current = true;
+        onLongPress?.(task);
+      } : undefined}
+      delayLongPress={300}
+      style={[styles.container]}>
+      {isSelectionMode && (
+        <View style={[styles.selectionOverlay, isSelected && styles.selectionOverlayChecked]}>
+          <Text style={styles.selectionCheck}>{isSelected ? '✓' : ''}</Text>
+        </View>
+      )}
       <TouchableOpacity
         style={styles.thumbnailWrap}
-        disabled={!isPlayableMedia}
-        onPress={() => onOpenMedia(task)}>
+        disabled={!isPlayableMedia || isSelectionMode}
+        onPress={isSelectionMode ? () => onSelect?.(task) : () => onOpenMedia(task)}>
         {mediaType === 'image' && task.filePath ? (
           <Image source={{ uri: task.filePath }} style={styles.thumbnailImage} />
         ) : mediaType === 'video' && videoThumbnailUri ? (
@@ -145,23 +173,6 @@ export default function DownloadItem({
         </View>
       )}
 
-      {/* <View style={styles.statusRow}>
-        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-          <Text style={styles.statusText}>
-            {task.status.toUpperCase()}
-          </Text>
-        </View>
-        {task.error ? (
-          <Text style={styles.errorText} numberOfLines={1}>
-            {task.error}
-          </Text>
-        ) : (
-          <Text style={styles.pageTitle} numberOfLines={1}>
-            {task.pageTitle}
-          </Text>
-        )}
-      </View> */}
-
       <View style={styles.bottomRow}>
         <View style={styles.infoSection}>
           <Text style={styles.fileName} numberOfLines={1}>
@@ -172,11 +183,13 @@ export default function DownloadItem({
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.menuBtn}
-          onPress={() => setActionsVisible(true)}>
-          <Text style={styles.menuBtnText}>⋯</Text>
-        </TouchableOpacity>
+        {!isSelectionMode && (
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => setActionsVisible(true)}>
+            <Text style={styles.menuBtnText}>⋯</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <Modal
@@ -266,7 +279,7 @@ export default function DownloadItem({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -433,5 +446,28 @@ const styles = StyleSheet.create({
   },
   removeBtn: {
     backgroundColor: '#F5F5F5',
+  },
+  selectionOverlay: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  selectionOverlayChecked: {
+    backgroundColor: '#2196F3',
+  },
+  selectionCheck: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });
