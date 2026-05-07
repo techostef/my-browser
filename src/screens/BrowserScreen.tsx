@@ -21,7 +21,7 @@ import {
   useTabActions,
   useTabList,
 } from '../store/tabStore';
-import { DetectedVideo } from '../types';
+import { DetectedVideo, HlsVariant } from '../types';
 import Browser from '@/components/Browser';
 
 // Injected into the browser WebView when the user taps Preview on a stream.
@@ -716,6 +716,14 @@ export default function BrowserScreen() {
     }
   }, [updateBlobProgress, completeBlobDownload, finalizeExtractionForTab, setTabHidden, addTab]);
 
+  const handleDownloadWithVariant = useCallback(
+    (video: DetectedVideo, variant?: HlsVariant) => {
+      startDownload(video, variant);
+      Alert.alert('Download Started', 'Check the Downloads tab for progress.');
+    },
+    [startDownload],
+  );
+
   const handleDownload = useCallback(
     (video: DetectedVideo) => {
       if (video.type === 'blob') {
@@ -839,6 +847,7 @@ export default function BrowserScreen() {
           videos={activeDetectedVideos}
           playingUrl={activePlayingVideoUrl}
           onPreview={handlePreviewVideo}
+          onDownload={handleDownloadWithVariant}
           onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
           onToggleFullscreen={handleToggleFullscreen}
         />

@@ -3,7 +3,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
-import { DownloadTask, HlsMasterInfo } from '../types';
+import { DownloadTask, HlsMasterInfo, HlsVariant } from '../types';
 
 const MEDIA_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac']);
 
@@ -586,9 +586,10 @@ class DownloadManager {
     pageUrl?: string,
     cookies?: string,
     hlsInfo?: HlsMasterInfo,
+    selectedVariant?: HlsVariant,
   ): Promise<string> {
     if (this.isHlsUrl(url) || (hlsInfo?.variants && hlsInfo.variants.length > 0)) {
-      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo);
+      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant);
     }
 
     const fileName = this.sanitizeFileName(url, pageTitle);
@@ -660,7 +661,8 @@ class DownloadManager {
     pageTitle: string,
     pageUrl?: string,
     cookies?: string,
-    hslInfo?: HlsMasterInfo
+    hslInfo?: HlsMasterInfo,
+    selectedVariant?: HlsVariant,
   ): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
 
@@ -689,7 +691,7 @@ class DownloadManager {
 
     let args: string[];
     if (hslInfo && hslInfo.variants.length > 0) {
-      const best = hslInfo.variants.reduce((a, b) => b.bandwidth > a.bandwidth ? b : a);
+      const best = selectedVariant ?? hslInfo.variants.reduce((a, b) => b.bandwidth > a.bandwidth ? b : a);
       const videoUrl = this.resolveHlsUri(url, best.uri);
 
       const audioTrack = best.audio

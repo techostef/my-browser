@@ -7,7 +7,7 @@ import {
   StyleSheet,
   FlatList,
 } from "react-native";
-import { DetectedVideo } from "../types";
+import { DetectedVideo, HlsVariant } from "../types";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
@@ -15,11 +15,17 @@ function formatSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+function formatBandwidth(bps: number): string {
+  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + " Mbps";
+  return (bps / 1_000).toFixed(0) + " Kbps";
+}
+
 interface Props {
   videos: DetectedVideo[];
   visible?: boolean;
   playingUrl?: string;
   onPreview: (video: DetectedVideo) => void;
+  onDownload: (video: DetectedVideo, variant?: HlsVariant) => void;
   onDismiss: () => void;
   onToggleFullscreen?: () => void;
 }
@@ -40,6 +46,7 @@ export default function VideoDetectedBanner({
   visible = true,
   playingUrl = '',
   onPreview,
+  onDownload,
   onDismiss,
   onToggleFullscreen,
 }: Props) {
@@ -56,6 +63,11 @@ export default function VideoDetectedBanner({
   const handlePreviewFromDetail = (video: DetectedVideo) => {
     setIsDetailVisible(false);
     onPreview(video);
+  };
+
+  const handleDownloadVariant = (video: DetectedVideo, variant?: HlsVariant) => {
+    setIsDetailVisible(false);
+    onDownload(video, variant);
   };
 
   if (filteredVideos.length === 0) {
@@ -114,47 +126,65 @@ export default function VideoDetectedBanner({
                 keyExtractor={(item, index) => `${item.url}-${index}`}
                 style={styles.list}
                 renderItem={({ item }) => {
+                  const hasVariants = item.type === "hls" && item.hlsInfo && item.hlsInfo.variants.length > 0;
                   return (
-                    <TouchableOpacity
-                    style={[styles.videoRow, isPlayingVideo(item, playingUrl) && styles.videoRowPlaying]}
-                    activeOpacity={0.7}
-                    onPress={() => handlePreviewFromDetail(item)}
-                  >
-                    <View style={styles.videoInfo}>
-                      <Text style={styles.videoType}>
-                        {item.type === "hls"
-                            ? "M3U8"
-                            : item.type.toUpperCase()}
-                      </Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.videoUrl} numberOfLines={1}>
-                          {item.type === "hls"
+                    <View style={[styles.videoCard, isPlayingVideo(item, playingUrl) && styles.videoCardPlaying]}>
+                      <View style={styles.videoInfo}>
+                        <Text style={styles.videoType}>
+                          {item.type === "hls" ? "M3U8" : item.type.toUpperCase()}
+                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.videoUrl} numberOfLines={1}>
+                            {item.type === "hls"
                               ? `${item.pageTitle || "HLS Stream"}`
                               : item.type === "dash"
                                 ? `${item.pageTitle || "DASH Stream"}`
                                 : item.videoWidth || item.pageTitle || "Video"}
-                        </Text>
-                        {item.hlsInfo && item.hlsInfo.variants.length > 0 && (
-                          <Text style={styles.hlsVariantText} numberOfLines={1}>
-                            {item.hlsInfo.variants
-                              .filter((v) => v.resolution)
-                              .map((v) => v.resolution)
-                              .join(" | ")}
-                            {item.hlsInfo.audioTracks.length > 0
-                              ? ` · ${item.hlsInfo.audioTracks.length} audio`
-                              : ""}
-                            {item.hlsInfo.subtitleTracks.length > 0
-                              ? ` · ${item.hlsInfo.subtitleTracks.length} subs`
-                              : ""}
                           </Text>
-                        )}
+                          {item.hlsInfo && item.hlsInfo.audioTracks.length > 0 && (
+                            <Text style={styles.hlsVariantText} numberOfLines={1}>
+                              {item.hlsInfo.audioTracks.length} audio
+                              {item.hlsInfo.subtitleTracks.length > 0
+                                ? ` · ${item.hlsInfo.subtitleTracks.length} subs`
+                                : ""}
+                            </Text>
+                          )}
+                        </View>
                       </View>
+
+                      {hasVariants ? (
+                        <View style={styles.variantList}>
+                          {item.hlsInfo!.variants.map((variant, vi) => (
+                            <View key={vi} style={styles.variantRow}>
+                              <View style={styles.variantInfo}>
+                                <Text style={styles.variantResolution}>
+                                  {variant.resolution || "Unknown"}
+                                </Text>
+                                <Text style={styles.variantBandwidth}>
+                                  {formatBandwidth(variant.bandwidth)}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                style={styles.downloadBtn}
+                                onPress={() => handleDownloadVariant(item, variant)}
+                              >
+                                <Text style={styles.downloadBtnText}>↓ Download</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                          <TouchableOpacity
+                            style={styles.previewBtnRow}
+                            onPress={() => handlePreviewFromDetail(item)}
+                          >
+                            <Text style={styles.previewBtnRowText}>▶ Preview</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={styles.previewBtn}>
+                        </View>
+                      )}
                     </View>
-                    <View style={styles.previewBtn}>
-                      <Text style={styles.previewBtnText}>▶ Preview</Text>
-                    </View>
-                  </TouchableOpacity>
-                  )
+                  );
                 }}
               />
             ) : (
@@ -241,12 +271,6 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 14,
   },
-  summaryText: {
-    color: "#AAA",
-    fontSize: 12,
-    paddingHorizontal: 12,
-    paddingBottom: 2,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
@@ -278,24 +302,21 @@ const styles = StyleSheet.create({
   list: {
     maxHeight: 420,
   },
-  videoRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  videoCard: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#333",
   },
-  videoRowPlaying: {
+  videoCardPlaying: {
     backgroundColor: "rgba(99, 179, 237, 0.15)",
     borderLeftWidth: 3,
     borderLeftColor: "#63b3ed",
   },
   videoInfo: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    marginRight: 8,
+    marginBottom: 6,
   },
   videoType: {
     backgroundColor: "#4ECDC4",
@@ -313,7 +334,65 @@ const styles = StyleSheet.create({
     color: "#CCC",
     fontSize: 12,
   },
+  hlsVariantText: {
+    color: "#8AB4F8",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  variantList: {
+    marginTop: 2,
+  },
+  variantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#2A2A3E",
+  },
+  variantInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  variantResolution: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "600",
+    minWidth: 80,
+  },
+  variantBandwidth: {
+    color: "#8AB4F8",
+    fontSize: 11,
+  },
+  downloadBtn: {
+    backgroundColor: "#4ECDC4",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  downloadBtnText: {
+    color: "#1A1A2E",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  previewBtnRow: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#4ECDC4",
+  },
+  previewBtnRowText: {
+    color: "#4ECDC4",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   previewBtn: {
+    alignSelf: "flex-end",
     backgroundColor: "#4ECDC4",
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -324,27 +403,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 12,
   },
-  warningRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  openTabBtn: {
-    backgroundColor: "#F9A825",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  openTabBtnText: {
-    color: "#1A1A2E",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  warningText: {
-    color: "#F9A825",
-    fontSize: 11,
-    fontStyle: "italic",
-  },
   emptyState: {
     paddingHorizontal: 16,
     paddingVertical: 24,
@@ -353,10 +411,5 @@ const styles = StyleSheet.create({
   emptyStateText: {
     color: "#AAA",
     fontSize: 13,
-  },
-  hlsVariantText: {
-    color: "#8AB4F8",
-    fontSize: 10,
-    marginTop: 2,
   },
 });

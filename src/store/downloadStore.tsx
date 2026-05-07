@@ -8,7 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DownloadTask, DownloadAction, DetectedVideo, DEVICE_DOWNLOAD_MOVE_TARGET } from '../types';
+import { DownloadTask, DownloadAction, DetectedVideo, HlsVariant, DEVICE_DOWNLOAD_MOVE_TARGET } from '../types';
 import { downloadManager } from '../services/downloadManager';
 
 interface DownloadState {
@@ -24,7 +24,7 @@ interface DeviceScanCachePayload {
 }
 
 interface DownloadContextValue extends DownloadState {
-  startDownload: (video: DetectedVideo) => void;
+  startDownload: (video: DetectedVideo, selectedVariant?: HlsVariant) => void;
   refreshDownloads: () => Promise<void>;
   // Blob download is split into three steps so the caller can track each phase
   // in the Downloads tab without a blocking modal:
@@ -412,7 +412,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshDownloads, scanDeviceDownloadFolder]);
 
-  const startDownload = useCallback((video: DetectedVideo) => {
+  const startDownload = useCallback((video: DetectedVideo, selectedVariant?: HlsVariant) => {
     const id = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const task: DownloadTask = {
       id,
@@ -429,7 +429,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     dispatchRef.current({ type: 'ADD_DOWNLOAD', payload: task });
 
-    downloadManager.startDownload(id, video.url, video.pageTitle, video.pageUrl, video.cookies, video.hlsInfo).catch(err => {
+    downloadManager.startDownload(id, video.url, video.pageTitle, video.pageUrl, video.cookies, video.hlsInfo, selectedVariant).catch(err => {
       console.warn('Download failed to start:', err);
     });
   }, []);
