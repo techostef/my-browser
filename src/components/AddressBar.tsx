@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { useSettings } from '../store/settingsStore';
 
 interface Props {
   initialUrl: string;
@@ -31,6 +32,7 @@ export default function AddressBar({
   loading,
   tabTrigger,
 }: Props) {
+  const { searchUrl } = useSettings();
   const [text, setText] = useState(initialUrl);
 
   useEffect(() => {
@@ -41,13 +43,11 @@ export default function AddressBar({
     let url = text.trim();
     if (!url) return;
 
-    // Auto-add https if no scheme
     if (!/^https?:\/\//i.test(url)) {
-      // If it looks like a domain, navigate; otherwise search
       if (/^[\w-]+(\.[\w-]+)+/.test(url)) {
         url = 'https://' + url;
       } else {
-        url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+        url = searchUrl(url);
       }
     }
     setText(url);

@@ -8,6 +8,7 @@ import * as FileSystem from 'expo-file-system';
 
 import AddressBar from '../components/AddressBar';
 import TabBarContainer from '../components/TabBarContainer';
+import { useSettings } from '../store/settingsStore';
 import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 import VideoPlayerController from '../components/VideoPlayerController';
@@ -107,6 +108,7 @@ export default function BrowserScreen() {
   const tabs = useTabList();
   const { addTab, removeTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
+  const { pushHistory } = useSettings();
   const previousUrl = useRef('');
 
   // Per-tab WebView refs
@@ -473,15 +475,13 @@ export default function BrowserScreen() {
     const currentBase = getBaseUrl(currentHistoryUrl).toLowerCase();
 
     if (nextBase === currentBase) {
-      // Same page, only params/hash/case differ → overwrite in place so
-      // pressing back skips these transient URLs.
       replaceUrl(tabId, navState.url, navState.title || undefined);
     } else {
-      // New page → push to history.
       pushUrl(tabId, navState.url, navState.title || undefined);
+      pushHistory({ url: navState.url, title: navState.title || navState.url });
     }
     previousUrl.current = navState.url;
-  }, [updateTab, pushUrl, replaceUrl, getTabsSnapshot, getBaseUrl]);
+  }, [updateTab, pushUrl, replaceUrl, getTabsSnapshot, getBaseUrl, pushHistory]);
 
   const handleMessage = useCallback((tabId: string) => (event: { nativeEvent: { data: string } }) => {
     try {

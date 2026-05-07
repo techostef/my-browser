@@ -6,8 +6,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import BrowserScreen from './src/screens/BrowserScreen';
 import DownloadsScreen from './src/screens/DownloadsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { DownloadProvider } from './src/store/downloadStore';
 import { TabProvider } from './src/store/tabStore';
+import { SettingsProvider } from './src/store/settingsStore';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,6 +20,7 @@ function TabIcon({ label }: { label: string }) {
 export default function App() {
   return (
     <SafeAreaProvider>
+      <SettingsProvider>
       <TabProvider>
         <DownloadProvider>
           <NavigationContainer>
@@ -52,10 +55,19 @@ export default function App() {
                 tabBarIcon: () => <TabIcon label="📥" />,
               }}
             />
+            <Tab.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{
+                tabBarLabel: 'Settings',
+                tabBarIcon: () => <TabIcon label="⚙️" />,
+              }}
+            />
           </Tab.Navigator>
           </NavigationContainer>
         </DownloadProvider>
       </TabProvider>
+      </SettingsProvider>
     </SafeAreaProvider>
   );
 }
