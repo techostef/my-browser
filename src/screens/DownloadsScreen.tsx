@@ -80,6 +80,8 @@ export default function DownloadsScreen() {
     AsyncStorage.setItem('@downloads_sort_key', key);
   }, []);
   const currentFolderPathRef = useRef(currentFolderPath);
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
 
   useEffect(() => {
     currentFolderPathRef.current = currentFolderPath;
@@ -185,6 +187,7 @@ export default function DownloadsScreen() {
   const handleCancelSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
+
 
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
@@ -631,6 +634,86 @@ export default function DownloadsScreen() {
     });
   }, [visibleDownloads, sortKey, filterType, getMediaType]);
 
+  const renderItem = useCallback(({ item }: { item: DownloadGridItem }) => {
+    if (item.type === 'folder') {
+      const itemCount = getFolderItemCount(item);
+      return (
+        <View style={styles.gridItem}>
+          <View style={styles.folderCard}>
+            <TouchableOpacity style={styles.folderCardBody} onPress={() => handleOpenFolder(item)}>
+              <Text style={styles.folderIcon}>📁</Text>
+              <Text style={styles.folderName} numberOfLines={1}>{item.name}</Text>
+            </TouchableOpacity>
+            <View style={{ display: 'flex', flexDirection: 'row' }}>
+              <Text style={styles.folderMeta} numberOfLines={1}>
+                {item.isDeviceRoot && isDeviceScanRunning
+                  ? 'Scanning...'
+                  : `${itemCount} item${itemCount !== 1 ? 's' : ''} · Tap to open`}
+              </Text>
+              {item.source === 'private' ? (
+                <TouchableOpacity style={styles.folderMenuBtn} onPress={() => handleFolderAction(item.path)}>
+                  <Text style={styles.folderMenuText}>⋯</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.gridItem}>
+        <DownloadItem
+          task={item.task}
+          mediaType={getMediaType(item.task)}
+          onPause={pauseDownload}
+          onResume={resumeDownload}
+          onCancel={cancelDownload}
+          onOpenMedia={handleOpenMedia}
+          onRename={handleRename}
+          onMove={handleCopyRequest}
+          onMoveInPrivate={handleMoveInPrivateRequest}
+          onRemove={handleRemove}
+          isSelectionMode={isSelectionMode}
+          isSelected={selectedIdsRef.current.has(item.task.id)}
+          onLongPress={handleEnterSelection}
+          onSelect={handleToggleSelect}
+        />
+      </View>
+    );
+  }, [
+    isSelectionMode,
+    isDeviceScanRunning,
+    getFolderItemCount,
+    handleOpenFolder,
+    handleFolderAction,
+    getMediaType,
+    pauseDownload,
+    resumeDownload,
+    cancelDownload,
+    handleOpenMedia,
+    handleRename,
+    handleCopyRequest,
+    handleMoveInPrivateRequest,
+    handleRemove,
+    handleEnterSelection,
+    handleToggleSelect,
+  ]);
+
+  const visibleFileIds = useMemo(
+    () => sortedFiles.map(f => f.task.id),
+    [sortedFiles],
+  );
+  const allSelected = visibleFileIds.length > 0 && visibleFileIds.every(id => selectedIds.has(id));
+
+  const handleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleFileIds));
+    }
+  }, [allSelected, visibleFileIds]);
+
   const gridData: DownloadGridItem[] = [
     ...(filterType === 'all' ? visibleFolders : []),
     ...sortedFiles,
@@ -644,7 +727,10 @@ export default function DownloadsScreen() {
             <TouchableOpacity style={styles.backFolderBtn} onPress={handleCancelSelection}>
               <Text style={styles.backFolderText}>✕</Text>
             </TouchableOpacity>
-            <View style={{ marginRight: 'auto' }}>
+            <TouchableOpacity style={styles.newFolderBtn} onPress={handleSelectAll}>
+              <Text style={styles.newFolderBtnText}>{allSelected ? 'Deselect all' : 'Select all'}</Text>
+            </TouchableOpacity>
+            <View style={{ marginRight: 'auto', marginLeft: 8 }}>
               <Text style={styles.headerTitle}>
                 {selectedIds.size} selected
               </Text>
@@ -739,53 +825,8 @@ export default function DownloadsScreen() {
           keyExtractor={item => (item.type === 'folder' ? `folder_${item.path}` : item.task.id)}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.listRow}
-          renderItem={({ item }) => (
-            <View style={styles.gridItem}>
-              {item.type === 'folder' ? (
-                (() => {
-                  const itemCount = getFolderItemCount(item);
-                  return (
-                    <View style={styles.folderCard}>
-                      <TouchableOpacity style={styles.folderCardBody} onPress={() => handleOpenFolder(item)}>
-                        <Text style={styles.folderIcon}>📁</Text>
-                        <Text style={styles.folderName} numberOfLines={1}>{item.name}</Text>
-                        
-                      </TouchableOpacity>
-                      <View style={{ display: 'flex', flexDirection: 'row' }}>
-                        <Text style={styles.folderMeta} numberOfLines={1}>
-                          {item.isDeviceRoot && isDeviceScanRunning
-                            ? 'Scanning...'
-                            : `${itemCount} item${itemCount !== 1 ? 's' : ''} · Tap to open`}
-                        </Text>
-                        {item.source === 'private' ? (
-                          <TouchableOpacity style={styles.folderMenuBtn} onPress={() => handleFolderAction(item.path)}>
-                            <Text style={styles.folderMenuText}>⋯</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    </View>
-                  );
-                })()
-              ) : (
-                <DownloadItem
-                  task={item.task}
-                  mediaType={getMediaType(item.task)}
-                  onPause={pauseDownload}
-                  onResume={resumeDownload}
-                  onCancel={cancelDownload}
-                  onOpenMedia={handleOpenMedia}
-                  onRename={handleRename}
-                  onMove={handleCopyRequest}
-                  onMoveInPrivate={handleMoveInPrivateRequest}
-                  onRemove={handleRemove}
-                  isSelectionMode={isSelectionMode}
-                  isSelected={selectedIds.has(item.task.id)}
-                  onLongPress={handleEnterSelection}
-                  onSelect={handleToggleSelect}
-                />
-              )}
-            </View>
-          )}
+          extraData={isSelectionMode}
+          renderItem={renderItem}
         />
       )}
 

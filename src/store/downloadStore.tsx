@@ -213,10 +213,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         ? meta.folders.filter((f): f is string => typeof f === 'string')
         : [];
 
-      const slimFiles: SlimDeviceTask[] = [];
       const chunkCount = typeof meta.chunkCount === 'number' ? meta.chunkCount : 0;
-      for (let i = 0; i < chunkCount; i++) {
-        const chunkRaw = await AsyncStorage.getItem(`${DEVICE_SCAN_CACHE_KEY}_chunk_${i}`);
+      const chunkKeys = Array.from({ length: chunkCount }, (_, i) => `${DEVICE_SCAN_CACHE_KEY}_chunk_${i}`);
+      const chunkResults = await AsyncStorage.multiGet(chunkKeys);
+      const slimFiles: SlimDeviceTask[] = [];
+      for (const [, chunkRaw] of chunkResults) {
         if (!chunkRaw) { continue; }
         const chunk = JSON.parse(chunkRaw) as SlimDeviceTask[];
         if (Array.isArray(chunk)) { slimFiles.push(...chunk); }

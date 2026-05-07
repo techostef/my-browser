@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -67,7 +67,7 @@ function getStatusColor(status: DownloadTask["status"]): string {
   }
 }
 
-export default function DownloadItem({
+const DownloadItem = memo(function DownloadItem({
   task,
   mediaType,
   onPause,
@@ -465,7 +465,9 @@ export default function DownloadItem({
       </Modal>
     </TouchableOpacity>
   );
-}
+});
+
+export default DownloadItem;
 
 const styles = StyleSheet.create({
   container: {
