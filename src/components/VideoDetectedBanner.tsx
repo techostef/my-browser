@@ -129,17 +129,13 @@ export default function VideoDetectedBanner({
                   >
                     <View style={styles.videoInfo}>
                       <Text style={styles.videoType}>
-                        {item.type === "blob-ready"
-                          ? "BLOB"
-                          : item.type === "hls"
+                        {item.type === "hls"
                             ? "M3U8"
                             : item.type.toUpperCase()}
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.videoUrl} numberOfLines={1}>
-                          {item.type === "blob-ready"
-                            ? `${item.pageTitle || "Video"} (${formatSize(item.blobSize || 0)})`
-                            : item.type === "hls"
+                          {item.type === "hls"
                               ? `${item.pageTitle || "HLS Stream"}`
                               : item.type === "dash"
                                 ? `${item.pageTitle || "DASH Stream"}`
@@ -161,14 +157,6 @@ export default function VideoDetectedBanner({
                         )}
                       </View>
                     </View>
-                    {(item.type === "hls" || item.type === "dash") && (
-                      <TouchableOpacity
-                        style={styles.openTabBtn}
-                        onPress={() => handleOpenInTabFromDetail(item)}
-                      >
-                        <Text style={styles.openTabBtnText}>🔗 Tab</Text>
-                      </TouchableOpacity>
-                    )}
                     <View style={styles.previewBtn}>
                       <Text style={styles.previewBtnText}>▶ Preview</Text>
                     </View>
