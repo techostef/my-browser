@@ -20,7 +20,6 @@ interface Props {
   visible?: boolean;
   playingUrl?: string;
   onPreview: (video: DetectedVideo) => void;
-  onOpenInTab: (video: DetectedVideo) => void;
   onDismiss: () => void;
   onToggleFullscreen?: () => void;
 }
@@ -41,7 +40,6 @@ export default function VideoDetectedBanner({
   visible = true,
   playingUrl = '',
   onPreview,
-  onOpenInTab,
   onDismiss,
   onToggleFullscreen,
 }: Props) {
@@ -58,11 +56,6 @@ export default function VideoDetectedBanner({
   const handlePreviewFromDetail = (video: DetectedVideo) => {
     setIsDetailVisible(false);
     onPreview(video);
-  };
-
-  const handleOpenInTabFromDetail = (video: DetectedVideo) => {
-    setIsDetailVisible(false);
-    onOpenInTab(video);
   };
 
   if (filteredVideos.length === 0) {

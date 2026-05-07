@@ -839,7 +839,6 @@ export default function BrowserScreen() {
           videos={activeDetectedVideos}
           playingUrl={activePlayingVideoUrl}
           onPreview={handlePreviewVideo}
-          onOpenInTab={(video) => addTab(video.url)}
           onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
           onToggleFullscreen={handleToggleFullscreen}
         />
