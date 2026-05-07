@@ -17,6 +17,7 @@ interface Props {
   canGoBack: boolean;
   canGoForward: boolean;
   loading: boolean;
+  tabTrigger?: React.ReactNode;
 }
 
 export default function AddressBar({
@@ -28,6 +29,7 @@ export default function AddressBar({
   canGoBack,
   canGoForward,
   loading,
+  tabTrigger,
 }: Props) {
   const [text, setText] = useState(initialUrl);
 
@@ -90,6 +92,7 @@ export default function AddressBar({
           <Text style={styles.navBtnText}>↻</Text>
         )}
       </TouchableOpacity>
+      {tabTrigger}
     </View>
   );
 }
