@@ -36,6 +36,27 @@ function durationCacheKey(filePath: string, size: number, mtime: number): string
   return `${filePath}|${size}|${mtime}`;
 }
 
+// Cap concurrent media-decoder loads. Each Audio.Sound allocates a native decoder;
+// running 100s in parallel exhausts memory and crashes the app on Android.
+const PROBE_CONCURRENCY = 2;
+let probeInFlight = 0;
+const probeQueue: Array<() => void> = [];
+
+async function acquireProbeSlot(): Promise<void> {
+  if (probeInFlight < PROBE_CONCURRENCY) {
+    probeInFlight++;
+    return;
+  }
+  await new Promise<void>(resolve => probeQueue.push(resolve));
+  probeInFlight++;
+}
+
+function releaseProbeSlot(): void {
+  probeInFlight--;
+  const next = probeQueue.shift();
+  if (next) { next(); }
+}
+
 async function probeMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
   const ext = filePath.split('.').pop()?.toLowerCase().split('?')[0] || '';
   if (!MEDIA_EXTS.has(ext)) {
@@ -48,18 +69,24 @@ async function probeMediaDuration(filePath: string, size: number, mtime: number)
     return cache[key] || undefined;
   }
 
+  await acquireProbeSlot();
   try {
     const sound = new Audio.Sound();
-    await sound.loadAsync({ uri: filePath }, {}, false);
-    const status = await sound.getStatusAsync();
-    await sound.unloadAsync();
-    if (status.isLoaded && status.durationMillis != null) {
-      cache[key] = status.durationMillis;
-      durationCacheDirty = true;
-      return status.durationMillis;
+    try {
+      await sound.loadAsync({ uri: filePath }, {}, false);
+      const status = await sound.getStatusAsync();
+      await sound.unloadAsync();
+      if (status.isLoaded && status.durationMillis != null) {
+        cache[key] = status.durationMillis;
+        durationCacheDirty = true;
+        return status.durationMillis;
+      }
+    } catch {
+      // best effort — make sure we still unload if loadAsync partially succeeded
+      try { await sound.unloadAsync(); } catch { /* ignore */ }
     }
-  } catch {
-    // not all files are probeable
+  } finally {
+    releaseProbeSlot();
   }
 
   cache[key] = 0; // remember failures to skip them next time
@@ -241,9 +268,6 @@ class DownloadManager {
       const getDownloadRelativeFolder = (fileUri: string): string | null => {
         const cleanUri = fileUri.split('?')[0];
         const parts = splitPathSegments(cleanUri);
-        if (parts[4].toLowerCase() !== 'download') {
-          return null;
-        }
         const downloadIndex = parts.findIndex(segment => segment.toLowerCase() === 'download');
         if (downloadIndex < 0) {
           return null;
@@ -255,6 +279,16 @@ class DownloadManager {
         return afterDownload.slice(0, -1).join('/');
       };
 
+      // Fast path: query only the "Download" album instead of iterating through every photo on the device.
+      let downloadAlbum: MediaLibrary.Album | null = null;
+      try {
+        downloadAlbum = await MediaLibrary.getAlbumAsync('Download');
+      } catch {
+        downloadAlbum = null;
+      }
+
+      const albumQuery: MediaLibrary.AssetsOptions['album'] | undefined = downloadAlbum?.id;
+
       let after: string | undefined;
       while (true) {
         const page = await MediaLibrary.getAssetsAsync({
@@ -262,28 +296,26 @@ class DownloadManager {
           after,
           mediaType: ['audio', 'video', 'photo', 'unknown'],
           sortBy: [MediaLibrary.SortBy.creationTime],
+          ...(albumQuery ? { album: albumQuery } : {}),
         });
 
-        for (const asset of page.assets) {
-          if (seenAssetIds.has(asset.id)) {
-            continue;
-          }
+        // When using the Download album, all assets are already in scope — skip the path filter.
+        // When falling back to full library scan, filter by URI containing "download".
+        const candidates = page.assets.filter(asset => {
+          if (seenAssetIds.has(asset.id)) { return false; }
+          if (albumQuery) { return true; }
+          const cleanUri = asset.uri.split('?')[0].toLowerCase();
+          return cleanUri.includes('/download/') || cleanUri.includes('/downloads/');
+        });
+
+        for (const asset of candidates) {
           seenAssetIds.add(asset.id);
 
-          let filePath = asset.uri;
-          try {
-            const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-            if (info.localUri) {
-              filePath = info.localUri;
-            }
-          } catch {
-            filePath = asset.uri;
-          }
-
+          // Use asset.uri directly — skip getAssetInfoAsync (the per-asset native call that was the bottleneck).
+          // asset.uri is already a file:// path on Android for files in shared storage.
+          const filePath = asset.uri;
           const folderPath = getDownloadRelativeFolder(filePath);
-          if (folderPath === null) {
-            continue;
-          }
+          if (folderPath === null) { continue; }
 
           if (folderPath) {
             const folderParts = folderPath.split('/').filter(Boolean);
@@ -294,15 +326,6 @@ class DownloadManager {
           }
 
           const fileName = asset.filename || filePath.split('/').pop() || `device_${asset.id}`;
-          let sizeBytes = 0;
-          try {
-            const fileInfo = await FileSystem.getInfoAsync(filePath);
-            if (fileInfo.exists && typeof fileInfo.size === 'number') {
-              sizeBytes = fileInfo.size;
-            }
-          } catch {
-            sizeBytes = 0;
-          }
 
           scannedFiles.push({
             id: `device_${asset.id}`,
@@ -313,8 +336,8 @@ class DownloadManager {
             folderPath,
             status: 'completed',
             progress: 100,
-            bytesDownloaded: sizeBytes,
-            totalBytes: sizeBytes,
+            bytesDownloaded: 0,
+            totalBytes: 0,
             pageTitle: 'Device Download',
             createdAt: this.normalizeTimestamp(asset.creationTime),
             duration: asset.duration > 0 ? Math.round(asset.duration * 1000) : undefined,

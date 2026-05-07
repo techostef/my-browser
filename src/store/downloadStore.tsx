@@ -8,6 +8,7 @@ import React, {
   useMemo,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import { DownloadTask, DownloadAction, DetectedVideo, HlsVariant, DEVICE_DOWNLOAD_MOVE_TARGET } from '../types';
 import { downloadManager } from '../services/downloadManager';
 
@@ -43,13 +44,18 @@ interface DownloadContextValue extends DownloadState {
   deleteFolder: (folderName: string, force?: boolean) => Promise<void>;
   scanDeviceDownloadFolder: (folderPath?: string) => Promise<void>;
   moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<void>;
+  bulkMoveDownloadsToFolder: (ids: string[], folderName?: string | null) => Promise<void>;
   removeDownload: (id: string) => void;
+  prefetchDeviceFileSizes: (ids: string[]) => void;
 }
 
 const DEVICE_SCAN_CACHE_KEY = '@device_download_scan_cache_v2';
 const DEVICE_SCAN_CHUNK_SIZE = 200;
+const PRIVATE_CACHE_KEY = '@private_downloads_cache_v1';
+const PRIVATE_CACHE_CHUNK_SIZE = 200;
 
 type SlimDeviceTask = Pick<DownloadTask, 'id' | 'fileName' | 'filePath' | 'folderPath' | 'totalBytes' | 'createdAt' | 'duration'>;
+type SlimPrivateTask = Pick<DownloadTask, 'id' | 'fileName' | 'filePath' | 'folderPath' | 'totalBytes' | 'createdAt' | 'duration'>;
 
 const initialState: DownloadState = {
   downloads: [],
@@ -108,6 +114,16 @@ function downloadReducer(
         ),
       };
 
+    case 'SET_FILE_SIZES':
+      return {
+        ...state,
+        downloads: state.downloads.map(d => {
+          const next = action.payload.sizes[d.id];
+          if (next === undefined || d.totalBytes === next) { return d; }
+          return { ...d, totalBytes: next, bytesDownloaded: next };
+        }),
+      };
+
     case 'REMOVE_DOWNLOAD':
       return {
         ...state,
@@ -152,7 +168,9 @@ interface DownloadActions {
   deleteFolder: DownloadContextValue['deleteFolder'];
   scanDeviceDownloadFolder: DownloadContextValue['scanDeviceDownloadFolder'];
   moveDownloadToFolder: DownloadContextValue['moveDownloadToFolder'];
+  bulkMoveDownloadsToFolder: DownloadContextValue['bulkMoveDownloadsToFolder'];
   removeDownload: DownloadContextValue['removeDownload'];
+  prefetchDeviceFileSizes: DownloadContextValue['prefetchDeviceFileSizes'];
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null);
@@ -246,6 +264,83 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const persistPrivateCache = useCallback(async (files: DownloadTask[], folders: string[]) => {
+    try {
+      const slim: SlimPrivateTask[] = files.map(f => ({
+        id: f.id,
+        fileName: f.fileName,
+        filePath: f.filePath,
+        folderPath: f.folderPath,
+        totalBytes: f.totalBytes,
+        createdAt: f.createdAt,
+        duration: f.duration,
+      }));
+
+      const chunkKeys: string[] = [];
+      for (let i = 0; i * PRIVATE_CACHE_CHUNK_SIZE < slim.length; i++) {
+        const chunkKey = `${PRIVATE_CACHE_KEY}_chunk_${i}`;
+        chunkKeys.push(chunkKey);
+        await AsyncStorage.setItem(chunkKey, JSON.stringify(slim.slice(i * PRIVATE_CACHE_CHUNK_SIZE, (i + 1) * PRIVATE_CACHE_CHUNK_SIZE)));
+      }
+
+      await AsyncStorage.setItem(PRIVATE_CACHE_KEY, JSON.stringify({ chunkCount: chunkKeys.length, folders }));
+
+      let staleIndex = chunkKeys.length;
+      while (true) {
+        const staleKey = `${PRIVATE_CACHE_KEY}_chunk_${staleIndex}`;
+        const exists = await AsyncStorage.getItem(staleKey);
+        if (exists === null) { break; }
+        await AsyncStorage.removeItem(staleKey);
+        staleIndex++;
+      }
+    } catch (err) {
+      console.warn('Failed to persist private cache:', err);
+    }
+  }, []);
+
+  const restorePrivateCache = useCallback(async (): Promise<{ files: DownloadTask[]; folders: string[] }> => {
+    try {
+      const raw = await AsyncStorage.getItem(PRIVATE_CACHE_KEY);
+      if (!raw) { return { files: [], folders: [] }; }
+
+      const meta = JSON.parse(raw) as { chunkCount?: number; folders?: unknown[] };
+      const folders = Array.isArray(meta.folders)
+        ? meta.folders.filter((f): f is string => typeof f === 'string')
+        : [];
+
+      const chunkCount = typeof meta.chunkCount === 'number' ? meta.chunkCount : 0;
+      const chunkKeys = Array.from({ length: chunkCount }, (_, i) => `${PRIVATE_CACHE_KEY}_chunk_${i}`);
+      const chunkResults = await AsyncStorage.multiGet(chunkKeys);
+      const slimFiles: SlimPrivateTask[] = [];
+      for (const [, chunkRaw] of chunkResults) {
+        if (!chunkRaw) { continue; }
+        const chunk = JSON.parse(chunkRaw) as SlimPrivateTask[];
+        if (Array.isArray(chunk)) { slimFiles.push(...chunk); }
+      }
+
+      const files: DownloadTask[] = slimFiles.map(f => ({
+        id: f.id,
+        url: f.filePath,
+        fileName: f.fileName,
+        filePath: f.filePath,
+        folderPath: f.folderPath,
+        source: 'private' as const,
+        status: 'completed' as const,
+        progress: 100,
+        bytesDownloaded: f.totalBytes,
+        totalBytes: f.totalBytes,
+        pageTitle: 'Private file',
+        createdAt: f.createdAt,
+        duration: f.duration,
+      }));
+
+      return { files, folders };
+    } catch (err) {
+      console.warn('Failed to restore private cache:', err);
+      return { files: [], folders: [] };
+    }
+  }, []);
+
   const refreshDownloads = useCallback(async () => {
     try {
       const privateFiles = await downloadManager.listPrivateDownloads();
@@ -257,6 +352,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       const merged = [...activeOrPending, ...privateFiles, ...scannedDeviceFiles].sort((a, b) => b.createdAt - a.createdAt);
       dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
       dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
+      void persistPrivateCache(privateFiles, privateFolders);
     } catch (err) {
       console.warn('Failed to refresh downloads from private folder:', err);
     }
@@ -312,34 +408,42 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        // Run init and cache restore in parallel — don't block one on the other
-        const initPrivate = downloadManager.initializePrivateFolder();
-        const [cachedDeviceScan, privateFiles, privateFolders] = await Promise.all([
+        // Restore both caches in parallel — these are AsyncStorage reads, fast & cheap.
+        // CRITICAL: do NOT call listPrivateDownloads here. With 350+ files, the duration
+        // probes block the JS thread for many seconds and can OOM-kill the app.
+        const [cachedPrivate, cachedDeviceScan] = await Promise.all([
+          restorePrivateCache(),
           restoreDeviceScanCache(),
-          initPrivate.then(() => downloadManager.listPrivateDownloads()),
-          initPrivate.then(() => downloadManager.listPrivateFolders()),
         ]);
 
         const merged = [
           ...downloadsRef.current.filter(d => d.status !== 'completed'),
-          ...privateFiles,
+          ...cachedPrivate.files,
           ...cachedDeviceScan.files,
         ].sort((a, b) => b.createdAt - a.createdAt);
 
-        // Dispatch cache immediately so UI shows data without waiting for rescan
         dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
-        dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
+        dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: cachedPrivate.folders } });
         dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: cachedDeviceScan.folders } });
+
+        // Initialize the on-disk private folder lazily (doesn't read files, just ensures the dir exists).
+        downloadManager.initializePrivateFolder().catch(err => {
+          console.warn('initializePrivateFolder failed:', err);
+        });
       } catch (err) {
         console.warn('Failed to bootstrap downloads:', err);
       }
 
-      // Rescan in background — UI already shows cached data above
+      // Rescan both private and device folders in the background — UI already shows cached data.
+      // refreshDownloads will update the cache when done.
+      refreshDownloads().catch(err => {
+        console.warn('Startup private rescan failed:', err);
+      });
       scanDeviceDownloadFolder().catch(err => {
         console.warn('Startup device scan failed:', err);
       });
     })();
-  }, [restoreDeviceScanCache, scanDeviceDownloadFolder]);
+  }, [restoreDeviceScanCache, restorePrivateCache, refreshDownloads, scanDeviceDownloadFolder]);
 
   const createFolder = useCallback(async (folderName: string) => {
     const trimmed = folderName.trim();
@@ -386,6 +490,53 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       throw err;
     }
   }, [refreshDownloads]);
+
+  const bulkMoveDownloadsToFolder = useCallback(async (ids: string[], folderName?: string | null) => {
+    const tasks = ids
+      .map(id => downloadsRef.current.find(d => d.id === id))
+      .filter((t): t is DownloadTask => !!t && !!t.filePath && t.status === 'completed');
+
+    if (tasks.length === 0) { return; }
+
+    const CONCURRENCY = 4;
+    const errors: string[] = [];
+
+    const runOne = async (task: DownloadTask) => {
+      try {
+        if (task.source === 'device') {
+          await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName);
+        } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
+          await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
+        } else {
+          await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    };
+
+    let cursor = 0;
+    const workers: Promise<void>[] = [];
+    for (let w = 0; w < CONCURRENCY; w++) {
+      workers.push((async () => {
+        while (cursor < tasks.length) {
+          const i = cursor++;
+          await runOne(tasks[i]);
+        }
+      })());
+    }
+    await Promise.all(workers);
+
+    // Refresh once at the end, not per-file
+    await Promise.all([
+      refreshDownloads(),
+      scanDeviceDownloadFolder(),
+    ]);
+
+    if (errors.length > 0) {
+      throw new Error(`${errors.length} of ${tasks.length} files failed: ${errors[0]}`);
+    }
+  }, [refreshDownloads, scanDeviceDownloadFolder]);
 
   const moveDownloadToFolder = useCallback(async (id: string, folderName?: string | null) => {
     const task = downloadsRef.current.find(d => d.id === id);
@@ -495,6 +646,41 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const fetchedSizeIdsRef = useRef<Set<string>>(new Set());
+  const prefetchDeviceFileSizes = useCallback((ids: string[]) => {
+    const fetched = fetchedSizeIdsRef.current;
+    const toFetch: Array<{ id: string; filePath: string }> = [];
+    for (const id of ids) {
+      if (fetched.has(id)) { continue; }
+      const task = downloadsRef.current.find(d => d.id === id);
+      if (!task || task.source !== 'device' || !task.filePath || task.totalBytes > 0) { continue; }
+      fetched.add(id);
+      toFetch.push({ id, filePath: task.filePath });
+    }
+    if (toFetch.length === 0) { return; }
+
+    Promise.all(toFetch.map(async ({ id, filePath }) => {
+      try {
+        const info = await FileSystem.getInfoAsync(filePath);
+        const anyInfo = info as any;
+        if (info.exists && typeof anyInfo.size === 'number') {
+          return [id, anyInfo.size as number] as const;
+        }
+      } catch {
+        // ignore
+      }
+      return [id, 0] as const;
+    })).then(results => {
+      const sizes: Record<string, number> = {};
+      for (const [id, size] of results) {
+        if (size > 0) { sizes[id] = size; }
+      }
+      if (Object.keys(sizes).length > 0) {
+        dispatchRef.current({ type: 'SET_FILE_SIZES', payload: { sizes } });
+      }
+    });
+  }, []);
+
   const removeDownload = useCallback((id: string) => {
     const task = downloadsRef.current.find(d => d.id === id);
 
@@ -525,7 +711,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       deleteFolder,
       scanDeviceDownloadFolder,
       moveDownloadToFolder,
+      bulkMoveDownloadsToFolder,
       removeDownload,
+      prefetchDeviceFileSizes,
     }),
     [
       startDownload,
@@ -542,7 +730,9 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       deleteFolder,
       scanDeviceDownloadFolder,
       moveDownloadToFolder,
+      bulkMoveDownloadsToFolder,
       removeDownload,
+      prefetchDeviceFileSizes,
     ],
   );
 

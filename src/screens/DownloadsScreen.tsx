@@ -11,6 +11,7 @@ import {
   Keyboard,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,7 +41,9 @@ export default function DownloadsScreen() {
     renameFolder,
     deleteFolder,
     moveDownloadToFolder,
+    bulkMoveDownloadsToFolder,
     removeDownload,
+    prefetchDeviceFileSizes,
   } = useDownloads();
 
   const DEVICE_ROOT_PATH = '__device_download__';
@@ -220,10 +223,15 @@ export default function DownloadsScreen() {
     const ids = Array.from(selectedIds);
     closeBulkMoveModal();
     setSelectedIds(new Set());
-    Promise.all(ids.map(id => moveDownloadToFolder(id, folderPath))).catch(err => {
-      Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
-    });
-  }, [closeBulkMoveModal, moveDownloadToFolder, selectedIds]);
+    setMoveProgress({ total: ids.length, label: 'Moving files...' });
+    bulkMoveDownloadsToFolder(ids, folderPath)
+      .catch(err => {
+        Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
+      })
+      .finally(() => {
+        setMoveProgress(null);
+      });
+  }, [closeBulkMoveModal, bulkMoveDownloadsToFolder, selectedIds]);
 
   const selectedTasks = useMemo(
     () => downloads.filter(t => selectedIds.has(t.id)),
@@ -237,6 +245,7 @@ export default function DownloadsScreen() {
   );
 
   const [bulkMoveToPrivateModalVisible, setBulkMoveToPrivateModalVisible] = useState(false);
+  const [moveProgress, setMoveProgress] = useState<{ total: number; label: string } | null>(null);
 
   const handleBulkMoveToPrivateRequest = useCallback(() => {
     setBulkMoveToPrivateModalVisible(true);
@@ -250,10 +259,15 @@ export default function DownloadsScreen() {
     const ids = Array.from(selectedIds);
     closeBulkMoveToPrivateModal();
     setSelectedIds(new Set());
-    Promise.all(ids.map(id => moveDownloadToFolder(id, folderPath ?? null))).catch(err => {
-      Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
-    });
-  }, [closeBulkMoveToPrivateModal, moveDownloadToFolder, selectedIds]);
+    setMoveProgress({ total: ids.length, label: 'Moving to private folder...' });
+    bulkMoveDownloadsToFolder(ids, folderPath ?? null)
+      .catch(err => {
+        Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
+      })
+      .finally(() => {
+        setMoveProgress(null);
+      });
+  }, [closeBulkMoveToPrivateModal, bulkMoveDownloadsToFolder, selectedIds]);
 
   const handleRemove = useCallback((id: string) => {
     Alert.alert('Delete file', 'Remove this download from private folder?', [
@@ -634,6 +648,20 @@ export default function DownloadsScreen() {
     });
   }, [visibleDownloads, sortKey, filterType, getMediaType]);
 
+  const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
+  prefetchSizesRef.current = prefetchDeviceFileSizes;
+
+  const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 1 });
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: Array<{ item: DownloadGridItem }> }) => {
+    const ids: string[] = [];
+    for (const v of viewableItems) {
+      if (v.item.type === 'file' && v.item.task.source === 'device' && v.item.task.totalBytes === 0) {
+        ids.push(v.item.task.id);
+      }
+    }
+    if (ids.length > 0) { prefetchSizesRef.current(ids); }
+  });
+
   const renderItem = useCallback(({ item }: { item: DownloadGridItem }) => {
     if (item.type === 'folder') {
       const itemCount = getFolderItemCount(item);
@@ -827,6 +855,8 @@ export default function DownloadsScreen() {
           columnWrapperStyle={styles.listRow}
           extraData={isSelectionMode}
           renderItem={renderItem}
+          viewabilityConfig={viewabilityConfigRef.current}
+          onViewableItemsChanged={onViewableItemsChangedRef.current}
         />
       )}
 
@@ -1111,6 +1141,22 @@ export default function DownloadsScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={moveProgress !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { /* block dismiss */ }}>
+        <View style={styles.moveProgressBackdrop}>
+          <View style={styles.moveProgressCard}>
+            <ActivityIndicator size="large" color="#1A73E8" />
+            <Text style={styles.moveProgressLabel}>{moveProgress?.label ?? 'Working...'}</Text>
+            <Text style={styles.moveProgressSubLabel}>
+              {moveProgress?.total ?? 0} item{(moveProgress?.total ?? 0) !== 1 ? 's' : ''} · please wait
+            </Text>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1488,5 +1534,34 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: '#FFF',
+  },
+  moveProgressBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  moveProgressCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  moveProgressLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#222',
+    marginTop: 14,
+    textAlign: 'center',
+  },
+  moveProgressSubLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
+    textAlign: 'center',
   },
 });
