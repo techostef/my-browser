@@ -18,103 +18,42 @@ function formatSize(bytes: number): string {
 interface Props {
   videos: DetectedVideo[];
   visible?: boolean;
+  playingUrl?: string;
   onPreview: (video: DetectedVideo) => void;
   onOpenInTab: (video: DetectedVideo) => void;
   onDismiss: () => void;
   onToggleFullscreen?: () => void;
 }
 
-interface VideoValidationResult {
-  isValid: boolean;
-  status?: number;
-  contentType?: string;
-  size?: number | null;
-  canPlay?: boolean;
-  videoWidth?: string;
-  duration?: number | null;
-  error?: string;
-}
 
-function extractResolutionFromUrl(url: string): string | undefined {
-  const match = url.match(/(\d{2,4})x(\d{2,4})/);
-
-  if (!match) return undefined;
-
-  return `${match[1]}x${match[2]}`;
-}
-
-async function validateMp4Video(url: string): Promise<VideoValidationResult> {
-  try {
-    // 1. Basic validation
-    if (!url || !url.startsWith("http")) {
-      return { isValid: false, error: "Invalid URL" };
+function isPlayingVideo(video: DetectedVideo, playingUrl: string): boolean {
+  const lastSegment = playingUrl.split('/').pop();
+  if (lastSegment && video.hlsInfo?.isMaster) {
+    if (video.hlsInfo.variants) {
+      return video.hlsInfo.variants.some(variant => variant.uri.includes(lastSegment));
     }
-    // 2. HEAD request (fast check)
-    const response = await fetch(url, {
-      method: "HEAD",
-    });
-
-    const status = response.status;
-
-    if (!response.ok) {
-      return {
-        isValid: false,
-        status,
-        error: "URL not reachable",
-      };
-    }
-
-    // 3. Get headers
-    const contentType = response.headers.get("content-type");
-    const contentLength = response.headers.get("content-length");
-
-    const size = contentLength ? parseInt(contentLength, 10) : null;
-
-    // 4. Validate it's actually video/mp4
-    const isMp4 =
-      contentType?.includes("video/mp4") || url.toLowerCase().includes(".mp4");
-
-    const videoWidth = extractResolutionFromUrl(url);
-
-    if (!isMp4) {
-      return {
-        isValid: false,
-        status,
-        contentType: contentType || undefined,
-        videoWidth,
-        size,
-        error: "Not an MP4 video",
-      };
-    }
-
-    return {
-      isValid: true,
-      status,
-      contentType: contentType || undefined,
-      videoWidth,
-      size,
-      canPlay: undefined, // will be determined later
-      duration: undefined,
-    };
-  } catch (err: any) {
-    return {
-      isValid: false,
-      error: err.message || "Unknown error",
-    };
   }
+  return false
 }
 
 export default function VideoDetectedBanner({
   videos,
   visible = true,
+  playingUrl = '',
   onPreview,
   onOpenInTab,
   onDismiss,
   onToggleFullscreen,
 }: Props) {
+
   if (videos.length === 0) return null;
 
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
+  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>([]);
+
+  useEffect(() => {
+    setFilteredVideos(videos.filter(video => isPlayingVideo(video, playingUrl)));
+  }, [videos, playingUrl]);
 
   const handlePreviewFromDetail = (video: DetectedVideo) => {
     setIsDetailVisible(false);
@@ -126,7 +65,7 @@ export default function VideoDetectedBanner({
     onOpenInTab(video);
   };
 
-  if (videos.length === 0) {
+  if (filteredVideos.length === 0) {
     return null;
   }
 
@@ -134,7 +73,7 @@ export default function VideoDetectedBanner({
     <View style={[styles.container, !visible && { display: "none" }]}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          {videos.length} video{videos.length > 1 ? "s" : ""}{" "}
+          {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""}{" "}
           detected
         </Text>
         <View style={styles.headerActions}>
@@ -176,14 +115,15 @@ export default function VideoDetectedBanner({
               </TouchableOpacity>
             </View>
 
-            {videos.length > 0 ? (
+            {filteredVideos.length > 0 ? (
               <FlatList
-                data={videos}
+                data={filteredVideos}
                 keyExtractor={(item, index) => `${item.url}-${index}`}
                 style={styles.list}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.videoRow}
+                renderItem={({ item }) => {
+                  return (
+                    <TouchableOpacity
+                    style={[styles.videoRow, isPlayingVideo(item, playingUrl) && styles.videoRowPlaying]}
                     activeOpacity={0.7}
                     onPress={() => handlePreviewFromDetail(item)}
                   >
@@ -233,7 +173,8 @@ export default function VideoDetectedBanner({
                       <Text style={styles.previewBtnText}>▶ Preview</Text>
                     </View>
                   </TouchableOpacity>
-                )}
+                  )
+                }}
               />
             ) : (
               <View style={styles.emptyState}>
@@ -245,16 +186,6 @@ export default function VideoDetectedBanner({
           </View>
         </View>
       </Modal>
-
-      {/* {nonDownloadable.length > 0 && (
-        <View style={styles.warningRow}>
-          <Text style={styles.warningText}>
-            {nonDownloadable.length} video{nonDownloadable.length > 1 ? 's' : ''}{' '}
-            ({nonDownloadable.map(v => v.type).join(', ')}) — not directly
-            downloadable
-          </Text>
-        </View>
-      )} */}
     </View>
   );
 }
@@ -373,6 +304,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#333",
+  },
+  videoRowPlaying: {
+    backgroundColor: "rgba(99, 179, 237, 0.15)",
+    borderLeftWidth: 3,
+    borderLeftColor: "#63b3ed",
   },
   videoInfo: {
     flex: 1,

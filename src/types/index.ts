@@ -30,6 +30,7 @@ export interface HlsMediaTrack {
 }
 
 export interface HlsMasterInfo {
+  isMaster?: boolean;
   variants: HlsVariant[];
   audioTracks: HlsMediaTrack[];
   subtitleTracks: HlsMediaTrack[];

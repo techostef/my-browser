@@ -12,6 +12,7 @@ export const VIDEO_DETECTOR_JS = `
 
   const SCAN_INTERVAL_MS = 500;
   const detectedUrls = new Set();
+  var lastM3u8Url = '';
 
   // ---- Extraction guard (SPA click interceptor + visibility shield) ----
   // RN bumps __extractionGuardCount when a blob download starts and decrements
@@ -204,6 +205,7 @@ export const VIDEO_DETECTOR_JS = `
       if (!detectedUrls.has(url)) {
         detectedUrls.add(url);
         var type = classifyUrl(url);
+        if (type === 'hls') lastM3u8Url = url;
         log('[DETECTED] (' + (source || 'scan') + ') type=' + type + ' url=' + url.substring(0, 150));
         newVideos.push({
           url: url,
@@ -318,17 +320,18 @@ export const VIDEO_DETECTOR_JS = `
 
     // Only send if we have useful data
     if (variants.length > 0 || audioTracks.length > 0 || subtitleTracks.length > 0) {
+      lastM3u8Url = m3u8Url;
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'M3U8_INFO',
           payload: {
             url: m3u8Url,
-            type: 'hsl',
+            type: 'hls',
             pageUrl: window.location.href,
             pageTitle: document.title,
             timestamp: Date.now(),
             cookies: document.cookie || '',
-            hslInfo: {
+            hlsInfo: {
               url: m3u8Url,
               isMaster: isMaster,
               variants: variants,
@@ -377,7 +380,10 @@ export const VIDEO_DETECTOR_JS = `
       } catch(e) {}
     });
     vEl.addEventListener('play', function() {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING' }));
+      var src = vEl.currentSrc || vEl.src || '';
+      var m3u8 = src.startsWith('blob:') ? lastM3u8Url : '';
+      log('[VIDEO_PLAYING] src=' + src.substring(0, 120) + ' lastM3u8Url=' + lastM3u8Url.substring(0, 120));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src, m3u8Url: m3u8 } }));
     });
   }
 

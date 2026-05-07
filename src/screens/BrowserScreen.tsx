@@ -123,6 +123,7 @@ export default function BrowserScreen() {
   // Per-tab video detection state
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
   const [bannerDismissedMap, setBannerDismissedMap] = useState<Record<string, boolean>>({});
+  const [playingVideoUrlMap, setPlayingVideoUrlMap] = useState<Record<string, string>>({});
 
   // Keyed by blobUrl so multiple blob downloads from different tabs can run simultaneously.
   const blobChunksMap = useRef<Map<string, string[]>>(new Map());
@@ -245,6 +246,7 @@ export default function BrowserScreen() {
 
   const activeDetectedVideos = detectedVideosMap[activeTabId] || [];
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
+  const activePlayingVideoUrl = playingVideoUrlMap[activeTabId] || '';
   const activeTab = useActiveTab();
   const navbarTitle = activeDetectedVideos[0]?.pageTitle || activeTab?.title || 'Video';
 
@@ -492,6 +494,15 @@ export default function BrowserScreen() {
 
       switch (message.type) {
         case 'VIDEO_DETECTED': {
+          const items: DetectedVideo[] = message.payload || [];
+          if (items.length > 0) {
+            setDetectedVideosMap(prev => {
+              const existing = prev[tabId] || [];
+              const existingUrls = new Set(existing.map(v => v.url));
+              const newItems = items.filter(v => !existingUrls.has(v.url));
+              return newItems.length > 0 ? { ...prev, [tabId]: [...existing, ...newItems] } : prev;
+            });
+          }
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
           break;
         }
@@ -511,6 +522,15 @@ export default function BrowserScreen() {
             pendingPreviewTimerRef.current = null;
             pendingPreviewVideoRef.current = null;
             setPreviewVideo({ ...pending, startTime: message.payload?.time || 0 });
+          }
+          break;
+        }
+        case 'VIDEO_PLAYING': {
+          const src: string = message.payload?.src || '';
+          const m3u8Url: string = message.payload?.m3u8Url || '';
+          const matchUrl = m3u8Url || src;
+          if (matchUrl) {
+            setPlayingVideoUrlMap(prev => ({ ...prev, [tabId]: matchUrl }));
           }
           break;
         }
@@ -817,6 +837,7 @@ export default function BrowserScreen() {
         <VideoDetectedBanner
           visible={!isVideoPlaying && !activeBannerDismissed}
           videos={activeDetectedVideos}
+          playingUrl={activePlayingVideoUrl}
           onPreview={handlePreviewVideo}
           onOpenInTab={(video) => addTab(video.url)}
           onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
