@@ -226,6 +226,28 @@ export default function DownloadsScreen() {
   const canBulkMove = selectedTasks.length > 0 && selectedTasks.every(
     t => t.status === 'completed' && !!t.filePath && t.source !== 'device',
   );
+  const canBulkMoveToPrivate = selectedTasks.length > 0 && selectedTasks.every(
+    t => t.status === 'completed' && !!t.filePath && t.source === 'device',
+  );
+
+  const [bulkMoveToPrivateModalVisible, setBulkMoveToPrivateModalVisible] = useState(false);
+
+  const handleBulkMoveToPrivateRequest = useCallback(() => {
+    setBulkMoveToPrivateModalVisible(true);
+  }, []);
+
+  const closeBulkMoveToPrivateModal = useCallback(() => {
+    setBulkMoveToPrivateModalVisible(false);
+  }, []);
+
+  const handleBulkMoveToPrivate = useCallback((folderPath?: string | null) => {
+    const ids = Array.from(selectedIds);
+    closeBulkMoveToPrivateModal();
+    setSelectedIds(new Set());
+    Promise.all(ids.map(id => moveDownloadToFolder(id, folderPath ?? null))).catch(err => {
+      Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
+    });
+  }, [closeBulkMoveToPrivateModal, moveDownloadToFolder, selectedIds]);
 
   const handleRemove = useCallback((id: string) => {
     Alert.alert('Delete file', 'Remove this download from private folder?', [
@@ -627,6 +649,11 @@ export default function DownloadsScreen() {
                 <Text style={styles.newFolderBtnText}>Move</Text>
               </TouchableOpacity>
             )}
+            {canBulkMoveToPrivate && (
+              <TouchableOpacity style={styles.newFolderBtn} onPress={handleBulkMoveToPrivateRequest}>
+                <Text style={styles.newFolderBtnText}>→ Private</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.newFolderBtn, styles.deleteSelectionBtn]} onPress={handleBulkDelete}>
               <Text style={[styles.newFolderBtnText, styles.deleteSelectionBtnText]}>Delete</Text>
             </TouchableOpacity>
@@ -984,6 +1011,31 @@ export default function DownloadsScreen() {
                   key={`bulk_move_${folder.path}`}
                   style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
                   onPress={() => handleBulkMoveTo(folder.path)}>
+                  <View style={{ width: folder.depth * 16 }} />
+                  <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+      <Modal
+        visible={bulkMoveToPrivateModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeBulkMoveToPrivateModal}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeBulkMoveToPrivateModal}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Move {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} to private folder</Text>
+            <View style={styles.moveOptions}>
+              <TouchableOpacity style={styles.moveOptionBtn} onPress={() => handleBulkMoveToPrivate(null)}>
+                <Text style={styles.moveOptionText}>Root</Text>
+              </TouchableOpacity>
+              {privateFolderTreeOptions.map(folder => (
+                <TouchableOpacity
+                  key={`bulk_move_private_${folder.path}`}
+                  style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
+                  onPress={() => handleBulkMoveToPrivate(folder.path)}>
                   <View style={{ width: folder.depth * 16 }} />
                   <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
                 </TouchableOpacity>

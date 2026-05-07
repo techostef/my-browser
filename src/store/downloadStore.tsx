@@ -46,7 +46,10 @@ interface DownloadContextValue extends DownloadState {
   removeDownload: (id: string) => void;
 }
 
-const DEVICE_SCAN_CACHE_KEY = '@device_download_scan_cache_v1';
+const DEVICE_SCAN_CACHE_KEY = '@device_download_scan_cache_v2';
+const DEVICE_SCAN_CHUNK_SIZE = 200;
+
+type SlimDeviceTask = Pick<DownloadTask, 'id' | 'fileName' | 'filePath' | 'folderPath' | 'totalBytes' | 'createdAt' | 'duration'>;
 
 const initialState: DownloadState = {
   downloads: [],
@@ -165,8 +168,34 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const persistDeviceScanCache = useCallback(async (files: DownloadTask[], folders: string[]) => {
     try {
-      const payload: DeviceScanCachePayload = { files, folders };
-      await AsyncStorage.setItem(DEVICE_SCAN_CACHE_KEY, JSON.stringify(payload));
+      const slim: SlimDeviceTask[] = files.map(f => ({
+        id: f.id,
+        fileName: f.fileName,
+        filePath: f.filePath,
+        folderPath: f.folderPath,
+        totalBytes: f.totalBytes,
+        createdAt: f.createdAt,
+        duration: f.duration,
+      }));
+
+      const chunkKeys: string[] = [];
+      for (let i = 0; i * DEVICE_SCAN_CHUNK_SIZE < slim.length; i++) {
+        const chunkKey = `${DEVICE_SCAN_CACHE_KEY}_chunk_${i}`;
+        chunkKeys.push(chunkKey);
+        await AsyncStorage.setItem(chunkKey, JSON.stringify(slim.slice(i * DEVICE_SCAN_CHUNK_SIZE, (i + 1) * DEVICE_SCAN_CHUNK_SIZE)));
+      }
+
+      await AsyncStorage.setItem(DEVICE_SCAN_CACHE_KEY, JSON.stringify({ chunkCount: chunkKeys.length, folders }));
+
+      // Remove stale chunks from a previous scan that had more chunks
+      let staleIndex = chunkKeys.length;
+      while (true) {
+        const staleKey = `${DEVICE_SCAN_CACHE_KEY}_chunk_${staleIndex}`;
+        const exists = await AsyncStorage.getItem(staleKey);
+        if (exists === null) { break; }
+        await AsyncStorage.removeItem(staleKey);
+        staleIndex++;
+      }
     } catch (err) {
       console.warn('Failed to persist device scan cache:', err);
     }
@@ -179,13 +208,35 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         return { files: [], folders: [] };
       }
 
-      const parsed = JSON.parse(raw) as Partial<DeviceScanCachePayload>;
-      const files = Array.isArray(parsed.files)
-        ? parsed.files.filter(file => file?.status === 'completed' && file?.source === 'device')
+      const meta = JSON.parse(raw) as { chunkCount?: number; folders?: unknown[] };
+      const folders = Array.isArray(meta.folders)
+        ? meta.folders.filter((f): f is string => typeof f === 'string')
         : [];
-      const folders = Array.isArray(parsed.folders)
-        ? parsed.folders.filter((folder): folder is string => typeof folder === 'string')
-        : [];
+
+      const slimFiles: SlimDeviceTask[] = [];
+      const chunkCount = typeof meta.chunkCount === 'number' ? meta.chunkCount : 0;
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkRaw = await AsyncStorage.getItem(`${DEVICE_SCAN_CACHE_KEY}_chunk_${i}`);
+        if (!chunkRaw) { continue; }
+        const chunk = JSON.parse(chunkRaw) as SlimDeviceTask[];
+        if (Array.isArray(chunk)) { slimFiles.push(...chunk); }
+      }
+
+      const files: DownloadTask[] = slimFiles.map(f => ({
+        id: f.id,
+        url: '',
+        fileName: f.fileName,
+        filePath: f.filePath,
+        folderPath: f.folderPath,
+        source: 'device' as const,
+        status: 'completed' as const,
+        progress: 100,
+        bytesDownloaded: f.totalBytes,
+        totalBytes: f.totalBytes,
+        pageTitle: f.fileName,
+        createdAt: f.createdAt,
+        duration: f.duration,
+      }));
 
       return { files, folders };
     } catch (err) {
