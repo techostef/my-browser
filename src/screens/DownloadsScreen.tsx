@@ -49,7 +49,7 @@ export default function DownloadsScreen() {
     | { type: 'file'; task: DownloadTask };
   type FolderGridItem = Extract<DownloadGridItem, { type: 'folder' }>;
 
-  type SortKey = 'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'size_largest' | 'size_smallest' | 'type';
+  type SortKey = 'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'size_largest' | 'size_smallest' | 'duration_longest' | 'duration_shortest' | 'type';
 
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -590,6 +590,10 @@ export default function DownloadsScreen() {
           return (b.task.totalBytes ?? 0) - (a.task.totalBytes ?? 0);
         case 'size_smallest':
           return (a.task.totalBytes ?? 0) - (b.task.totalBytes ?? 0);
+        case 'duration_longest':
+          return (b.task.duration ?? 0) - (a.task.duration ?? 0);
+        case 'duration_shortest':
+          return (a.task.duration ?? 0) - (b.task.duration ?? 0);
         case 'type': {
           const ext = (t: DownloadTask) => (t.fileName || '').split('.').pop()?.toLowerCase() || '';
           return ext(a.task).localeCompare(ext(b.task));
@@ -944,6 +948,8 @@ export default function DownloadsScreen() {
                     ['date_oldest', 'Date (oldest first)'],
                     ['size_largest', 'Size (largest first)'],
                     ['size_smallest', 'Size (smallest first)'],
+                    ['duration_longest', 'Duration (longest first)'],
+                    ['duration_shortest', 'Duration (shortest first)'],
                     ['type', 'File type'],
                   ] as [SortKey, string][]
                 ).map(([key, label]) => (

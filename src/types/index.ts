@@ -75,6 +75,7 @@ export interface DownloadTask {
   totalBytes: number;
   pageTitle: string;
   createdAt: number;
+  duration?: number; // milliseconds, for video/audio files
   error?: string;
 }
 

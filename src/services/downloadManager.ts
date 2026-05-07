@@ -1,7 +1,29 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import { Audio } from 'expo-av';
 import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import { DownloadTask, HlsMasterInfo } from '../types';
+
+const MEDIA_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac']);
+
+async function probeMediaDuration(filePath: string): Promise<number | undefined> {
+  const ext = filePath.split('.').pop()?.toLowerCase().split('?')[0] || '';
+  if (!MEDIA_EXTS.has(ext)) {
+    return undefined;
+  }
+  try {
+    const sound = new Audio.Sound();
+    await sound.loadAsync({ uri: filePath }, {}, false);
+    const status = await sound.getStatusAsync();
+    await sound.unloadAsync();
+    if (status.isLoaded && status.durationMillis != null) {
+      return status.durationMillis;
+    }
+  } catch {
+    // not all files are probeable
+  }
+  return undefined;
+}
 
 type ProgressCallback = (
   id: string,
@@ -117,6 +139,7 @@ class DownloadManager {
         const createdAt = this.normalizeTimestamp(info.modificationTime);
         const size = typeof info.size === 'number' ? info.size : 0;
 
+        const duration = await probeMediaDuration(entryPath);
         files.push({
           id: `file_${entryPath}`,
           url: entryPath,
@@ -130,6 +153,7 @@ class DownloadManager {
           totalBytes: size,
           pageTitle: 'Private file',
           createdAt,
+          duration,
         });
       }
     };
@@ -233,6 +257,7 @@ class DownloadManager {
             totalBytes: sizeBytes,
             pageTitle: 'Device Download',
             createdAt: this.normalizeTimestamp(asset.creationTime),
+            duration: asset.duration > 0 ? Math.round(asset.duration * 1000) : undefined,
           });
         }
 

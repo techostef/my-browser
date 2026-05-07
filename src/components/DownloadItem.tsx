@@ -39,6 +39,15 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
 
+function formatDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 function getStatusColor(status: DownloadTask["status"]): string {
   switch (status) {
     case "downloading":
@@ -240,7 +249,7 @@ export default function DownloadItem({
             {task.fileName || task.url.split("/").pop() || "video"}
           </Text>
           <Text style={styles.fileSize} numberOfLines={1}>
-            {formatBytes(sizeBytes)}
+            {formatBytes(sizeBytes)}{task.duration ? ` · ${formatDuration(task.duration)}` : ''}
           </Text>
         </View>
 
