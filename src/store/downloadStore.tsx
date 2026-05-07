@@ -312,11 +312,12 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        await downloadManager.initializePrivateFolder();
+        // Run init and cache restore in parallel — don't block one on the other
+        const initPrivate = downloadManager.initializePrivateFolder();
         const [cachedDeviceScan, privateFiles, privateFolders] = await Promise.all([
           restoreDeviceScanCache(),
-          downloadManager.listPrivateDownloads(),
-          downloadManager.listPrivateFolders(),
+          initPrivate.then(() => downloadManager.listPrivateDownloads()),
+          initPrivate.then(() => downloadManager.listPrivateFolders()),
         ]);
 
         const merged = [
@@ -325,6 +326,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           ...cachedDeviceScan.files,
         ].sort((a, b) => b.createdAt - a.createdAt);
 
+        // Dispatch cache immediately so UI shows data without waiting for rescan
         dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
         dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
         dispatchRef.current({ type: 'SET_DEVICE_FOLDERS', payload: { folders: cachedDeviceScan.folders } });
@@ -332,6 +334,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         console.warn('Failed to bootstrap downloads:', err);
       }
 
+      // Rescan in background — UI already shows cached data above
       scanDeviceDownloadFolder().catch(err => {
         console.warn('Startup device scan failed:', err);
       });

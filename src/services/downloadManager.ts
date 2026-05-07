@@ -1,27 +1,69 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Audio } from 'expo-av';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import { DownloadTask, HlsMasterInfo } from '../types';
 
 const MEDIA_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac']);
 
-async function probeMediaDuration(filePath: string): Promise<number | undefined> {
+const DURATION_CACHE_KEY = '@media_duration_cache_v1';
+let durationCache: Record<string, number> | null = null;
+let durationCacheDirty = false;
+
+async function loadDurationCache(): Promise<Record<string, number>> {
+  if (durationCache) { return durationCache; }
+  try {
+    const raw = await AsyncStorage.getItem(DURATION_CACHE_KEY);
+    durationCache = raw ? JSON.parse(raw) : {};
+  } catch {
+    durationCache = {};
+  }
+  return durationCache!;
+}
+
+async function flushDurationCache(): Promise<void> {
+  if (!durationCacheDirty || !durationCache) { return; }
+  durationCacheDirty = false;
+  try {
+    await AsyncStorage.setItem(DURATION_CACHE_KEY, JSON.stringify(durationCache));
+  } catch {
+    // best effort
+  }
+}
+
+function durationCacheKey(filePath: string, size: number, mtime: number): string {
+  return `${filePath}|${size}|${mtime}`;
+}
+
+async function probeMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
   const ext = filePath.split('.').pop()?.toLowerCase().split('?')[0] || '';
   if (!MEDIA_EXTS.has(ext)) {
     return undefined;
   }
+
+  const cache = await loadDurationCache();
+  const key = durationCacheKey(filePath, size, mtime);
+  if (cache[key] !== undefined) {
+    return cache[key] || undefined;
+  }
+
   try {
     const sound = new Audio.Sound();
     await sound.loadAsync({ uri: filePath }, {}, false);
     const status = await sound.getStatusAsync();
     await sound.unloadAsync();
     if (status.isLoaded && status.durationMillis != null) {
+      cache[key] = status.durationMillis;
+      durationCacheDirty = true;
       return status.durationMillis;
     }
   } catch {
     // not all files are probeable
   }
+
+  cache[key] = 0; // remember failures to skip them next time
+  durationCacheDirty = true;
   return undefined;
 }
 
@@ -123,42 +165,60 @@ class DownloadManager {
     const walk = async (dirPath: string, folderPath: string): Promise<void> => {
       const entries = await FileSystem.readDirectoryAsync(dirPath);
 
-      for (const entry of entries) {
+      const infos = await Promise.all(entries.map(async entry => {
         const entryPath = `${dirPath}${entry}`;
         const info = await FileSystem.getInfoAsync(entryPath);
-        if (!info.exists) {
-          continue;
+        return { entry, entryPath, info };
+      }));
+
+      const subDirs: Array<{ entry: string; entryPath: string }> = [];
+      const fileEntries: Array<{ entry: string; entryPath: string; size: number; modificationTime: number }> = [];
+
+      for (const item of infos) {
+        if (!item.info.exists) { continue; }
+        if (item.info.isDirectory) {
+          subDirs.push({ entry: item.entry, entryPath: item.entryPath });
+        } else {
+          const anyInfo = item.info as any;
+          fileEntries.push({
+            entry: item.entry,
+            entryPath: item.entryPath,
+            size: typeof anyInfo.size === 'number' ? anyInfo.size : 0,
+            modificationTime: typeof anyInfo.modificationTime === 'number' ? anyInfo.modificationTime : 0,
+          });
         }
+      }
 
-        if (info.isDirectory) {
-          const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
-          await walk(`${entryPath}/`, childFolderPath);
-          continue;
-        }
-
-        const createdAt = this.normalizeTimestamp(info.modificationTime);
-        const size = typeof info.size === 'number' ? info.size : 0;
-
-        const duration = await probeMediaDuration(entryPath);
-        files.push({
+      const fileTasks = await Promise.all(fileEntries.map(async ({ entry, entryPath, size, modificationTime }) => {
+        const createdAt = this.normalizeTimestamp(modificationTime);
+        const mtime = modificationTime;
+        const duration = await probeMediaDuration(entryPath, size, mtime);
+        return {
           id: `file_${entryPath}`,
           url: entryPath,
           fileName: entry,
           filePath: entryPath,
-          source: 'private',
+          source: 'private' as const,
           folderPath,
-          status: 'completed',
+          status: 'completed' as const,
           progress: 100,
           bytesDownloaded: size,
           totalBytes: size,
           pageTitle: 'Private file',
           createdAt,
           duration,
-        });
-      }
+        };
+      }));
+      files.push(...fileTasks);
+
+      await Promise.all(subDirs.map(({ entry, entryPath }) => {
+        const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
+        return walk(`${entryPath}/`, childFolderPath);
+      }));
     };
 
     await walk(privateDir, '');
+    void flushDurationCache();
     files.sort((a, b) => b.createdAt - a.createdAt);
     return files;
   }
