@@ -10,7 +10,7 @@ import {
   SectionList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useSettings, HistoryEntry } from "../store/settingsStore";
+import { useSettings, useThemeColors, HistoryEntry } from "../store/settingsStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,12 +27,13 @@ interface Section {
 // ─── Shared header ────────────────────────────────────────────────────────────
 
 function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) {
+  const c = useThemeColors();
   return (
-    <View style={s.screenHeader}>
+    <View style={[s.screenHeader, { backgroundColor: c.surfaceSecondary, borderBottomColor: c.border }]}>
       <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
         <Text style={s.backBtnText}>{"‹"} Settings</Text>
       </TouchableOpacity>
-      <Text style={s.screenHeaderTitle}>{title}</Text>
+      <Text style={[s.screenHeaderTitle, { color: c.text }]}>{title}</Text>
       <View style={s.backBtn} />
     </View>
   );
@@ -42,14 +43,15 @@ function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) 
 
 function SearchEngineScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
+  const c = useThemeColors();
   const engines = ["Google", "Bing", "DuckDuckGo", "Yahoo", "Brave Search", "Ecosia"];
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="Search Engine" onBack={onBack} />
       <ScrollView>
         {engines.map((e) => (
-          <TouchableOpacity key={e} style={s.row} onPress={() => setSetting("searchEngine", e)}>
-            <Text style={s.rowLabel}>{e}</Text>
+          <TouchableOpacity key={e} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("searchEngine", e)}>
+            <Text style={[s.rowLabel, { color: c.text }]}>{e}</Text>
             {settings.searchEngine === e && <Text style={s.checkmark}>✓</Text>}
           </TouchableOpacity>
         ))}
@@ -60,14 +62,15 @@ function SearchEngineScreen({ onBack }: { onBack: () => void }) {
 
 function LanguageScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
+  const c = useThemeColors();
   const languages = ["English", "Spanish", "French", "German", "Japanese", "Korean", "Chinese (Simplified)", "Arabic", "Portuguese", "Russian"];
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="Language" onBack={onBack} />
       <ScrollView>
         {languages.map((l) => (
-          <TouchableOpacity key={l} style={s.row} onPress={() => setSetting("language", l)}>
-            <Text style={s.rowLabel}>{l}</Text>
+          <TouchableOpacity key={l} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("language", l)}>
+            <Text style={[s.rowLabel, { color: c.text }]}>{l}</Text>
             {settings.language === l && <Text style={s.checkmark}>✓</Text>}
           </TouchableOpacity>
         ))}
@@ -90,6 +93,7 @@ function formatTime(ts: number): string {
 
 function HistoryScreen({ onBack }: { onBack: () => void }) {
   const { history, clearHistory } = useSettings();
+  const c = useThemeColors();
 
   const confirmClear = () =>
     Alert.alert("Clear History", "Are you sure you want to clear all browsing history?", [
@@ -98,27 +102,27 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
     ]);
 
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="History" onBack={onBack} />
       <ScrollView>
         {history.length === 0 ? (
-          <Text style={s.emptyText}>No history yet.</Text>
+          <Text style={[s.emptyText, { color: c.textSecondary }]}>No history yet.</Text>
         ) : (
           history.map((item: HistoryEntry) => (
-            <View key={item.id} style={s.historyRow}>
-              <View style={s.historyIcon}>
+            <View key={item.id} style={[s.historyRow, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+              <View style={[s.historyIcon, { backgroundColor: c.surfaceSecondary }]}>
                 <Text style={s.historyIconText}>🌐</Text>
               </View>
               <View style={s.historyText}>
-                <Text style={s.historyTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={s.historyUrl} numberOfLines={1}>{item.url}</Text>
+                <Text style={[s.historyTitle, { color: c.text }]} numberOfLines={1}>{item.title}</Text>
+                <Text style={[s.historyUrl, { color: c.textSecondary }]} numberOfLines={1}>{item.url}</Text>
               </View>
-              <Text style={s.historyTime}>{formatTime(item.timestamp)}</Text>
+              <Text style={[s.historyTime, { color: c.textSecondary }]}>{formatTime(item.timestamp)}</Text>
             </View>
           ))
         )}
         {history.length > 0 && (
-          <TouchableOpacity style={s.dangerBtn} onPress={confirmClear}>
+          <TouchableOpacity style={[s.dangerBtn, { backgroundColor: c.surface }]} onPress={confirmClear}>
             <Text style={s.dangerBtnText}>Clear History</Text>
           </TouchableOpacity>
         )}
@@ -128,26 +132,27 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
 }
 
 function BookmarksScreen({ onBack }: { onBack: () => void }) {
+  const c = useThemeColors();
   const [bookmarks] = useState([
     { id: "1", title: "Google", url: "https://google.com" },
     { id: "2", title: "GitHub", url: "https://github.com" },
     { id: "3", title: "YouTube", url: "https://youtube.com" },
   ]);
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="Bookmarks" onBack={onBack} />
       <ScrollView>
         {bookmarks.length === 0 ? (
-          <Text style={s.emptyText}>No bookmarks yet.</Text>
+          <Text style={[s.emptyText, { color: c.textSecondary }]}>No bookmarks yet.</Text>
         ) : (
           bookmarks.map((b) => (
-            <TouchableOpacity key={b.id} style={s.row} onPress={() => {}}>
-              <View style={s.bookmarkIcon}>
+            <TouchableOpacity key={b.id} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => {}}>
+              <View style={[s.bookmarkIcon, { backgroundColor: c.surfaceSecondary }]}>
                 <Text>🔖</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.rowLabel}>{b.title}</Text>
-                <Text style={s.rowSub} numberOfLines={1}>{b.url}</Text>
+                <Text style={[s.rowLabel, { color: c.text }]}>{b.title}</Text>
+                <Text style={[s.rowSub, { color: c.textSecondary }]} numberOfLines={1}>{b.url}</Text>
               </View>
             </TouchableOpacity>
           ))
@@ -159,6 +164,7 @@ function BookmarksScreen({ onBack }: { onBack: () => void }) {
 
 function PrivacyScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
+  const c = useThemeColors();
 
   const confirmClearData = () =>
     Alert.alert("Clear Browsing Data", "This will clear cookies, cache, and site data.", [
@@ -167,24 +173,24 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
     ]);
 
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="Privacy & Security" onBack={onBack} />
       <ScrollView>
-        <Text style={s.sectionHeader}>TRACKING</Text>
-        <View style={s.row}>
-          <Text style={s.rowLabel}>Block Trackers</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>TRACKING</Text>
+        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text style={[s.rowLabel, { color: c.text }]}>Block Trackers</Text>
           <Switch value={settings.blockTrackers} onValueChange={(v) => setSetting("blockTrackers", v)} trackColor={{ true: "#4ECDC4" }} />
         </View>
-        <View style={s.row}>
-          <Text style={s.rowLabel}>Send "Do Not Track"</Text>
+        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text style={[s.rowLabel, { color: c.text }]}>Send "Do Not Track"</Text>
           <Switch value={settings.doNotTrack} onValueChange={(v) => setSetting("doNotTrack", v)} trackColor={{ true: "#4ECDC4" }} />
         </View>
-        <Text style={s.sectionHeader}>DATA</Text>
-        <View style={s.row}>
-          <Text style={s.rowLabel}>Clear Data on Exit</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>DATA</Text>
+        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text style={[s.rowLabel, { color: c.text }]}>Clear Data on Exit</Text>
           <Switch value={settings.clearOnExit} onValueChange={(v) => setSetting("clearOnExit", v)} trackColor={{ true: "#4ECDC4" }} />
         </View>
-        <TouchableOpacity style={s.dangerBtn} onPress={confirmClearData}>
+        <TouchableOpacity style={[s.dangerBtn, { backgroundColor: c.surface }]} onPress={confirmClearData}>
           <Text style={s.dangerBtnText}>Clear Browsing Data</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -194,21 +200,22 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
 
 function AppearanceScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
+  const c = useThemeColors();
   const themes = ["System Default", "Light", "Dark"];
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="Appearance" onBack={onBack} />
       <ScrollView>
-        <Text style={s.sectionHeader}>THEME</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>THEME</Text>
         {themes.map((t) => (
-          <TouchableOpacity key={t} style={s.row} onPress={() => setSetting("theme", t)}>
-            <Text style={s.rowLabel}>{t}</Text>
+          <TouchableOpacity key={t} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("theme", t)}>
+            <Text style={[s.rowLabel, { color: c.text }]}>{t}</Text>
             {settings.theme === t && <Text style={s.checkmark}>✓</Text>}
           </TouchableOpacity>
         ))}
-        <Text style={s.sectionHeader}>TABS</Text>
-        <View style={s.row}>
-          <Text style={s.rowLabel}>Compact Tab Switcher</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>TABS</Text>
+        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text style={[s.rowLabel, { color: c.text }]}>Compact Tab Switcher</Text>
           <Switch value={settings.compactTabs} onValueChange={(v) => setSetting("compactTabs", v)} trackColor={{ true: "#4ECDC4" }} />
         </View>
       </ScrollView>
@@ -217,22 +224,23 @@ function AppearanceScreen({ onBack }: { onBack: () => void }) {
 }
 
 function AboutScreen({ onBack }: { onBack: () => void }) {
+  const c = useThemeColors();
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="About" onBack={onBack} />
       <ScrollView>
-        <View style={s.aboutCard}>
-          <Text style={s.aboutAppName}>My Browser</Text>
-          <Text style={s.aboutVersion}>Version 1.0.0</Text>
+        <View style={[s.aboutCard, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text style={[s.aboutAppName, { color: c.text }]}>My Browser</Text>
+          <Text style={[s.aboutVersion, { color: c.textSecondary }]}>Version 1.0.0</Text>
         </View>
         {[
           { label: "Version", value: "1.0.0" },
           { label: "Build", value: "100" },
           { label: "Platform", value: "React Native / Expo" },
         ].map((item) => (
-          <View key={item.label} style={s.row}>
-            <Text style={s.rowLabel}>{item.label}</Text>
-            <Text style={s.rowValue}>{item.value}</Text>
+          <View key={item.label} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+            <Text style={[s.rowLabel, { color: c.text }]}>{item.label}</Text>
+            <Text style={[s.rowValue, { color: c.textSecondary }]}>{item.value}</Text>
           </View>
         ))}
       </ScrollView>
@@ -246,6 +254,7 @@ type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "privac
 
 export default function SettingsScreen() {
   const { settings } = useSettings();
+  const c = useThemeColors();
   const [sub, setSub] = useState<SubScreen>(null);
 
   if (sub === "searchEngine") return <SearchEngineScreen onBack={() => setSub(null)} />;
@@ -268,63 +277,57 @@ export default function SettingsScreen() {
     },
     {
       title: "PRIVACY",
-      data: [
-        { kind: "nav", label: "🔒  Privacy & Security", onPress: () => setSub("privacy") },
-      ],
+      data: [{ kind: "nav", label: "🔒  Privacy & Security", onPress: () => setSub("privacy") }],
     },
     {
       title: "DISPLAY",
-      data: [
-        { kind: "nav", label: "🎨  Appearance", onPress: () => setSub("appearance") },
-      ],
+      data: [{ kind: "nav", label: "🎨  Appearance", onPress: () => setSub("appearance") }],
     },
     {
       title: "INFO",
-      data: [
-        { kind: "nav", label: "ℹ️  About", onPress: () => setSub("about") },
-      ],
+      data: [{ kind: "nav", label: "ℹ️  About", onPress: () => setSub("about") }],
     },
   ];
 
   const renderItem = ({ item }: { item: RowItem }) => {
     if (item.kind === "nav") {
       return (
-        <TouchableOpacity style={s.row} onPress={item.onPress}>
-          <Text style={s.rowLabel}>{item.label}</Text>
+        <TouchableOpacity style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={item.onPress}>
+          <Text style={[s.rowLabel, { color: c.text }]}>{item.label}</Text>
           <View style={s.rowRight}>
-            {item.value ? <Text style={s.rowValue}>{item.value}</Text> : null}
-            <Text style={s.chevron}>›</Text>
+            {item.value ? <Text style={[s.rowValue, { color: c.textSecondary }]}>{item.value}</Text> : null}
+            <Text style={[s.chevron, { color: c.border }]}>›</Text>
           </View>
         </TouchableOpacity>
       );
     }
     if (item.kind === "toggle") {
       return (
-        <View style={s.row}>
-          <Text style={s.rowLabel}>{item.label}</Text>
+        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          <Text style={[s.rowLabel, { color: c.text }]}>{item.label}</Text>
           <Switch value={item.value} onValueChange={item.onToggle} trackColor={{ true: "#4ECDC4" }} />
         </View>
       );
     }
     return (
-      <View style={s.row}>
-        <Text style={s.rowLabel}>{item.label}</Text>
-        <Text style={s.rowValue}>{item.value}</Text>
+      <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+        <Text style={[s.rowLabel, { color: c.text }]}>{item.label}</Text>
+        <Text style={[s.rowValue, { color: c.textSecondary }]}>{item.value}</Text>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={s.root} edges={["top"]}>
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <View style={s.mainHeader}>
-        <Text style={s.mainHeaderTitle}>Settings</Text>
+        <Text style={[s.mainHeaderTitle, { color: c.text }]}>Settings</Text>
       </View>
       <SectionList
         sections={sections}
         keyExtractor={(item, i) => item.label + i}
         renderItem={renderItem}
         renderSectionHeader={({ section }) => (
-          <Text style={s.sectionHeader}>{section.title}</Text>
+          <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{section.title}</Text>
         )}
         stickySectionHeadersEnabled={false}
       />
@@ -335,9 +338,9 @@ export default function SettingsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F2F2F7" },
+  root: { flex: 1 },
   mainHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  mainHeaderTitle: { fontSize: 28, fontWeight: "700", color: "#1C1C1E" },
+  mainHeaderTitle: { fontSize: 28, fontWeight: "700" },
   screenHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -345,16 +348,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#C8C8CC",
-    backgroundColor: "#F2F2F7",
   },
-  screenHeaderTitle: { fontSize: 17, fontWeight: "600", color: "#1C1C1E" },
+  screenHeaderTitle: { fontSize: 17, fontWeight: "600" },
   backBtn: { minWidth: 80 },
   backBtnText: { fontSize: 16, color: "#4ECDC4", fontWeight: "500" },
   sectionHeader: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#8E8E93",
     letterSpacing: 0.5,
     paddingHorizontal: 16,
     paddingTop: 20,
@@ -363,57 +363,52 @@ const s = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E5EA",
   },
-  rowLabel: { flex: 1, fontSize: 16, color: "#1C1C1E" },
-  rowSub: { fontSize: 12, color: "#8E8E93", marginTop: 2 },
+  rowLabel: { flex: 1, fontSize: 16 },
+  rowSub: { fontSize: 12, marginTop: 2 },
   rowRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  rowValue: { fontSize: 15, color: "#8E8E93", marginRight: 4 },
-  chevron: { fontSize: 20, color: "#C7C7CC", lineHeight: 22 },
+  rowValue: { fontSize: 15, marginRight: 4 },
+  chevron: { fontSize: 20, lineHeight: 22 },
   checkmark: { fontSize: 17, color: "#4ECDC4", fontWeight: "600" },
   dangerBtn: {
     margin: 16,
     marginTop: 24,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: "#FFF",
     alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#FF3B30",
   },
   dangerBtnText: { fontSize: 16, fontWeight: "600", color: "#FF3B30" },
-  emptyText: { textAlign: "center", color: "#8E8E93", marginTop: 48, fontSize: 15 },
+  emptyText: { textAlign: "center", marginTop: 48, fontSize: 15 },
   historyRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E5EA",
     gap: 10,
   },
   historyIcon: {
     width: 32, height: 32, borderRadius: 8,
-    backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
   historyIconText: { fontSize: 16 },
   historyText: { flex: 1 },
-  historyTitle: { fontSize: 15, color: "#1C1C1E" },
-  historyUrl: { fontSize: 12, color: "#8E8E93", marginTop: 1 },
-  historyTime: { fontSize: 12, color: "#C7C7CC" },
+  historyTitle: { fontSize: 15 },
+  historyUrl: { fontSize: 12, marginTop: 1 },
+  historyTime: { fontSize: 12 },
   bookmarkIcon: {
     width: 32, height: 32, borderRadius: 8,
-    backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center", marginRight: 10,
+    alignItems: "center", justifyContent: "center", marginRight: 10,
   },
   aboutCard: {
-    alignItems: "center", paddingVertical: 32, backgroundColor: "#FFF",
-    marginBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E5E5EA",
+    alignItems: "center", paddingVertical: 32,
+    marginBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  aboutAppName: { fontSize: 22, fontWeight: "700", color: "#1C1C1E" },
-  aboutVersion: { fontSize: 14, color: "#8E8E93", marginTop: 4 },
+  aboutAppName: { fontSize: 22, fontWeight: "700" },
+  aboutVersion: { fontSize: 14, marginTop: 4 },
 });

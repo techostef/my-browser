@@ -7,8 +7,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 
 import AddressBar from '../components/AddressBar';
+import HomePage from '../components/HomePage';
 import TabBarContainer from '../components/TabBarContainer';
-import { useSettings } from '../store/settingsStore';
+import { useSettings, useThemeColors } from '../store/settingsStore';
 import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 import VideoPlayerController from '../components/VideoPlayerController';
@@ -776,10 +777,13 @@ export default function BrowserScreen() {
     }
   }, [tabs]);
 
+  const c = useThemeColors();
+  const barStyle = c.background === '#000000' || c.background === '#1C1C1E' ? 'light-content' : 'dark-content';
+
   if (!isReady) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F8F8F8" />
+      <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['top']}>
+        <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4ECDC4" />
         </View>
@@ -788,8 +792,8 @@ export default function BrowserScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F8F8" />
+    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['top']}>
+      <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
 
       <AddressBarContainer
         onNavigate={handleNavigate}
@@ -799,6 +803,10 @@ export default function BrowserScreen() {
       />
 
       <View style={styles.webviewArea}>
+        {tabs.find(t => t.id === activeTabId)?.url === 'about:home' && (
+          <HomePage onNavigate={handleNavigate} />
+        )}
+
         <WebViewList
           setWebViewRef={setWebViewRef}
           handleMessage={handleMessage}
@@ -918,7 +926,7 @@ function WebViewListInner({
   const activeTabId = useActiveTabId();
   return (
     <View style={styles.webviewContainer}>
-      {tabs.map(tab => (
+      {tabs.filter(tab => tab.url !== 'about:home').map(tab => (
         <View
           key={tab.id}
           style={[
@@ -927,12 +935,12 @@ function WebViewListInner({
           ]}
           pointerEvents={tab.id === activeTabId ? 'auto' : 'none'}>
           <Browser
-            webViewRef={(ref: WebView | null) => setWebViewRef(tab.id, ref)}
-            currentUrl={tab.url}
-            handleMessage={handleMessage(tab.id)}
-            handleNavigationStateChange={handleNavigationStateChange(tab.id)}
-            handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
-          />
+              webViewRef={(ref: WebView | null) => setWebViewRef(tab.id, ref)}
+              currentUrl={tab.url}
+              handleMessage={handleMessage(tab.id)}
+              handleNavigationStateChange={handleNavigationStateChange(tab.id)}
+              handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
+            />
         </View>
       ))}
     </View>

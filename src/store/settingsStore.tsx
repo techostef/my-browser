@@ -7,6 +7,7 @@ import React, {
   useReducer,
   useRef,
 } from "react";
+import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "@browser_settings";
@@ -32,6 +33,82 @@ export const SEARCH_ENGINE_HOME: Record<string, string> = {
   Ecosia: "https://www.ecosia.org",
 };
 
+// ─── Theme tokens ─────────────────────────────────────────────────────────────
+
+export type ColorScheme = "light" | "dark";
+
+export interface ThemeColors {
+  background: string;
+  surface: string;
+  surfaceSecondary: string;
+  border: string;
+  text: string;
+  textSecondary: string;
+  tabBar: string;
+  tabBarBorder: string;
+  tabBarActive: string;
+  tabBarInactive: string;
+  inputBackground: string;
+  inputBorder: string;
+  navButton: string;
+  addressBar: string;
+}
+
+const LIGHT: ThemeColors = {
+  background: "#FFFFFF",
+  surface: "#FFFFFF",
+  surfaceSecondary: "#F2F2F7",
+  border: "#E5E5EA",
+  text: "#1C1C1E",
+  textSecondary: "#8E8E93",
+  tabBar: "#FFFFFF",
+  tabBarBorder: "#EEEEEE",
+  tabBarActive: "#4ECDC4",
+  tabBarInactive: "#999999",
+  inputBackground: "#FFFFFF",
+  inputBorder: "#DDDDDD",
+  navButton: "#E8E8E8",
+  addressBar: "#F8F8F8",
+};
+
+const DARK: ThemeColors = {
+  background: "#000000",
+  surface: "#1C1C1E",
+  surfaceSecondary: "#2C2C2E",
+  border: "#3A3A3C",
+  text: "#FFFFFF",
+  textSecondary: "#8E8E93",
+  tabBar: "#1C1C1E",
+  tabBarBorder: "#3A3A3C",
+  tabBarActive: "#4ECDC4",
+  tabBarInactive: "#636366",
+  inputBackground: "#2C2C2E",
+  inputBorder: "#3A3A3C",
+  navButton: "#2C2C2E",
+  addressBar: "#1C1C1E",
+};
+
+export const THEME_COLORS: Record<ColorScheme, ThemeColors> = { light: LIGHT, dark: DARK };
+
+// ─── Shortcuts ────────────────────────────────────────────────────────────────
+
+export interface Shortcut {
+  id: string;
+  title: string;
+  url: string;
+  /** Emoji or single char used as fallback favicon */
+  emoji?: string;
+}
+
+const DEFAULT_SHORTCUTS: Shortcut[] = [
+  { id: "s1", title: "GitHub",      url: "https://github.com",           emoji: "🐙" },
+  { id: "s2", title: "YouTube",     url: "https://youtube.com",          emoji: "▶️" },
+  { id: "s3", title: "ChatGPT",     url: "https://chat.openai.com",      emoji: "🤖" },
+  { id: "s4", title: "Reddit",      url: "https://reddit.com",           emoji: "🟠" },
+  { id: "s5", title: "X / Twitter", url: "https://x.com",                emoji: "𝕏" },
+  { id: "s6", title: "Wikipedia",   url: "https://wikipedia.org",        emoji: "📖" },
+];
+
 // ─── Settings state ───────────────────────────────────────────────────────────
 
 export interface SettingsState {
@@ -42,6 +119,7 @@ export interface SettingsState {
   clearOnExit: boolean;
   theme: string;
   compactTabs: boolean;
+  shortcuts: Shortcut[];
 }
 
 const DEFAULT_SETTINGS: SettingsState = {
@@ -52,6 +130,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   clearOnExit: false,
   theme: "System Default",
   compactTabs: false,
+  shortcuts: DEFAULT_SHORTCUTS,
 };
 
 type SettingsAction = { type: "SET"; payload: Partial<SettingsState> } | { type: "RESTORE"; payload: SettingsState };
@@ -107,6 +186,10 @@ interface SettingsContextValue {
   clearHistory: () => void;
   searchUrl: (query: string) => string;
   homeUrl: () => string;
+  addShortcut: (shortcut: Omit<Shortcut, "id">) => void;
+  removeShortcut: (id: string) => void;
+  resolvedScheme: ColorScheme;
+  themeColors: ThemeColors;
   isReady: boolean;
 }
 
@@ -116,6 +199,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, dispatchSettings] = useReducer(settingsReducer, DEFAULT_SETTINGS);
   const [history, dispatchHistory] = useReducer(historyReducer, []);
   const [isReady, setIsReady] = React.useState(false);
+  const systemScheme = useColorScheme();
 
   const saveSettingsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHistoryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -196,9 +280,31 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return SEARCH_ENGINE_HOME[settingsRef.current.searchEngine] ?? SEARCH_ENGINE_HOME.Google;
   }, []);
 
+  const addShortcut = useCallback((shortcut: Omit<Shortcut, "id">) => {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    dispatchSettings({
+      type: "SET",
+      payload: { shortcuts: [...settingsRef.current.shortcuts, { ...shortcut, id }] },
+    });
+  }, []);
+
+  const removeShortcut = useCallback((id: string) => {
+    dispatchSettings({
+      type: "SET",
+      payload: { shortcuts: settingsRef.current.shortcuts.filter((s) => s.id !== id) },
+    });
+  }, []);
+
+  const resolvedScheme: ColorScheme =
+    settings.theme === "Dark" ? "dark"
+    : settings.theme === "Light" ? "light"
+    : (systemScheme ?? "light");
+
+  const themeColors = THEME_COLORS[resolvedScheme];
+
   const value = useMemo<SettingsContextValue>(
-    () => ({ settings, setSetting, history, pushHistory, clearHistory, searchUrl, homeUrl, isReady }),
-    [settings, setSetting, history, pushHistory, clearHistory, searchUrl, homeUrl, isReady]
+    () => ({ settings, setSetting, history, pushHistory, clearHistory, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady }),
+    [settings, setSetting, history, pushHistory, clearHistory, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
@@ -208,4 +314,8 @@ export function useSettings() {
   const ctx = useContext(SettingsContext);
   if (!ctx) throw new Error("useSettings must be used inside SettingsProvider");
   return ctx;
+}
+
+export function useThemeColors(): ThemeColors {
+  return useSettings().themeColors;
 }

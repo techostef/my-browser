@@ -2,7 +2,8 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect, u
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BrowserTab } from '../types';
 
-const DEFAULT_URL = 'https://www.google.com';
+export const HOME_URL = 'about:home';
+const DEFAULT_URL = HOME_URL;
 const STORAGE_KEY = '@browser_tabs';
 
 function generateId(): string {

@@ -32,11 +32,12 @@ export default function AddressBar({
   loading,
   tabTrigger,
 }: Props) {
-  const { searchUrl } = useSettings();
-  const [text, setText] = useState(initialUrl);
+  const { searchUrl, themeColors: c } = useSettings();
+  const displayUrl = initialUrl === 'about:home' ? '' : initialUrl;
+  const [text, setText] = useState(displayUrl);
 
   useEffect(() => {
-    setText(initialUrl);
+    setText(initialUrl === 'about:home' ? '' : initialUrl);
   }, [initialUrl]);
 
   const handleSubmit = () => {
@@ -55,29 +56,29 @@ export default function AddressBar({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: c.addressBar, borderBottomColor: c.border }]}>
       <View style={styles.navButtons}>
         <TouchableOpacity
           onPress={onGoBack}
           disabled={!canGoBack}
-          style={[styles.navBtn, !canGoBack && styles.navBtnDisabled]}>
-          <Text style={styles.navBtnText}>{'<'}</Text>
+          style={[styles.navBtn, { backgroundColor: c.navButton }, !canGoBack && styles.navBtnDisabled]}>
+          <Text style={[styles.navBtnText, { color: c.text }]}>{'<'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={onGoForward}
           disabled={!canGoForward}
-          style={[styles.navBtn, !canGoForward && styles.navBtnDisabled]}>
-          <Text style={styles.navBtnText}>{'>'}</Text>
+          style={[styles.navBtn, { backgroundColor: c.navButton }, !canGoForward && styles.navBtnDisabled]}>
+          <Text style={[styles.navBtnText, { color: c.text }]}>{'>'}</Text>
         </TouchableOpacity>
       </View>
 
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: c.inputBackground, borderColor: c.inputBorder, color: c.text }]}
         value={text}
         onChangeText={setText}
         onSubmitEditing={handleSubmit}
         placeholder="Enter URL or search..."
-        placeholderTextColor="#999"
+        placeholderTextColor={c.textSecondary}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
@@ -85,11 +86,11 @@ export default function AddressBar({
         selectTextOnFocus
       />
 
-      <TouchableOpacity onPress={onReload} style={styles.navBtn}>
+      <TouchableOpacity onPress={onReload} style={[styles.navBtn, { backgroundColor: c.navButton }]}>
         {loading ? (
           <ActivityIndicator size="small" color="#007AFF" />
         ) : (
-          <Text style={styles.navBtnText}>↻</Text>
+          <Text style={[styles.navBtnText, { color: c.text }]}>↻</Text>
         )}
       </TouchableOpacity>
       {tabTrigger}
