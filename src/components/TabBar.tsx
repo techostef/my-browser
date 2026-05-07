@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ interface Props {
   activeTabId: string;
   onSwitchTab: (id: string) => void;
   onAddTab: () => void;
+  onAddIncognitoTab: () => void;
   onRemoveTab: (id: string) => void;
   visible: boolean;
   onClose: () => void;
@@ -32,11 +33,21 @@ export default function TabBar({
   activeTabId,
   onSwitchTab,
   onAddTab,
+  onAddIncognitoTab,
   onRemoveTab,
   visible,
   onClose,
 }: Props) {
-  const visibleTabs = tabs.filter((t) => !t.hidden);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  // Default segment to whichever mode the active tab is in
+  const [segment, setSegment] = useState<"normal" | "incognito">(
+    activeTab?.incognito ? "incognito" : "normal"
+  );
+
+  const isIncognito = segment === "incognito";
+  const visibleTabs = tabs.filter((t) => !t.hidden && !!t.incognito === isIncognito);
+  const normalCount = tabs.filter((t) => !t.hidden && !t.incognito).length;
+  const incognitoCount = tabs.filter((t) => !t.hidden && t.incognito).length;
 
   const handleSwitchTab = (id: string) => {
     onSwitchTab(id);
@@ -44,7 +55,8 @@ export default function TabBar({
   };
 
   const handleAddTab = () => {
-    onAddTab();
+    if (isIncognito) onAddIncognitoTab();
+    else onAddTab();
     onClose();
   };
 
@@ -54,72 +66,135 @@ export default function TabBar({
       animationType="slide"
       transparent={false}
       onRequestClose={onClose}>
-      <SafeAreaView style={styles.root}>
+      <SafeAreaView style={[styles.root, isIncognito && styles.rootIncognito]}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>{visibleTabs.length} tab{visibleTabs.length !== 1 ? "s" : ""}</Text>
+        <View style={[styles.header, isIncognito && styles.headerIncognito]}>
+          <Text style={[styles.headerTitle, isIncognito && styles.headerTitleIncognito]}>
+            {visibleTabs.length} {isIncognito ? "incognito" : ""} tab{visibleTabs.length !== 1 ? "s" : ""}
+          </Text>
           <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
             <Text style={styles.doneBtnText}>Done</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Segment control */}
+        <View style={[styles.segmentRow, isIncognito && styles.segmentRowIncognito]}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, !isIncognito && styles.segmentBtnActive]}
+            onPress={() => setSegment("normal")}>
+            <Text style={[styles.segmentText, !isIncognito && styles.segmentTextActive]}>
+              Tabs{normalCount > 0 ? ` (${normalCount})` : ""}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentBtn, isIncognito && styles.segmentBtnActiveIncognito]}
+            onPress={() => setSegment("incognito")}>
+            <Text style={[styles.segmentText, styles.segmentTextIncog, isIncognito && styles.segmentTextActive]}>
+              🕵️ Incognito{incognitoCount > 0 ? ` (${incognitoCount})` : ""}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Incognito info banner */}
+        {isIncognito && (
+          <View style={styles.incognitoBanner}>
+            <Text style={styles.incognitoBannerTitle}>You're incognito</Text>
+            <Text style={styles.incognitoBannerBody}>
+              Pages won't appear in history, cookies and site data are cleared when you close these tabs.
+            </Text>
+          </View>
+        )}
+
         {/* Grid */}
         <ScrollView
           contentContainerStyle={styles.grid}
           showsVerticalScrollIndicator={false}>
-          {visibleTabs.map((tab) => {
-            const isActive = tab.id === activeTabId;
-            const displayUrl = tab.url.replace(/^https?:\/\//, "").split("/")[0];
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.card, isActive && styles.cardActive]}
-                onPress={() => handleSwitchTab(tab.id)}
-                activeOpacity={0.85}>
-                {/* Card top bar */}
-                <View style={[styles.cardBar, isActive && styles.cardBarActive]}>
-                  <Text style={[styles.cardUrl, isActive && styles.cardUrlActive]} numberOfLines={1}>
-                    {displayUrl || "New Tab"}
-                  </Text>
-                  {visibleTabs.length > 1 && (
-                    <TouchableOpacity
-                      style={styles.closeBtn}
-                      onPress={(e) => { e.stopPropagation?.(); onRemoveTab(tab.id); }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Text style={styles.closeBtnText}>✕</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {/* Card body — title */}
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle} numberOfLines={3}>
-                    {tab.title || "New Tab"}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+          {visibleTabs.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyText, isIncognito && styles.emptyTextIncognito]}>
+                {isIncognito ? "No incognito tabs open" : "No tabs open"}
+              </Text>
+            </View>
+          ) : (
+            visibleTabs.map((tab) => {
+              const isActive = tab.id === activeTabId;
+              const displayUrl = tab.url.replace(/^https?:\/\//, "").split("/")[0];
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[
+                    styles.card,
+                    isIncognito && styles.cardIncognito,
+                    isActive && (isIncognito ? styles.cardActiveIncognito : styles.cardActive),
+                  ]}
+                  onPress={() => handleSwitchTab(tab.id)}
+                  activeOpacity={0.85}>
+                  <View style={[
+                    styles.cardBar,
+                    isIncognito && styles.cardBarIncognito,
+                    isActive && (isIncognito ? styles.cardBarActiveIncognito : styles.cardBarActive),
+                  ]}>
+                    <Text style={[
+                      styles.cardUrl,
+                      isIncognito && styles.cardUrlIncognito,
+                      isActive && styles.cardUrlActive,
+                    ]} numberOfLines={1}>
+                      {isIncognito && <Text>🕵️ </Text>}{displayUrl || "New Tab"}
+                    </Text>
+                    {visibleTabs.length > 1 && (
+                      <TouchableOpacity
+                        style={styles.closeBtn}
+                        onPress={(e) => { e.stopPropagation?.(); onRemoveTab(tab.id); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={styles.closeBtnText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={styles.cardBody}>
+                    <Text style={[styles.cardTitle, isIncognito && styles.cardTitleIncognito]} numberOfLines={3}>
+                      {tab.title || "New Tab"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </ScrollView>
 
         {/* New tab button */}
-        <TouchableOpacity style={styles.newTabBtn} onPress={handleAddTab}>
-          <Text style={styles.newTabBtnText}>+ New tab</Text>
+        <TouchableOpacity
+          style={[styles.newTabBtn, isIncognito && styles.newTabBtnIncognito]}
+          onPress={handleAddTab}>
+          <Text style={[styles.newTabBtnText, isIncognito && styles.newTabBtnTextIncognito]}>
+            {isIncognito ? "🕵️  New Incognito Tab" : "+ New Tab"}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     </Modal>
   );
 }
 
-// Trigger button — rendered in the address bar to open the switcher
+// ─── Trigger button ───────────────────────────────────────────────────────────
+
 interface TriggerProps {
   count: number;
+  isIncognito: boolean;
   onPress: () => void;
 }
 
-export function TabCountTrigger({ count, onPress }: TriggerProps) {
+export function TabCountTrigger({ count, isIncognito, onPress }: TriggerProps) {
   return (
-    <TouchableOpacity style={trigger.btn} onPress={onPress} activeOpacity={0.7}>
-      <Text style={trigger.text}>{count > 99 ? "99+" : count}</Text>
+    <TouchableOpacity
+      style={[trigger.btn, isIncognito && trigger.btnIncognito]}
+      onPress={onPress}
+      activeOpacity={0.7}>
+      {isIncognito ? (
+        <Text style={trigger.icon}>🕵️</Text>
+      ) : (
+        <Text style={[trigger.text, isIncognito && trigger.textIncognito]}>
+          {count > 99 ? "99+" : count}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -135,18 +210,27 @@ const trigger = StyleSheet.create({
     justifyContent: "center",
     marginHorizontal: 2,
   },
+  btnIncognito: {
+    borderColor: "#A78BFA",
+    backgroundColor: "#2D2040",
+  },
   text: {
     fontSize: 12,
     fontWeight: "700",
     color: "#333",
   },
+  textIncognito: {
+    color: "#E9D5FF",
+  },
+  icon: {
+    fontSize: 14,
+  },
 });
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#F2F2F7",
-  },
+  root: { flex: 1, backgroundColor: "#F2F2F7" },
+  rootIncognito: { backgroundColor: "#1A1025" },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -157,25 +241,70 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#C8C8CC",
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1C1C1E",
+  headerIncognito: {
+    backgroundColor: "#1A1025",
+    borderBottomColor: "#3D2D5C",
   },
-  doneBtn: {
-    paddingHorizontal: 4,
+  headerTitle: { fontSize: 17, fontWeight: "600", color: "#1C1C1E" },
+  headerTitleIncognito: { color: "#E9D5FF" },
+
+  doneBtn: { paddingHorizontal: 4 },
+  doneBtnText: { fontSize: 17, fontWeight: "600", color: "#4ECDC4" },
+
+  segmentRow: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginVertical: 10,
+    backgroundColor: "#E0E0E5",
+    borderRadius: 10,
+    padding: 3,
   },
-  doneBtnText: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#4ECDC4",
+  segmentRowIncognito: {
+    backgroundColor: "#2D2040",
   },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  segmentBtnActive: {
+    backgroundColor: "#FFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentBtnActiveIncognito: {
+    backgroundColor: "#4C3575",
+  },
+  segmentText: { fontSize: 13, fontWeight: "600", color: "#8E8E93" },
+  segmentTextIncog: { color: "#8E8E93" },
+  segmentTextActive: { color: "#1C1C1E" },
+
+  incognitoBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    backgroundColor: "#2D2040",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#4C3575",
+  },
+  incognitoBannerTitle: { fontSize: 13, fontWeight: "700", color: "#C4B5FD", marginBottom: 4 },
+  incognitoBannerBody: { fontSize: 12, color: "#9D8EC4", lineHeight: 17 },
+
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     padding: CARD_GAP,
     gap: CARD_GAP,
   },
+  emptyWrap: { width: "100%", alignItems: "center", paddingTop: 40 },
+  emptyText: { fontSize: 15, color: "#8E8E93" },
+  emptyTextIncognito: { color: "#6B5A8A" },
+
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
@@ -190,9 +319,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  cardActive: {
-    borderColor: "#4ECDC4",
-  },
+  cardIncognito: { backgroundColor: "#2D2040" },
+  cardActive: { borderColor: "#4ECDC4" },
+  cardActiveIncognito: { borderColor: "#A78BFA" },
+
   cardBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -202,19 +332,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#DDD",
   },
-  cardBarActive: {
-    backgroundColor: "#D6F5F3",
-    borderBottomColor: "#B2E8E5",
-  },
-  cardUrl: {
-    flex: 1,
-    fontSize: 11,
-    color: "#666",
-  },
-  cardUrlActive: {
-    color: "#2A9D96",
-    fontWeight: "600",
-  },
+  cardBarIncognito: { backgroundColor: "#3D2D5C", borderBottomColor: "#4C3575" },
+  cardBarActive: { backgroundColor: "#D6F5F3", borderBottomColor: "#B2E8E5" },
+  cardBarActiveIncognito: { backgroundColor: "#4C3575", borderBottomColor: "#6D4E9E" },
+
+  cardUrl: { flex: 1, fontSize: 11, color: "#666" },
+  cardUrlIncognito: { color: "#C4B5FD" },
+  cardUrlActive: { color: "#2A9D96", fontWeight: "600" },
+
   closeBtn: {
     marginLeft: 6,
     width: 18,
@@ -231,15 +356,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: "center",
   },
-  cardBody: {
-    flex: 1,
-    padding: 10,
-  },
-  cardTitle: {
-    fontSize: 13,
-    color: "#1C1C1E",
-    lineHeight: 18,
-  },
+  cardBody: { flex: 1, padding: 10 },
+  cardTitle: { fontSize: 13, color: "#1C1C1E", lineHeight: 18 },
+  cardTitleIncognito: { color: "#D8B4FE" },
+
   newTabBtn: {
     margin: 16,
     paddingVertical: 14,
@@ -252,9 +372,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  newTabBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#4ECDC4",
-  },
+  newTabBtnIncognito: { backgroundColor: "#2D2040", borderWidth: 1, borderColor: "#4C3575" },
+  newTabBtnText: { fontSize: 16, fontWeight: "600", color: "#4ECDC4" },
+  newTabBtnTextIncognito: { color: "#C4B5FD" },
 });

@@ -4,6 +4,7 @@ export interface BrowserTab {
   lastVisitedUrl: string;
   title: string;
   hidden?: boolean;
+  incognito?: boolean;
   urlHistory: string[];
   historyIndex: number;
 }

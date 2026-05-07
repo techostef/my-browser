@@ -478,7 +478,9 @@ export default function BrowserScreen() {
       replaceUrl(tabId, navState.url, navState.title || undefined);
     } else {
       pushUrl(tabId, navState.url, navState.title || undefined);
-      pushHistory({ url: navState.url, title: navState.title || navState.url });
+      if (!tab?.incognito) {
+        pushHistory({ url: navState.url, title: navState.title || navState.url });
+      }
     }
     previousUrl.current = navState.url;
   }, [updateTab, pushUrl, replaceUrl, getTabsSnapshot, getBaseUrl, pushHistory]);

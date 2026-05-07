@@ -12,16 +12,29 @@ function TabBarContainerInner() {
 
   const open = useCallback(() => setVisible(true), []);
   const close = useCallback(() => setVisible(false), []);
-  const visibleCount = tabs.filter((t) => !t.hidden).length;
+
+  const visibleTabs = tabs.filter((t) => !t.hidden);
+  const activeTab = visibleTabs.find((t) => t.id === activeTabId);
+  const isActiveIncognito = !!activeTab?.incognito;
+
+  // Count shown on trigger reflects the current segment's tabs
+  const displayCount = isActiveIncognito
+    ? visibleTabs.filter((t) => t.incognito).length
+    : visibleTabs.filter((t) => !t.incognito).length;
 
   return (
     <>
-      <TabCountTrigger count={visibleCount} onPress={open} />
+      <TabCountTrigger
+        count={displayCount}
+        isIncognito={isActiveIncognito}
+        onPress={open}
+      />
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
         onSwitchTab={setActiveTab}
         onAddTab={() => addTab(homeUrl())}
+        onAddIncognitoTab={() => addTab(homeUrl(), true)}
         onRemoveTab={removeTab}
         visible={visible}
         onClose={close}

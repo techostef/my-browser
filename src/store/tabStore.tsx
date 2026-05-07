@@ -9,7 +9,7 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 }
 
-function createTab(url: string = DEFAULT_URL): BrowserTab {
+function createTab(url: string = DEFAULT_URL, incognito = false): BrowserTab {
   return {
     id: generateId(),
     url,
@@ -17,11 +17,12 @@ function createTab(url: string = DEFAULT_URL): BrowserTab {
     title: 'New Tab',
     urlHistory: [url],
     historyIndex: 0,
+    incognito: incognito || undefined,
   };
 }
 
 type TabAction =
-  | { type: 'ADD_TAB'; payload?: { url?: string } }
+  | { type: 'ADD_TAB'; payload?: { url?: string; incognito?: boolean } }
   | { type: 'REMOVE_TAB'; payload: { id: string } }
   | { type: 'SET_ACTIVE_TAB'; payload: { id: string } }
   | { type: 'UPDATE_TAB'; payload: { id: string; url?: string; title?: string; lastVisitedUrl?: string } }
@@ -54,7 +55,7 @@ function tabReducer(state: TabState, action: TabAction): TabState {
       return { ...action.payload, tabs };
     }
     case 'ADD_TAB': {
-      const newTab = createTab(action.payload?.url);
+      const newTab = createTab(action.payload?.url, action.payload?.incognito);
       return {
         tabs: [...state.tabs, newTab],
         activeTabId: newTab.id,
@@ -172,7 +173,7 @@ function tabReducer(state: TabState, action: TabAction): TabState {
 }
 
 interface TabActions {
-  addTab: (url?: string) => void;
+  addTab: (url?: string, incognito?: boolean) => void;
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: { url?: string; title?: string; lastVisitedUrl?: string }) => void;
@@ -227,14 +228,24 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     if (!isReady) return;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(e => {
+      // Never persist incognito tabs
+      const persistState = {
+        ...state,
+        tabs: state.tabs.filter(t => !t.incognito),
+      };
+      // If active tab was incognito, don't persist an invalid activeTabId
+      const hasActive = persistState.tabs.some(t => t.id === persistState.activeTabId);
+      if (!hasActive && persistState.tabs.length > 0) {
+        persistState.activeTabId = persistState.tabs[persistState.tabs.length - 1].id;
+      }
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persistState)).catch(e => {
         console.warn('Failed to persist tabs:', e);
       });
     }, 500);
   }, [state, isReady]);
 
-  const addTab = useCallback((url?: string) => {
-    dispatch({ type: 'ADD_TAB', payload: url ? { url } : undefined });
+  const addTab = useCallback((url?: string, incognito?: boolean) => {
+    dispatch({ type: 'ADD_TAB', payload: { url, incognito } });
   }, []);
 
   const removeTab = useCallback((id: string) => {
