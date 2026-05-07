@@ -10,6 +10,7 @@ import {
   TextInput,
   Keyboard,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,6 +51,7 @@ export default function DownloadsScreen() {
   type FolderGridItem = Extract<DownloadGridItem, { type: 'folder' }>;
 
   type SortKey = 'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'size_largest' | 'size_smallest' | 'duration_longest' | 'duration_shortest' | 'type';
+  type FilterType = 'all' | 'video' | 'audio' | 'image' | 'other';
 
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -63,8 +65,9 @@ export default function DownloadsScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoveModalVisible, setBulkMoveModalVisible] = useState(false);
   const [actionsDialogVisible, setActionsDialogVisible] = useState(false);
-  const [actionsPage, setActionsPage] = useState<'main' | 'sort'>('main');
+  const [actionsPage, setActionsPage] = useState<'main' | 'sort' | 'filter'>('main');
   const [sortKey, setSortKey] = useState<SortKey>('name_asc');
+  const [filterType, setFilterType] = useState<FilterType>('all');
 
   useEffect(() => {
     AsyncStorage.getItem('@downloads_sort_key').then(val => {
@@ -597,7 +600,9 @@ export default function DownloadsScreen() {
   });
 
   const sortedFiles = useMemo(() => {
-    const files = visibleDownloads.map(task => ({ type: 'file' as const, task }));
+    const files = visibleDownloads
+      .filter(task => filterType === 'all' || getMediaType(task) === filterType)
+      .map(task => ({ type: 'file' as const, task }));
     return files.slice().sort((a, b) => {
       switch (sortKey) {
         case 'name_asc':
@@ -624,10 +629,10 @@ export default function DownloadsScreen() {
           return 0;
       }
     });
-  }, [visibleDownloads, sortKey]);
+  }, [visibleDownloads, sortKey, filterType, getMediaType]);
 
   const gridData: DownloadGridItem[] = [
-    ...visibleFolders,
+    ...(filterType === 'all' ? visibleFolders : []),
     ...sortedFiles,
   ];
 
@@ -678,6 +683,28 @@ export default function DownloadsScreen() {
           </>
         )}
       </View>
+
+      {!isSelectionMode && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterChipRow}
+          contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+          {(['all', 'video', 'audio', 'image', 'other'] as FilterType[]).map(f => {
+            const label = f === 'all' ? 'All' : f === 'video' ? 'Video' : f === 'audio' ? 'Audio' : f === 'image' ? 'Image' : 'Other';
+            const icon = f === 'all' ? '🗂️' : f === 'video' ? '🎬' : f === 'audio' ? '🎵' : f === 'image' ? '🖼️' : '📄';
+            const active = filterType === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setFilterType(f)}>
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{icon} {label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {isDevicePath ? (
         <View style={styles.deviceScanStatusRow}>
@@ -1126,6 +1153,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listContent: {
+    flexGrow: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
@@ -1391,5 +1419,33 @@ const styles = StyleSheet.create({
   actionsSheetRowActive: {
     color: '#1A73E8',
     fontWeight: '700',
+  },
+  filterChipRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingBottom: 4,
+    backgroundColor: '#FFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#DDD',
+    height: 50,
+    maxHeight: 50,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    height: 27,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  filterChipActive: {
+    backgroundColor: '#1A73E8',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#555',
+  },
+  filterChipTextActive: {
+    color: '#FFF',
   },
 });
