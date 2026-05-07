@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Video, ResizeMode } from 'expo-av';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import DownloadItem, { DownloadMediaType } from '../components/DownloadItem';
 import { DEVICE_DOWNLOAD_MOVE_TARGET, DownloadTask } from '../types';
 import { useDownloads } from '../store/downloadStore';
@@ -47,6 +49,8 @@ export default function DownloadsScreen() {
     | { type: 'file'; task: DownloadTask };
   type FolderGridItem = Extract<DownloadGridItem, { type: 'folder' }>;
 
+  type SortKey = 'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'size_largest' | 'size_smallest' | 'type';
+
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
   const [renameText, setRenameText] = useState('');
   const [previewTask, setPreviewTask] = useState<DownloadTask | null>(null);
@@ -58,6 +62,20 @@ export default function DownloadsScreen() {
   const [moveTaskInPrivate, setMoveTaskInPrivate] = useState<DownloadTask | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoveModalVisible, setBulkMoveModalVisible] = useState(false);
+  const [actionsDialogVisible, setActionsDialogVisible] = useState(false);
+  const [actionsPage, setActionsPage] = useState<'main' | 'sort'>('main');
+  const [sortKey, setSortKey] = useState<SortKey>('name_asc');
+
+  useEffect(() => {
+    AsyncStorage.getItem('@downloads_sort_key').then(val => {
+      if (val) setSortKey(val as SortKey);
+    });
+  }, []);
+
+  const applySortKey = useCallback((key: SortKey) => {
+    setSortKey(key);
+    AsyncStorage.setItem('@downloads_sort_key', key);
+  }, []);
   const currentFolderPathRef = useRef(currentFolderPath);
 
   useEffect(() => {
@@ -556,9 +574,35 @@ export default function DownloadsScreen() {
     return fileFolder === currentFolderPath;
   });
 
+  const sortedFiles = useMemo(() => {
+    const files = visibleDownloads.map(task => ({ type: 'file' as const, task }));
+    return files.slice().sort((a, b) => {
+      switch (sortKey) {
+        case 'name_asc':
+          return (a.task.fileName || '').localeCompare(b.task.fileName || '');
+        case 'name_desc':
+          return (b.task.fileName || '').localeCompare(a.task.fileName || '');
+        case 'date_newest':
+          return (b.task.createdAt ?? 0) - (a.task.createdAt ?? 0);
+        case 'date_oldest':
+          return (a.task.createdAt ?? 0) - (b.task.createdAt ?? 0);
+        case 'size_largest':
+          return (b.task.totalBytes ?? 0) - (a.task.totalBytes ?? 0);
+        case 'size_smallest':
+          return (a.task.totalBytes ?? 0) - (b.task.totalBytes ?? 0);
+        case 'type': {
+          const ext = (t: DownloadTask) => (t.fileName || '').split('.').pop()?.toLowerCase() || '';
+          return ext(a.task).localeCompare(ext(b.task));
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [visibleDownloads, sortKey]);
+
   const gridData: DownloadGridItem[] = [
     ...visibleFolders,
-    ...visibleDownloads.map(task => ({ type: 'file' as const, task })),
+    ...sortedFiles,
   ];
 
   return (
@@ -597,18 +641,9 @@ export default function DownloadsScreen() {
                 {(currentFolderPath || 'Root').replace(DEVICE_ROOT_PATH, 'Device Download')} · {gridData.length} item{gridData.length !== 1 ? 's' : ''}
               </Text>
             </View>
-            {!isDevicePath ? (
-              <TouchableOpacity style={styles.newFolderBtn} onPress={openCreateFolder}>
-                <Text style={styles.newFolderBtnText}>+ Folder</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.rescanBtn, isDeviceScanRunning ? styles.rescanBtnDisabled : null]}
-                onPress={handleRescanDevice}
-                disabled={isDeviceScanRunning}>
-                <Text style={styles.rescanBtnText}>{isDeviceScanRunning ? 'Scanning...' : 'Rescan'}</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.actionsMenuBtn} onPress={() => setActionsDialogVisible(true)}>
+              <Text style={styles.actionsMenuBtnText}>⋯</Text>
+            </TouchableOpacity>
           </>
         )}
       </View>
@@ -854,6 +889,76 @@ export default function DownloadsScreen() {
             )}
           </View>
         </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={actionsDialogVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setActionsDialogVisible(false); setActionsPage('main'); }}>
+        <TouchableOpacity
+          style={styles.actionsDropdownBackdrop}
+          activeOpacity={1}
+          onPress={() => { setActionsDialogVisible(false); setActionsPage('main'); }}>
+          <TouchableOpacity activeOpacity={1} style={styles.actionsDropdown} onPress={() => {}}>
+            {actionsPage === 'main' ? (
+              <>
+                {!isDevicePath && (
+                  <TouchableOpacity
+                    style={styles.actionsDropdownRow}
+                    onPress={() => { setActionsDialogVisible(false); setActionsPage('main'); openCreateFolder(); }}>
+                    <Text style={styles.actionsDropdownIcon}>📁</Text>
+                    <Text style={styles.actionsDropdownLabel}>New folder</Text>
+                  </TouchableOpacity>
+                )}
+                {isDevicePath && (
+                  <TouchableOpacity
+                    style={[styles.actionsDropdownRow, isDeviceScanRunning && styles.actionsSheetRowDisabled]}
+                    disabled={isDeviceScanRunning}
+                    onPress={() => { setActionsDialogVisible(false); setActionsPage('main'); handleRescanDevice(); }}>
+                    <Text style={styles.actionsDropdownIcon}>🔄</Text>
+                    <Text style={styles.actionsDropdownLabel}>{isDeviceScanRunning ? 'Scanning...' : 'Rescan device'}</Text>
+                  </TouchableOpacity>
+                )}
+                <View style={styles.actionsDropdownDivider} />
+                <TouchableOpacity
+                  style={styles.actionsDropdownRow}
+                  onPress={() => setActionsPage('sort')}>
+                  <Text style={styles.actionsDropdownIcon}>↕️</Text>
+                  <Text style={styles.actionsDropdownLabel}>Sort</Text>
+                  <Text style={styles.actionsDropdownChevron}>›</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.actionsDropdownRow} onPress={() => setActionsPage('main')}>
+                  <Text style={styles.actionsDropdownIcon}>‹</Text>
+                  <Text style={[styles.actionsDropdownLabel, { fontWeight: '700' }]}>Sort by</Text>
+                </TouchableOpacity>
+                <View style={styles.actionsDropdownDivider} />
+                {(
+                  [
+                    ['name_asc', 'Name A → Z'],
+                    ['name_desc', 'Name Z → A'],
+                    ['date_newest', 'Date (newest first)'],
+                    ['date_oldest', 'Date (oldest first)'],
+                    ['size_largest', 'Size (largest first)'],
+                    ['size_smallest', 'Size (smallest first)'],
+                    ['type', 'File type'],
+                  ] as [SortKey, string][]
+                ).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={styles.actionsDropdownRow}
+                    onPress={() => { applySortKey(key); setActionsDialogVisible(false); setActionsPage('main'); }}>
+                    <Text style={styles.actionsDropdownIcon}>{sortKey === key ? '✓' : '  '}</Text>
+                    <Text style={[styles.actionsDropdownLabel, sortKey === key && styles.actionsSheetRowActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <Modal
@@ -1164,5 +1269,69 @@ const styles = StyleSheet.create({
   previewAudio: {
     width: '100%',
     height: 90,
+  },
+  actionsMenuBtn: {
+    paddingHorizontal: 2,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  actionsMenuBtnText: {
+    fontSize: 18,
+    color: '#444',
+    fontWeight: '700',
+    lineHeight: 18,
+    transform: [{ rotate: '90deg' }],
+  },
+  actionsDropdownBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  actionsDropdown: {
+    position: 'absolute',
+    top: 56,
+    right: 12,
+    width: 240,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    paddingVertical: 4,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+  },
+  actionsDropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  actionsDropdownIcon: {
+    fontSize: 16,
+    width: 28,
+    color: '#444',
+  },
+  actionsDropdownLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#222',
+  },
+  actionsDropdownChevron: {
+    fontSize: 20,
+    color: '#999',
+    lineHeight: 20,
+  },
+  actionsDropdownDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 4,
+    marginHorizontal: 16,
+  },
+  actionsSheetRowDisabled: {
+    opacity: 0.45,
+  },
+  actionsSheetRowActive: {
+    color: '#1A73E8',
+    fontWeight: '700',
   },
 });
