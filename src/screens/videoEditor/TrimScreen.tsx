@@ -501,7 +501,9 @@ export default function TrimScreen({ navigation, route }: Props) {
       videoUri,
       timelineSegments: segments,
       duration: durationRef.current,
-      ...(subtitleSegments.length > 0 ? { srt: segmentsToSrt(subtitleSegments) } : {}),
+      ...(subtitleSegments.length > 0
+        ? { segments: subtitleSegments, srt: segmentsToSrt(subtitleSegments) }
+        : {}),
     });
   };
 

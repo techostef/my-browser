@@ -1,5 +1,6 @@
 import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import * as FileSystem from 'expo-file-system';
+import { EncodingType } from 'expo-file-system';
 
 function toPath(uri: string): string {
   return uri.startsWith('file://') ? uri.slice(7) : uri;
@@ -67,27 +68,78 @@ export async function extractAudio(
   );
 }
 
-export async function burnSubtitles(
+export async function probeVideoSize(
   videoUri: string,
-  srtContent: string,
+): Promise<{ width: number; height: number }> {
+  const session = await FFmpegKit.execute(`-hide_banner -i "${toPath(videoUri)}"`);
+  const logs = await session.getLogs();
+  for (const log of logs) {
+    const msg = String(log.getMessage());
+    // Match "Video: ... 1920x1080" or "1920x1080 [SAR ...]"
+    const m = msg.match(/\bVideo:.*?\b(\d{2,5})x(\d{2,5})\b/);
+    if (m) {
+      return { width: parseInt(m[1], 10), height: parseInt(m[2], 10) };
+    }
+  }
+  // Fallback — assume 1280×720 so the pipeline still runs
+  return { width: 1280, height: 720 };
+}
+
+export async function burnSubtitlesWithOverlay(
+  videoUri: string,
+  subtitlePngs: Array<{ id: number; start: number; end: number; pngBase64: string }>,
   outputUri: string,
   onProgress?: (msg: string) => void,
 ): Promise<void> {
-  const tmpDir = FileSystem.cacheDirectory + 'srt_tmp_' + Date.now() + '/';
+  if (subtitlePngs.length === 0) {
+    await FileSystem.copyAsync({ from: videoUri, to: outputUri });
+    return;
+  }
+
+  const tmpDir = FileSystem.cacheDirectory + 'sub_overlay_' + Date.now() + '/';
   await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
 
   try {
-    const srtPath = `${tmpDir}subtitles.srt`;
-    await FileSystem.writeAsStringAsync(srtPath, srtContent);
+    onProgress?.('Saving subtitle images…');
+    // Write each PNG to a temp file
+    const pngPaths: Array<{ path: string; start: number; end: number }> = [];
+    for (const item of subtitlePngs) {
+      const p = `${tmpDir}sub_${item.id}.png`;
+      await FileSystem.writeAsStringAsync(p, item.pngBase64, { encoding: EncodingType.Base64 });
+      pngPaths.push({ path: p, start: item.start, end: item.end });
+    }
 
-    onProgress?.('Embedding subtitles…');
-    // Mux SRT as a mov_text soft subtitle track — no libass/FreeType required.
-    // All streams from the video (0) are copied, the SRT (1) is encoded as mov_text.
+    onProgress?.('Burning subtitles…');
+
+    // Build FFmpeg command with chained overlay filters.
+    // Each PNG is a separate input with -loop 1 so it stays available through the
+    // entire video — without this the PNG is a single-frame stream that ends
+    // almost immediately, truncating the output to ~100ms.
+    // enable='between(t,start,end)' makes each PNG visible only during its segment.
+    // -shortest stops the output at the source video's duration since the looped
+    // PNG streams are infinite.
+    const inputs = pngPaths.map(p => `-loop 1 -i "${toPath(p.path)}"`).join(' ');
+    const N = pngPaths.length;
+
+    // Escape commas inside between(t,a,b) with backslashes — single-quoting
+    // the expression is unreliable when the command goes through FFmpegKit's
+    // tokenizer, but `\,` works in every parsing layer.
+    let filterChain = '';
+    for (let i = 0; i < N; i++) {
+      const inLabel = i === 0 ? '[0:v]' : `[v${i}]`;
+      const pngLabel = `[${i + 1}:v]`;
+      const outLabel = i === N - 1 ? '[vout]' : `[v${i + 1}]`;
+      const { start, end } = pngPaths[i];
+      filterChain +=
+        `${inLabel}${pngLabel}overlay=x=(W-w)/2:y=H-h-24:enable=between(t\\,${start.toFixed(3)}\\,${end.toFixed(3)})${outLabel}`;
+      if (i < N - 1) filterChain += ';';
+    }
+
     await runFFmpeg(
-      `-i "${toPath(videoUri)}" -i "${toPath(srtPath)}"` +
-      ` -map 0 -map 1` +
-      ` -c:v copy -c:a copy -c:s mov_text` +
-      ` "${toPath(outputUri)}" -y`,
+      `-i "${toPath(videoUri)}" ${inputs}` +
+      ` -filter_complex "${filterChain}"` +
+      ` -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac` +
+      ` -shortest "${toPath(outputUri)}" -y`,
     );
   } finally {
     await FileSystem.deleteAsync(tmpDir, { idempotent: true });

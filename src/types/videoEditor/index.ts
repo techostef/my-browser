@@ -30,6 +30,7 @@ export type RootStackParamList = {
     videoUri: string;
     timelineSegments: TimelineSegment[];
     duration: number;
+    segments?: Segment[];
     srt?: string;
   };
 };

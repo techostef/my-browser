@@ -289,8 +289,16 @@ class DownloadManager {
 
         // Corrupted editor exports (failed writes with no moov atom) have undefined
         // duration and will crash Android's MediaMetadataRetriever during thumbnail
-        // generation. Delete them automatically — they can't be played anyway.
-        if (duration === undefined && /^edited_\d+\.(mp4|mov)$/i.test(entry)) {
+        // generation. Delete them automatically — but ONLY in the root folder, never
+        // inside trash or any subfolder, since the user expects trashed files to stay
+        // until they explicitly purge them. A duration probe in trash can also miss
+        // the cache (filePath changes when moved), so a transient undefined here
+        // would otherwise wipe the file out from under the user.
+        if (
+          duration === undefined &&
+          folderPath === '' &&
+          /^edited_\d+(?:_tmp)?\.(mp4|mov)$/i.test(entry)
+        ) {
           try { await FileSystem.deleteAsync(entryPath, { idempotent: true }); } catch { /* ignore */ }
           return null;
         }

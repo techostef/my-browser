@@ -6,23 +6,34 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import WebView from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../types/videoEditor';
-import { trimAndConcat } from '../../lib/videoEditor/ffmpeg';
+import type { RootStackParamList, Segment } from '../../types/videoEditor';
+import { trimAndConcat, probeVideoSize, burnSubtitlesWithOverlay } from '../../lib/videoEditor/ffmpeg';
 import { clearSession } from '../../lib/videoEditor/editSession';
 import { preCacheMediaDuration } from '../../services/downloadManager';
+import { buildSubtitleRenderHtml } from '../../lib/videoEditor/subtitlePng';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Export'>;
 
+type PngResult = { id: number; png: string };
+type WebViewMessage =
+  | { type: 'png'; id: number; png: string; index: number; total: number }
+  | { type: 'done' }
+  | { type: 'error'; message: string };
+
 export default function ExportScreen({ navigation, route }: Props) {
-  const { videoUri, timelineSegments, duration, srt } = route.params;
+  const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt } = route.params;
   const [status, setStatus] = useState('Preparing…');
   const [done, setDone] = useState(false);
   const [outputPath, setOutputPath] = useState('');
-  const [srtPath, setSrtPath] = useState('');
   const [error, setError] = useState('');
+  const [webViewHtml, setWebViewHtml] = useState<string | null>(null);
   const started = useRef(false);
+  const pngBufferRef = useRef<PngResult[]>([]);
+  const pngResolveRef = useRef<((pngs: PngResult[]) => void) | null>(null);
+  const pngRejectRef = useRef<((err: Error) => void) | null>(null);
 
   useEffect(() => {
     if (started.current) return;
@@ -30,12 +41,53 @@ export default function ExportScreen({ navigation, route }: Props) {
     runExport();
   }, []);
 
+  // Render subtitle PNGs via a hidden WebView
+  const renderSubtitlePngs = (
+    segs: Segment[],
+    videoWidth: number,
+    videoHeight: number,
+  ): Promise<PngResult[]> => {
+    return new Promise((resolve, reject) => {
+      pngBufferRef.current = [];
+      pngResolveRef.current = resolve;
+      pngRejectRef.current = reject;
+      const html = buildSubtitleRenderHtml(segs, videoWidth, videoHeight);
+      setWebViewHtml(html);
+    });
+  };
+
+  const finishWebView = () => {
+    pngResolveRef.current = null;
+    pngRejectRef.current = null;
+    setWebViewHtml(null);
+  };
+
+  const handleWebViewMessage = (event: { nativeEvent: { data: string } }) => {
+    let msg: WebViewMessage;
+    try {
+      msg = JSON.parse(event.nativeEvent.data) as WebViewMessage;
+    } catch {
+      return;
+    }
+    if (msg.type === 'png') {
+      pngBufferRef.current.push({ id: msg.id, png: msg.png });
+      setStatus(`Rendering subtitles ${msg.index + 1}/${msg.total}…`);
+    } else if (msg.type === 'done') {
+      const pngs = pngBufferRef.current;
+      pngBufferRef.current = [];
+      pngResolveRef.current?.(pngs);
+      finishWebView();
+    } else if (msg.type === 'error') {
+      pngRejectRef.current?.(new Error(`Subtitle render failed: ${msg.message}`));
+      finishWebView();
+    }
+  };
+
   const runExport = async () => {
     try {
       const outputDir = (FileSystem.documentDirectory ?? '') + 'private_downloads/';
       await FileSystem.makeDirectoryAsync(outputDir, { intermediates: true });
       const stamp = Date.now();
-      const outputUri = `${outputDir}edited_${stamp}.mp4`;
 
       const keptRanges = timelineSegments
         .filter(s => s.kept)
@@ -46,23 +98,42 @@ export default function ExportScreen({ navigation, route }: Props) {
         keptRanges[0].start <= 0.01 &&
         keptRanges[0].end >= duration - 0.01;
 
+      // Step 1: trim/copy video to a temp file
+      const tmpUri = `${outputDir}edited_${stamp}_tmp.mp4`;
       if (isFullVideo) {
         setStatus('Copying file…');
-        await FileSystem.copyAsync({ from: videoUri, to: outputUri });
+        await FileSystem.copyAsync({ from: videoUri, to: tmpUri });
       } else {
-        await trimAndConcat(videoUri, keptRanges, outputUri, setStatus);
+        await trimAndConcat(videoUri, keptRanges, tmpUri, setStatus);
       }
 
-      // Save SRT as a sidecar file — embedding mov_text in the MP4 crashes
-      // Android's MediaPlayer when the file is later scanned for duration.
-      if (srt) {
-        setStatus('Saving subtitles…');
-        const srtUri = `${outputDir}edited_${stamp}.srt`;
-        await FileSystem.writeAsStringAsync(srtUri, srt);
-        setSrtPath(srtUri);
+      const outputUri = `${outputDir}edited_${stamp}.mp4`;
+
+      if (subtitleSegments && subtitleSegments.length > 0 && srt) {
+        // Step 2: probe video dimensions for canvas sizing
+        setStatus('Preparing subtitles…');
+        const { width: vw, height: vh } = await probeVideoSize(tmpUri);
+
+        // Step 3: render PNGs in the hidden WebView
+        const pngResults = await renderSubtitlePngs(subtitleSegments, vw, vh);
+
+        // Map PNGs back to their segments for timing data
+        const segMap = new Map(subtitleSegments.map(s => [s.id, s]));
+        const overlayItems: Array<{ id: number; start: number; end: number; pngBase64: string }> = [];
+        for (const r of pngResults) {
+          const seg = segMap.get(r.id);
+          if (seg) overlayItems.push({ id: r.id, start: seg.start, end: seg.end, pngBase64: r.png });
+        }
+
+        // Step 4: burn PNGs as overlay frames
+        await burnSubtitlesWithOverlay(tmpUri, overlayItems, outputUri, setStatus);
+        await FileSystem.deleteAsync(tmpUri, { idempotent: true });
+      } else {
+        // No subtitles — just rename tmp to final
+        await FileSystem.moveAsync({ from: tmpUri, to: outputUri });
       }
 
-      // Pre-cache duration so the Downloads scan never probes this file.
+      // Pre-cache duration so the Downloads scan never probes this file
       if (duration > 0) {
         await preCacheMediaDuration(outputUri, duration * 1000);
       }
@@ -92,16 +163,12 @@ export default function ExportScreen({ navigation, route }: Props) {
 
   if (done) {
     const filename = outputPath.split('/').pop() ?? outputPath;
-    const srtFilename = srtPath ? srtPath.split('/').pop() : null;
     return (
       <View style={styles.container}>
         <View style={styles.center}>
           <Text style={styles.doneIcon}>✓</Text>
           <Text style={styles.doneTitle}>Export complete</Text>
           <Text style={styles.filename}>{filename}</Text>
-          {srtFilename ? (
-            <Text style={styles.filename}>{srtFilename}</Text>
-          ) : null}
           <TouchableOpacity style={styles.btn} onPress={() => navigation.popToTop()}>
             <Text style={styles.btnText}>Done</Text>
           </TouchableOpacity>
@@ -112,6 +179,15 @@ export default function ExportScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* Hidden WebView used to render subtitle PNGs via HTML5 Canvas */}
+      {webViewHtml ? (
+        <WebView
+          style={styles.hiddenWebView}
+          source={{ html: webViewHtml }}
+          onMessage={handleWebViewMessage}
+          javaScriptEnabled
+        />
+      ) : null}
       <View style={styles.center}>
         <ActivityIndicator color="#fff" size="large" style={styles.spinner} />
         <Text style={styles.statusText}>{status}</Text>
@@ -124,6 +200,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0d0d0d',
+  },
+  hiddenWebView: {
+    width: 1,
+    height: 1,
+    opacity: 0,
+    position: 'absolute',
   },
   center: {
     flex: 1,

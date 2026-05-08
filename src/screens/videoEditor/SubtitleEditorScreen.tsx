@@ -145,6 +145,7 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
       videoUri,
       timelineSegments,
       duration,
+      segments,
       srt: segmentsToSrt(segments),
     });
   };
