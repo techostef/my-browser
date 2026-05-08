@@ -25,6 +25,7 @@ import type { Segment as SubtitleSegment } from '../../lib/videoEditor/srt';
 import { getSubtitles } from '../../lib/videoEditor/subtitles';
 import { transcribeVideo } from '../../lib/videoEditor/whisper';
 import { translateSegments } from '../../lib/videoEditor/translate';
+import { loadSubtitles, saveSubtitles } from '../../lib/videoEditor/subtitleCache';
 import { getOpenAIKey } from '../../lib/openaiKey';
 import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/editSession';
 
@@ -247,7 +248,8 @@ export default function TrimScreen({ navigation, route }: Props) {
   // ─── Restore session on mount ────────────────────────────────────────────────
 
   useEffect(() => {
-    loadSession(videoUri).then(session => {
+    (async () => {
+      const session = await loadSession(videoUri);
       if (session && (session.splitPoints.length > 0 || session.deletedSegments.length > 0)) {
         setSplitPoints(session.splitPoints);
         setDeletedSegments(new Set(session.deletedSegments));
@@ -255,9 +257,15 @@ export default function TrimScreen({ navigation, route }: Props) {
       }
       if (session?.subtitleSegments && session.subtitleSegments.length > 0) {
         setSubtitleSegments(session.subtitleSegments);
+      } else {
+        // No subtitles in session — fall back to the persistent cache so a
+        // previous transcription/translation isn't lost when the edit
+        // session is reset or cleared after export.
+        const cached = await loadSubtitles(videoUri);
+        if (cached) setSubtitleSegments(cached);
       }
       sessionReady.current = true;
-    });
+    })();
   }, [videoUri]);
 
   // ─── Auto-save session on changes (debounced) ────────────────────────────────
@@ -524,6 +532,9 @@ export default function TrimScreen({ navigation, route }: Props) {
         targetLanguage,
         setStatusMsg,
       );
+      // Persist before updating editor state so an interrupted UI render
+      // doesn't lose the paid translation result.
+      await saveSubtitles(videoUri, translated);
       setSubtitleSegments(translated);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Translation failed';
@@ -561,8 +572,14 @@ export default function TrimScreen({ navigation, route }: Props) {
       }
 
       let allSrtSegments = parseSrt(rawSrt);
-      let finalSegments = allSrtSegments;
 
+      // Save the full untrimmed transcription to the persistent cache first.
+      // Filtering for the current trim is a view-time concern; caching the
+      // full set means a different trim later still reuses the same Whisper
+      // result without paying for a re-transcription.
+      await saveSubtitles(videoUri, allSrtSegments);
+
+      let finalSegments = allSrtSegments;
       if (!isFullVideo(segments)) {
         setStatusMsg('Filtering subtitles…');
         const filtered = filterSegments(allSrtSegments, segments, dur);
