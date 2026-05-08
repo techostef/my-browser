@@ -216,7 +216,10 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
           const parsed: TabState = JSON.parse(stored);
           if (parsed.tabs && parsed.tabs.length > 0 && parsed.activeTabId) {
             dispatch({ type: 'RESTORE', payload: parsed });
-            dispatch({ type: 'ADD_TAB', payload: { url: HOME_URL } });
+            const activeTab = parsed.tabs.find(t => t.id === parsed.activeTabId);
+            if (activeTab?.url !== HOME_URL) {
+              dispatch({ type: 'ADD_TAB', payload: { url: HOME_URL } });
+            }
           }
         }
       } catch (e) {
