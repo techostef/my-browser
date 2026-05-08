@@ -80,10 +80,14 @@ export async function burnSubtitles(
     const srtPath = `${tmpDir}subtitles.srt`;
     await FileSystem.writeAsStringAsync(srtPath, srtContent);
 
-    onProgress?.('Burning subtitles…');
-    const escapedSrt = toPath(srtPath).replace(/:/g, '\\:');
+    onProgress?.('Embedding subtitles…');
+    // Mux SRT as a mov_text soft subtitle track — no libass/FreeType required.
+    // All streams from the video (0) are copied, the SRT (1) is encoded as mov_text.
     await runFFmpeg(
-      `-i "${toPath(videoUri)}" -vf "subtitles='${escapedSrt}'" -c:a copy "${toPath(outputUri)}" -y`,
+      `-i "${toPath(videoUri)}" -i "${toPath(srtPath)}"` +
+      ` -map 0 -map 1` +
+      ` -c:v copy -c:a copy -c:s mov_text` +
+      ` "${toPath(outputUri)}" -y`,
     );
   } finally {
     await FileSystem.deleteAsync(tmpDir, { idempotent: true });

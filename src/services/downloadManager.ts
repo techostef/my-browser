@@ -6,6 +6,9 @@ import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import { DownloadTask, HlsMasterInfo, HlsVariant } from '../types';
 
 const MEDIA_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac']);
+// Video files are probed with FFmpegKit (reads file headers, safe for all containers).
+// Audio files use Audio.Sound (faster for simple audio-only formats).
+const VIDEO_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp']);
 
 const DURATION_CACHE_KEY = '@media_duration_cache_v1';
 let durationCache: Record<string, number> | null = null;
@@ -34,6 +37,22 @@ async function flushDurationCache(): Promise<void> {
 
 function durationCacheKey(filePath: string, size: number, mtime: number): string {
   return `${filePath}|${size}|${mtime}`;
+}
+
+// Pre-populate the duration cache for a just-exported file so the Downloads
+// scan never needs to probe it (avoids any probe-related issues entirely).
+export async function preCacheMediaDuration(fileUri: string, durationMs: number): Promise<void> {
+  try {
+    const info = await FileSystem.getInfoAsync(fileUri);
+    if (!info.exists) return;
+    const anyInfo = info as any;
+    const size: number = typeof anyInfo.size === 'number' ? anyInfo.size : 0;
+    const mtime: number = typeof anyInfo.modificationTime === 'number' ? anyInfo.modificationTime : 0;
+    const cache = await loadDurationCache();
+    cache[durationCacheKey(fileUri, size, mtime)] = durationMs;
+    durationCacheDirty = true;
+    await flushDurationCache();
+  } catch { /* best effort */ }
 }
 
 async function concurrentMap<T, R>(items: T[], fn: (item: T) => Promise<R>, concurrency: number): Promise<R[]> {
@@ -73,6 +92,31 @@ function releaseProbeSlot(): void {
   if (next) { next(); }
 }
 
+// Use FFmpegKit to read duration from a video file's container header.
+// This handles any format (including MP4s with mov_text subtitle tracks) without
+// invoking Android's MediaPlayer, which native-crashes on unknown codec streams.
+async function probeVideoWithFFmpeg(filePath: string): Promise<number | undefined> {
+  try {
+    // Intentionally no output — FFmpeg exits with error but logs file metadata.
+    const session = await FFmpegKit.execute(`-hide_banner -i "${filePath}"`);
+    const logs = await session.getLogs();
+    for (const log of logs) {
+      const match = (log.getMessage() as string).match(
+        /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/,
+      );
+      if (match) {
+        const ms =
+          (parseInt(match[1], 10) * 3600 +
+            parseInt(match[2], 10) * 60 +
+            parseFloat(match[3])) *
+          1000;
+        return ms;
+      }
+    }
+  } catch { /* ignore */ }
+  return undefined;
+}
+
 async function probeMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
   const ext = filePath.split('.').pop()?.toLowerCase().split('?')[0] || '';
   if (!MEDIA_EXTS.has(ext)) {
@@ -86,28 +130,34 @@ async function probeMediaDuration(filePath: string, size: number, mtime: number)
   }
 
   await acquireProbeSlot();
+  let durationMs: number | undefined;
   try {
-    const sound = new Audio.Sound();
-    try {
-      await sound.loadAsync({ uri: filePath }, {}, false);
-      const status = await sound.getStatusAsync();
-      await sound.unloadAsync();
-      if (status.isLoaded && status.durationMillis != null) {
-        cache[key] = status.durationMillis;
-        durationCacheDirty = true;
-        return status.durationMillis;
+    if (VIDEO_EXTS.has(ext)) {
+      // FFmpegKit reads only the container header — safe for all formats including
+      // MP4s with subtitle tracks that crash Android's MediaPlayer via Audio.Sound.
+      durationMs = await probeVideoWithFFmpeg(filePath);
+    } else {
+      const sound = new Audio.Sound();
+      try {
+        await sound.loadAsync({ uri: filePath }, {}, false);
+        const status = await sound.getStatusAsync();
+        await sound.unloadAsync();
+        if (status.isLoaded && status.durationMillis != null) {
+          durationMs = status.durationMillis;
+        }
+      } catch {
+        try { await sound.unloadAsync(); } catch { /* ignore */ }
       }
-    } catch {
-      // best effort — make sure we still unload if loadAsync partially succeeded
-      try { await sound.unloadAsync(); } catch { /* ignore */ }
     }
   } finally {
     releaseProbeSlot();
   }
 
-  cache[key] = 0; // remember failures to skip them next time
+  cache[key] = durationMs ?? 0;
   durationCacheDirty = true;
-  return undefined;
+  // Flush after each probe so a mid-walk crash doesn't reset the whole cache.
+  void flushDurationCache();
+  return durationMs;
 }
 
 type ProgressCallback = (
@@ -232,10 +282,19 @@ class DownloadManager {
         }
       }
 
-      const fileTasks = await concurrentMap(fileEntries, async ({ entry, entryPath, size, modificationTime }) => {
+      const rawTasks = await concurrentMap(fileEntries, async ({ entry, entryPath, size, modificationTime }) => {
         const createdAt = this.normalizeTimestamp(modificationTime);
         const mtime = modificationTime;
         const duration = await probeMediaDuration(entryPath, size, mtime);
+
+        // Corrupted editor exports (failed writes with no moov atom) have undefined
+        // duration and will crash Android's MediaMetadataRetriever during thumbnail
+        // generation. Delete them automatically — they can't be played anyway.
+        if (duration === undefined && /^edited_\d+\.(mp4|mov)$/i.test(entry)) {
+          try { await FileSystem.deleteAsync(entryPath, { idempotent: true }); } catch { /* ignore */ }
+          return null;
+        }
+
         return {
           id: `file_${entryPath}`,
           url: entryPath,
@@ -250,9 +309,9 @@ class DownloadManager {
           pageTitle: 'Private file',
           createdAt,
           duration,
-        };
-      }, STAT_CONCURRENCY) as DownloadTask[];
-      files.push(...fileTasks);
+        } as DownloadTask;
+      }, STAT_CONCURRENCY);
+      files.push(...rawTasks.filter((t): t is DownloadTask => t !== null));
 
       await Promise.all(subDirs.map(({ entry, entryPath }) => {
         const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;

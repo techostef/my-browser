@@ -9,8 +9,9 @@ import {
 import * as FileSystem from 'expo-file-system';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types/videoEditor';
-import { trimAndConcat, burnSubtitles } from '../../lib/videoEditor/ffmpeg';
+import { trimAndConcat } from '../../lib/videoEditor/ffmpeg';
 import { clearSession } from '../../lib/videoEditor/editSession';
+import { preCacheMediaDuration } from '../../services/downloadManager';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Export'>;
 
@@ -19,6 +20,7 @@ export default function ExportScreen({ navigation, route }: Props) {
   const [status, setStatus] = useState('Preparing…');
   const [done, setDone] = useState(false);
   const [outputPath, setOutputPath] = useState('');
+  const [srtPath, setSrtPath] = useState('');
   const [error, setError] = useState('');
   const started = useRef(false);
 
@@ -32,7 +34,8 @@ export default function ExportScreen({ navigation, route }: Props) {
     try {
       const outputDir = (FileSystem.documentDirectory ?? '') + 'private_downloads/';
       await FileSystem.makeDirectoryAsync(outputDir, { intermediates: true });
-      const outputUri = `${outputDir}edited_${Date.now()}.mp4`;
+      const stamp = Date.now();
+      const outputUri = `${outputDir}edited_${stamp}.mp4`;
 
       const keptRanges = timelineSegments
         .filter(s => s.kept)
@@ -44,22 +47,24 @@ export default function ExportScreen({ navigation, route }: Props) {
         keptRanges[0].end >= duration - 0.01;
 
       if (isFullVideo) {
-        if (srt) {
-          await burnSubtitles(videoUri, srt, outputUri, setStatus);
-        } else {
-          setStatus('Copying file…');
-          await FileSystem.copyAsync({ from: videoUri, to: outputUri });
-        }
+        setStatus('Copying file…');
+        await FileSystem.copyAsync({ from: videoUri, to: outputUri });
       } else {
-        if (srt) {
-          // Trim first into a temp file, then burn subtitles
-          const tmpUri = `${FileSystem.cacheDirectory ?? ''}trimmed_${Date.now()}.mp4`;
-          await trimAndConcat(videoUri, keptRanges, tmpUri, setStatus);
-          await burnSubtitles(tmpUri, srt, outputUri, setStatus);
-          await FileSystem.deleteAsync(tmpUri, { idempotent: true });
-        } else {
-          await trimAndConcat(videoUri, keptRanges, outputUri, setStatus);
-        }
+        await trimAndConcat(videoUri, keptRanges, outputUri, setStatus);
+      }
+
+      // Save SRT as a sidecar file — embedding mov_text in the MP4 crashes
+      // Android's MediaPlayer when the file is later scanned for duration.
+      if (srt) {
+        setStatus('Saving subtitles…');
+        const srtUri = `${outputDir}edited_${stamp}.srt`;
+        await FileSystem.writeAsStringAsync(srtUri, srt);
+        setSrtPath(srtUri);
+      }
+
+      // Pre-cache duration so the Downloads scan never probes this file.
+      if (duration > 0) {
+        await preCacheMediaDuration(outputUri, duration * 1000);
       }
 
       setOutputPath(outputUri);
@@ -87,12 +92,16 @@ export default function ExportScreen({ navigation, route }: Props) {
 
   if (done) {
     const filename = outputPath.split('/').pop() ?? outputPath;
+    const srtFilename = srtPath ? srtPath.split('/').pop() : null;
     return (
       <View style={styles.container}>
         <View style={styles.center}>
           <Text style={styles.doneIcon}>✓</Text>
           <Text style={styles.doneTitle}>Export complete</Text>
           <Text style={styles.filename}>{filename}</Text>
+          {srtFilename ? (
+            <Text style={styles.filename}>{srtFilename}</Text>
+          ) : null}
           <TouchableOpacity style={styles.btn} onPress={() => navigation.popToTop()}>
             <Text style={styles.btnText}>Done</Text>
           </TouchableOpacity>
