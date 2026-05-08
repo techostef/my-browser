@@ -130,9 +130,6 @@ export default function VideoDetectedBanner({
                   return (
                     <View style={[styles.videoCard, isPlayingVideo(item, playingUrl) && styles.videoCardPlaying]}>
                       <View style={styles.videoInfo}>
-                        <Text style={styles.videoType}>
-                          {item.type === "hls" ? "M3U8" : item.type.toUpperCase()}
-                        </Text>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.videoUrl} numberOfLines={1}>
                             {item.type === "hls"
@@ -141,14 +138,6 @@ export default function VideoDetectedBanner({
                                 ? `${item.pageTitle || "DASH Stream"}`
                                 : item.videoWidth || item.pageTitle || "Video"}
                           </Text>
-                          {item.hlsInfo && item.hlsInfo.audioTracks.length > 0 && (
-                            <Text style={styles.hlsVariantText} numberOfLines={1}>
-                              {item.hlsInfo.audioTracks.length} audio
-                              {item.hlsInfo.subtitleTracks.length > 0
-                                ? ` · ${item.hlsInfo.subtitleTracks.length} subs`
-                                : ""}
-                            </Text>
-                          )}
                         </View>
                       </View>
 
