@@ -107,43 +107,74 @@ export default function ExportScreen({ navigation, route }: Props) {
         keptRanges[0].start <= 0.01 &&
         keptRanges[0].end >= duration - 0.01;
 
-      // Step 1: trim/copy video to a temp file
+      // Step 1: only re-encode if the user actually trimmed segments. For a
+      // full-length export we feed the source straight into the burn/transcode
+      // pass — that one re-encode is mandatory anyway, and avoiding the
+      // intermediate copy roughly halves total export time.
       const tmpUri = `${outputDir}edited_${stamp}_tmp.mp4`;
+      let sourceUri: string;
+      let trimmedTmp = false;
       if (isFullVideo) {
-        setStatus('Copying file…');
-        await FileSystem.copyAsync({ from: videoUri, to: tmpUri });
+        sourceUri = videoUri;
       } else {
         await trimAndConcat(videoUri, keptRanges, tmpUri, setStatus);
+        sourceUri = tmpUri;
+        trimmedTmp = true;
       }
 
       const outputUri = `${outputDir}edited_${stamp}.mp4`;
 
       // Probe video size; skip upscaling if target >= source
-      const { width: vw, height: vh } = await probeVideoSize(tmpUri);
+      const { width: vw, height: vh } = await probeVideoSize(sourceUri);
       const effectiveTargetH =
         targetHeight && vh > targetHeight ? targetHeight : null;
 
       if (subtitleSegments && subtitleSegments.length > 0 && srt) {
-        // Render PNGs in the hidden WebView at the source resolution; the
-        // overlay pipeline scales to target height as the final step.
-        const pngResults = await renderSubtitlePngs(subtitleSegments, vw, vh);
+        // Render PNGs at the dimensions the overlays will actually run at.
+        // The burn pipeline scales the source FIRST when targetHeight is set,
+        // so overlays operate on smaller frames — but the PNG dimensions
+        // must match those scaled frames or text will be wrong-size.
+        const renderH = effectiveTargetH ?? vh;
+        const renderWraw = Math.round((vw * renderH) / vh);
+        const renderW = renderWraw - (renderWraw % 2); // keep even for yuv420p
+        const pngResults = await renderSubtitlePngs(subtitleSegments, renderW, renderH);
+
+        // Separate the gap-filler blank PNG (id -1) from the real subtitles
+        const blank = pngResults.find(r => r.id === -1);
+        if (!blank) throw new Error('Subtitle renderer did not produce a blank PNG');
 
         const segMap = new Map(subtitleSegments.map(s => [s.id, s]));
         const overlayItems: Array<{ id: number; start: number; end: number; pngBase64: string }> = [];
         for (const r of pngResults) {
+          if (r.id === -1) continue;
           const seg = segMap.get(r.id);
           if (seg) overlayItems.push({ id: r.id, start: seg.start, end: seg.end, pngBase64: r.png });
         }
 
-        await burnSubtitlesWithOverlay(tmpUri, overlayItems, outputUri, setStatus, effectiveTargetH);
-        await FileSystem.deleteAsync(tmpUri, { idempotent: true });
+        await burnSubtitlesWithOverlay(
+          sourceUri,
+          overlayItems,
+          blank.png,
+          outputUri,
+          setStatus,
+          effectiveTargetH,
+          duration,
+        );
       } else if (effectiveTargetH) {
         // No subtitles, but resolution change requested — transcode
-        await transcodeVideo(tmpUri, outputUri, effectiveTargetH, setStatus);
-        await FileSystem.deleteAsync(tmpUri, { idempotent: true });
-      } else {
-        // No subtitles, original resolution — rename tmp to final
+        await transcodeVideo(sourceUri, outputUri, effectiveTargetH, setStatus);
+      } else if (trimmedTmp) {
+        // No subtitles, original resolution, but we already trimmed — rename tmp to final
         await FileSystem.moveAsync({ from: tmpUri, to: outputUri });
+        trimmedTmp = false;
+      } else {
+        // Full video, original resolution, no subtitles — straight copy
+        setStatus('Copying file…');
+        await FileSystem.copyAsync({ from: videoUri, to: outputUri });
+      }
+
+      if (trimmedTmp) {
+        await FileSystem.deleteAsync(tmpUri, { idempotent: true });
       }
 
       // Pre-cache duration so the Downloads scan never probes this file

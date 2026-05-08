@@ -83,12 +83,23 @@ export function buildSubtitleRenderHtml(
     return c.toDataURL('image/png').split(',')[1];
   }
 
+  function renderBlank() {
+    var c = document.createElement('canvas');
+    c.width = W; c.height = SH;
+    var ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, W, SH);
+    return c.toDataURL('image/png').split(',')[1];
+  }
+
   whenReady(function(){
     try {
+      var total = segs.length + 1;
       for (var i = 0; i < segs.length; i++) {
         var png = renderOne(segs[i]);
-        post({ type: 'png', id: segs[i].id, png: png, index: i, total: segs.length });
+        post({ type: 'png', id: segs[i].id, png: png, index: i, total: total });
       }
+      // Final blank PNG (id -1) used to fill gaps between subtitles
+      post({ type: 'png', id: -1, png: renderBlank(), index: segs.length, total: total });
       post({ type: 'done' });
     } catch (e) {
       post({ type: 'error', message: (e && e.message) ? e.message : String(e) });

@@ -16,6 +16,40 @@ async function runFFmpeg(command: string): Promise<void> {
   }
 }
 
+// MediaCodec (Android hardware H.264) is dramatically faster than libx264 —
+// often 5-10× on a flagship phone. Picking a sane bitrate per resolution
+// keeps file sizes reasonable since MediaCodec is bitrate-driven, not CRF.
+function bitrateForHeight(h?: number | null): string {
+  if (!h) return '5000k';
+  if (h <= 480) return '1500k';
+  if (h <= 720) return '3000k';
+  if (h <= 1080) return '5000k';
+  return '8000k';
+}
+
+const HW_VENC = (h?: number | null) =>
+  `-c:v h264_mediacodec -b:v ${bitrateForHeight(h)}`;
+
+const SW_VENC =
+  `-c:v libx264 -preset ultrafast -tune zerolatency -crf 26 -pix_fmt yuv420p -threads 0`;
+
+// Try the hardware encoder first; fall back to software if MediaCodec rejects
+// the input (some devices have buggy or restrictive implementations).
+async function runWithEncoderFallback(
+  build: (encoderArgs: string) => string,
+  outputUri: string,
+  targetHeight?: number | null,
+): Promise<void> {
+  try {
+    await runFFmpeg(build(HW_VENC(targetHeight)));
+    return;
+  } catch {
+    // Clean any partial output before retrying with software encoder
+    await FileSystem.deleteAsync(outputUri, { idempotent: true });
+  }
+  await runFFmpeg(build(SW_VENC));
+}
+
 export async function trimAndConcat(
   inputUri: string,
   keptRanges: { start: number; end: number }[],
@@ -34,11 +68,11 @@ export async function trimAndConcat(
       const { start, end } = keptRanges[i];
       const segPath = `${tmpDir}seg_${i}.mp4`;
       onProgress?.(`Trimming segment ${i + 1}/${keptRanges.length}…`);
-      await runFFmpeg(
+      const build = (enc: string) =>
         `-ss ${start} -i "${toPath(inputUri)}" -t ${end - start}` +
-          ` -c:v libx264 -preset ultrafast -c:a aac -avoid_negative_ts make_zero` +
-          ` "${toPath(segPath)}" -y`,
-      );
+        ` ${enc} -c:a aac -avoid_negative_ts make_zero` +
+        ` "${toPath(segPath)}" -y`;
+      await runWithEncoderFallback(build, segPath);
       segmentPaths.push(segPath);
     }
 
@@ -92,21 +126,26 @@ export async function transcodeVideo(
   onProgress?: (msg: string) => void,
 ): Promise<void> {
   onProgress?.(`Encoding ${targetHeight}p…`);
-  await runFFmpeg(
+  // Hardware encoder first; software fallback. -c:a copy passes audio through
+  // unchanged so we only spend CPU on the video.
+  const build = (enc: string) =>
     `-i "${toPath(inputUri)}" -vf scale=-2:${targetHeight}` +
-    ` -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac` +
-    ` "${toPath(outputUri)}" -y`,
-  );
+    ` ${enc} -c:a copy -movflags +faststart` +
+    ` "${toPath(outputUri)}" -y`;
+  await runWithEncoderFallback(build, outputUri, targetHeight);
 }
 
 export async function burnSubtitlesWithOverlay(
   videoUri: string,
   subtitlePngs: Array<{ id: number; start: number; end: number; pngBase64: string }>,
+  blankPngBase64: string,
   outputUri: string,
   onProgress?: (msg: string) => void,
   targetHeight?: number | null,
+  videoDuration?: number,
 ): Promise<void> {
-  if (subtitlePngs.length === 0) {
+  const realPngs = subtitlePngs.filter(p => p.id !== -1);
+  if (realPngs.length === 0) {
     if (targetHeight) {
       await transcodeVideo(videoUri, outputUri, targetHeight, onProgress);
     } else {
@@ -120,54 +159,64 @@ export async function burnSubtitlesWithOverlay(
 
   try {
     onProgress?.('Saving subtitle images…');
-    // Write each PNG to a temp file
-    const pngPaths: Array<{ path: string; start: number; end: number }> = [];
-    for (const item of subtitlePngs) {
+
+    // Write subtitle PNGs and one transparent gap-filler PNG
+    const blankPath = `${tmpDir}blank.png`;
+    await FileSystem.writeAsStringAsync(blankPath, blankPngBase64, {
+      encoding: EncodingType.Base64,
+    });
+
+    const items: Array<{ path: string; start: number; end: number }> = [];
+    for (const item of realPngs) {
       const p = `${tmpDir}sub_${item.id}.png`;
       await FileSystem.writeAsStringAsync(p, item.pngBase64, { encoding: EncodingType.Base64 });
-      pngPaths.push({ path: p, start: item.start, end: item.end });
+      items.push({ path: p, start: item.start, end: item.end });
     }
+    items.sort((a, b) => a.start - b.start);
+
+    // Build a concat-demuxer playlist: subtitle PNGs and blank fillers in
+    // chronological order. This collapses 80+ chained overlay filters into a
+    // SINGLE overlay stage, which is the real speed bottleneck on Android —
+    // MediaCodec encoding is fast, but each per-frame overlay/enable check
+    // is single-threaded CPU work.
+    let list = '';
+    let cursor = 0;
+    const minGap = 0.04; // ignore sub-frame gaps
+    for (const it of items) {
+      if (it.start > cursor + minGap) {
+        list += `file '${toPath(blankPath)}'\nduration ${(it.start - cursor).toFixed(3)}\n`;
+      }
+      const dur = Math.max(0.04, it.end - it.start);
+      list += `file '${toPath(it.path)}'\nduration ${dur.toFixed(3)}\n`;
+      cursor = it.end;
+    }
+    // Pad to video duration so the subtitle stream doesn't end early
+    const padTo = videoDuration && videoDuration > cursor ? videoDuration : cursor + 60;
+    list += `file '${toPath(blankPath)}'\nduration ${(padTo - cursor).toFixed(3)}\n`;
+    // concat demuxer requires the last entry repeated without a duration line
+    list += `file '${toPath(blankPath)}'\n`;
+
+    const listPath = `${tmpDir}sublist.txt`;
+    await FileSystem.writeAsStringAsync(listPath, list);
 
     onProgress?.('Burning subtitles…');
 
-    // Build FFmpeg command with chained overlay filters.
-    // Each PNG is a separate input with -loop 1 so it stays available through the
-    // entire video — without this the PNG is a single-frame stream that ends
-    // almost immediately, truncating the output to ~100ms.
-    // enable='between(t,start,end)' makes each PNG visible only during its segment.
-    // -shortest stops the output at the source video's duration since the looped
-    // PNG streams are infinite.
-    const inputs = pngPaths.map(p => `-loop 1 -i "${toPath(p.path)}"`).join(' ');
-    const N = pngPaths.length;
-
-    // Escape commas inside between(t,a,b) with backslashes — single-quoting
-    // the expression is unreliable when the command goes through FFmpegKit's
-    // tokenizer, but `\,` works in every parsing layer.
-    // If targetHeight is set, the final overlay output is named [v_N] and a
-    // trailing scale filter produces [vout]; otherwise the last overlay is
-    // [vout] directly.
+    // Scale source first so overlay operates on smaller frames when the user
+    // picked a lower resolution. The PNGs were rendered at the same target
+    // dimensions by the caller, so the overlay aligns 1:1.
     const willScale = !!targetHeight;
-    let filterChain = '';
-    for (let i = 0; i < N; i++) {
-      const inLabel = i === 0 ? '[0:v]' : `[v${i}]`;
-      const pngLabel = `[${i + 1}:v]`;
-      const isLast = i === N - 1;
-      const outLabel = (isLast && !willScale) ? '[vout]' : `[v${i + 1}]`;
-      const { start, end } = pngPaths[i];
-      filterChain +=
-        `${inLabel}${pngLabel}overlay=x=(W-w)/2:y=H-h-24:enable=between(t\\,${start.toFixed(3)}\\,${end.toFixed(3)})${outLabel}`;
-      if (!isLast) filterChain += ';';
-    }
-    if (willScale) {
-      filterChain += `;[v${N}]scale=-2:${targetHeight}[vout]`;
-    }
+    const filter = willScale
+      ? `[0:v]scale=-2:${targetHeight}[vs];[vs][1:v]overlay=x=(W-w)/2:y=H-h-24[vout]`
+      : `[0:v][1:v]overlay=x=(W-w)/2:y=H-h-24[vout]`;
 
-    await runFFmpeg(
-      `-i "${toPath(videoUri)}" ${inputs}` +
-      ` -filter_complex "${filterChain}"` +
-      ` -map "[vout]" -map 0:a? -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac` +
-      ` -shortest "${toPath(outputUri)}" -y`,
-    );
+    const build = (enc: string) =>
+      `-i "${toPath(videoUri)}"` +
+      ` -f concat -safe 0 -i "${toPath(listPath)}"` +
+      ` -filter_complex "${filter}"` +
+      ` -map "[vout]" -map 0:a?` +
+      ` ${enc} -c:a copy` +
+      ` -shortest -movflags +faststart "${toPath(outputUri)}" -y`;
+    await runWithEncoderFallback(build, outputUri, targetHeight);
   } finally {
     await FileSystem.deleteAsync(tmpDir, { idempotent: true });
   }
