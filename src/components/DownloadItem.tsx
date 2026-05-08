@@ -269,15 +269,13 @@ const DownloadItem = memo(function DownloadItem({
         )}
       </View>
 
-      {labels && labels.length > 0 && (
-        <View style={styles.labelRow}>
-          {labels.map(label => (
-            <View key={label} style={styles.labelPill}>
-              <Text style={styles.labelPillText}>{label}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      <View style={styles.labelRow}>
+        {labels?.map(label => (
+          <View key={label} style={styles.labelPill}>
+            <Text style={styles.labelPillText}>{label}</Text>
+          </View>
+        ))}
+      </View>
 
       <Modal
         visible={actionsVisible}
@@ -733,9 +731,9 @@ const styles = StyleSheet.create({
   },
   labelRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 4,
     marginTop: 5,
+    height: 16
   },
   labelPill: {
     backgroundColor: "#E3F2FD",
