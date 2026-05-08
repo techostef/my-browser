@@ -38,14 +38,14 @@ interface DownloadContextValue extends DownloadState {
   pauseDownload: (id: string) => void;
   resumeDownload: (id: string) => void;
   cancelDownload: (id: string) => void;
-  renameDownload: (id: string, newFileName: string) => Promise<void>;
+  renameDownload: (id: string, newFileName: string) => Promise<string | null>;
   createFolder: (folderName: string) => Promise<void>;
   renameFolder: (folderName: string, newFolderName: string) => Promise<void>;
   deleteFolder: (folderName: string, force?: boolean) => Promise<void>;
   scanDeviceDownloadFolder: (folderPath?: string) => Promise<void>;
-  moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<void>;
-  bulkMoveDownloadsToFolder: (ids: string[], folderName?: string | null) => Promise<void>;
-  removeDownload: (id: string) => void;
+  moveDownloadToFolder: (id: string, folderName?: string | null) => Promise<string | null>;
+  bulkMoveDownloadsToFolder: (ids: string[], folderName?: string | null) => Promise<Record<string, string>>;
+  removeDownload: (id: string) => Promise<string | null>;
   deleteFromTrash: (id: string) => void;
   prefetchDeviceFileSizes: (ids: string[]) => void;
 }
@@ -493,15 +493,16 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshDownloads]);
 
-  const bulkMoveDownloadsToFolder = useCallback(async (ids: string[], folderName?: string | null) => {
+  const bulkMoveDownloadsToFolder = useCallback(async (ids: string[], folderName?: string | null): Promise<Record<string, string>> => {
     const tasks = ids
       .map(id => downloadsRef.current.find(d => d.id === id))
       .filter((t): t is DownloadTask => !!t && !!t.filePath && t.status === 'completed');
 
-    if (tasks.length === 0) { return; }
+    if (tasks.length === 0) { return {}; }
 
     const CONCURRENCY = 4;
     const errors: string[] = [];
+    const idMapping: Record<string, string> = {};
 
     const runOne = async (task: DownloadTask) => {
       try {
@@ -510,7 +511,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
           await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
         } else {
-          await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+          const newPath = await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+          idMapping[task.id] = `file_${newPath}`;
         }
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
@@ -538,27 +540,31 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     if (errors.length > 0) {
       throw new Error(`${errors.length} of ${tasks.length} files failed: ${errors[0]}`);
     }
+    return idMapping;
   }, [refreshDownloads, scanDeviceDownloadFolder]);
 
-  const moveDownloadToFolder = useCallback(async (id: string, folderName?: string | null) => {
+  const moveDownloadToFolder = useCallback(async (id: string, folderName?: string | null): Promise<string | null> => {
     const task = downloadsRef.current.find(d => d.id === id);
     if (!task?.filePath || task.status !== 'completed') {
-      return;
+      return null;
     }
 
     try {
+      let newId: string | null = null;
       if (task.source === 'device') {
         await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName);
       } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
         await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
       } else {
-        await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+        const newPath = await downloadManager.movePrivateFileToFolder(task.filePath, folderName);
+        newId = `file_${newPath}`;
       }
 
       await Promise.all([
         refreshDownloads(),
         scanDeviceDownloadFolder(),
       ]);
+      return newId;
     } catch (err) {
       console.warn('Move to folder failed:', err);
       throw err;
@@ -605,16 +611,18 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     downloadManager.cancelDownload(id);
   }, []);
 
-  const renameDownload = useCallback(async (id: string, newFileName: string) => {
+  const renameDownload = useCallback(async (id: string, newFileName: string): Promise<string | null> => {
     const task = downloadsRef.current.find(d => d.id === id);
     if (!task?.filePath || task.source === 'device') {
-      return;
+      return null;
     }
     try {
-      await downloadManager.renamePrivateFile(task.filePath, newFileName);
+      const newPath = await downloadManager.renamePrivateFile(task.filePath, newFileName);
       await refreshDownloads();
+      return `file_${newPath}`;
     } catch (err) {
       console.warn('Rename failed:', err);
+      return null;
     }
   }, [refreshDownloads]);
 
@@ -683,7 +691,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const removeDownload = useCallback((id: string) => {
+  const removeDownload = useCallback(async (id: string): Promise<string | null> => {
     const task = downloadsRef.current.find(d => d.id === id);
 
     if (task?.status === 'completed' && task.filePath && task.source !== 'device') {
@@ -693,18 +701,21 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           console.warn('Delete from trash failed:', err);
         });
       } else {
-        downloadManager.movePrivateFileToTrash(task.filePath)
-          .then(() => refreshDownloads())
-          .catch(err => {
-            console.warn('Move to trash failed:', err);
-          });
-        return;
+        try {
+          const trashPath = await downloadManager.movePrivateFileToTrash(task.filePath);
+          await refreshDownloads();
+          return `file_${trashPath}`;
+        } catch (err) {
+          console.warn('Move to trash failed:', err);
+          return null;
+        }
       }
     } else {
       downloadManager.cancelDownload(id);
     }
 
     dispatchRef.current({ type: 'REMOVE_DOWNLOAD', payload: { id } });
+    return null;
   }, [refreshDownloads]);
 
   const deleteFromTrash = useCallback((id: string) => {

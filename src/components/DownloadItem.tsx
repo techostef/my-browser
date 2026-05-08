@@ -28,6 +28,8 @@ interface Props {
   isSelected?: boolean;
   onLongPress?: (task: DownloadTask) => void;
   onSelect?: (task: DownloadTask) => void;
+  labels?: string[];
+  onLabel?: (task: DownloadTask) => void;
 }
 
 const videoThumbnailCache = new Map<string, string>();
@@ -84,6 +86,8 @@ const DownloadItem = memo(function DownloadItem({
   isSelected = false,
   onLongPress,
   onSelect,
+  labels,
+  onLabel,
 }: Props) {
   const statusColor = getStatusColor(task.status);
   const isPlayableMedia =
@@ -265,6 +269,16 @@ const DownloadItem = memo(function DownloadItem({
         )}
       </View>
 
+      {labels && labels.length > 0 && (
+        <View style={styles.labelRow}>
+          {labels.map(label => (
+            <View key={label} style={styles.labelPill}>
+              <Text style={styles.labelPillText}>{label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <Modal
         visible={actionsVisible}
         transparent
@@ -352,6 +366,17 @@ const DownloadItem = memo(function DownloadItem({
                   }}
                 >
                   <Text style={styles.actionBtnText}>✏ Rename</Text>
+                </TouchableOpacity>
+              )}
+              {canManageCompletedFile && onLabel && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.labelBtn]}
+                  onPress={() => {
+                    onLabel(task);
+                    setActionsVisible(false);
+                  }}
+                >
+                  <Text style={styles.actionBtnText}>🏷 Label</Text>
                 </TouchableOpacity>
               )}
               {canManageCompletedFile && onRemove && (
@@ -705,5 +730,25 @@ const styles = StyleSheet.create({
   },
   infoError: {
     color: "#C62828",
+  },
+  labelRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 5,
+  },
+  labelPill: {
+    backgroundColor: "#E3F2FD",
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  labelPillText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#1565C0",
+  },
+  labelBtn: {
+    backgroundColor: "#FFF8E1",
   },
 });

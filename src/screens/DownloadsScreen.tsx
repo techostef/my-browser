@@ -70,15 +70,111 @@ export default function DownloadsScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoveModalVisible, setBulkMoveModalVisible] = useState(false);
   const [actionsDialogVisible, setActionsDialogVisible] = useState(false);
-  const [actionsPage, setActionsPage] = useState<'main' | 'sort' | 'filter'>('main');
+  const [actionsPage, setActionsPage] = useState<'main' | 'sort'>('main');
   const [sortKey, setSortKey] = useState<SortKey>('name_asc');
   const [filterType, setFilterType] = useState<FilterType>('all');
+  const [labelDefs, setLabelDefs] = useState<string[]>([]);
+  const [fileLabels, setFileLabels] = useState<Record<string, string[]>>({});
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [labelTaskTarget, setLabelTaskTarget] = useState<DownloadTask | null>(null);
+  const [manageLabelModalVisible, setManageLabelModalVisible] = useState(false);
+  const [manageLabelNewText, setManageLabelNewText] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem('@downloads_sort_key').then(val => {
       if (val) setSortKey(val as SortKey);
     });
   }, []);
+
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem('@label_definitions_v1'),
+      AsyncStorage.getItem('@file_labels_v1'),
+    ]).then(([defs, labels]) => {
+      if (defs) setLabelDefs(JSON.parse(defs));
+      if (labels) setFileLabels(JSON.parse(labels));
+    });
+  }, []);
+
+  const saveLabelDefs = useCallback((defs: string[]) => {
+    setLabelDefs(defs);
+    AsyncStorage.setItem('@label_definitions_v1', JSON.stringify(defs));
+  }, []);
+
+  const handleToggleFileLabel = useCallback((taskId: string, label: string) => {
+    setFileLabels(prev => {
+      const current = prev[taskId] || [];
+      const next = current.includes(label)
+        ? current.filter(l => l !== label)
+        : [...current, label];
+      const updated = { ...prev, [taskId]: next };
+      AsyncStorage.setItem('@file_labels_v1', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const handleAddLabelDef = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setLabelDefs(prev => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [...prev, trimmed];
+      AsyncStorage.setItem('@label_definitions_v1', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const handleDeleteLabelDef = useCallback((label: string) => {
+    setLabelDefs(prev => {
+      const next = prev.filter(l => l !== label);
+      AsyncStorage.setItem('@label_definitions_v1', JSON.stringify(next));
+      return next;
+    });
+    setFileLabels(prev => {
+      const updated: Record<string, string[]> = {};
+      for (const id of Object.keys(prev)) {
+        updated[id] = prev[id].filter(l => l !== label);
+      }
+      AsyncStorage.setItem('@file_labels_v1', JSON.stringify(updated));
+      return updated;
+    });
+    setLabelFilter(lf => lf === label ? null : lf);
+  }, []);
+
+  const handleLabelTask = useCallback((task: DownloadTask) => {
+    setLabelTaskTarget(task);
+  }, []);
+
+  const migrateLabels = useCallback((idMapping: Record<string, string>) => {
+    setFileLabels(prev => {
+      const updated = { ...prev };
+      let changed = false;
+      for (const [oldId, newId] of Object.entries(idMapping)) {
+        const labels = prev[oldId];
+        if (labels && labels.length > 0) {
+          delete updated[oldId];
+          updated[newId] = labels;
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      AsyncStorage.setItem('@file_labels_v1', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const cleanupLabels = useCallback((id: string) => {
+    setFileLabels(prev => {
+      if (!prev[id]) return prev;
+      const updated = { ...prev };
+      delete updated[id];
+      AsyncStorage.setItem('@file_labels_v1', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const fileLabelsRef = useRef(fileLabels);
+  fileLabelsRef.current = fileLabels;
 
   const applySortKey = useCallback((key: SortKey) => {
     setSortKey(key);
@@ -162,14 +258,18 @@ export default function DownloadsScreen() {
     if (!trimmed) {
       return;
     }
-    renameDownload(renameTask.id, trimmed)
+    const oldId = renameTask.id;
+    renameDownload(oldId, trimmed)
+      .then(newId => {
+        if (newId) migrateLabels({ [oldId]: newId });
+      })
       .catch(err => {
         console.warn('Rename failed:', err);
       })
       .finally(() => {
         closeRenameModal();
       });
-  }, [closeRenameModal, renameDownload, renameTask, renameText]);
+  }, [closeRenameModal, renameDownload, renameTask, renameText, migrateLabels]);
 
   const isSelectionMode = selectedIds.size > 0;
 
@@ -205,13 +305,21 @@ export default function DownloadsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            selectedIds.forEach(id => removeDownload(id));
+            const ids = Array.from(selectedIds);
             setSelectedIds(new Set());
+            Promise.all(ids.map(id => removeDownload(id))).then(results => {
+              const mapping: Record<string, string> = {};
+              for (let i = 0; i < ids.length; i++) {
+                const newId = results[i];
+                if (newId) mapping[ids[i]] = newId;
+              }
+              if (Object.keys(mapping).length > 0) migrateLabels(mapping);
+            });
           },
         },
       ],
     );
-  }, [removeDownload, selectedIds]);
+  }, [removeDownload, selectedIds, migrateLabels]);
 
   const handleBulkMoveRequest = useCallback(() => {
     setBulkMoveModalVisible(true);
@@ -227,13 +335,16 @@ export default function DownloadsScreen() {
     setSelectedIds(new Set());
     setMoveProgress({ total: ids.length, label: 'Moving files...' });
     bulkMoveDownloadsToFolder(ids, folderPath)
+      .then(idMapping => {
+        if (Object.keys(idMapping).length > 0) migrateLabels(idMapping);
+      })
       .catch(err => {
         Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
       })
       .finally(() => {
         setMoveProgress(null);
       });
-  }, [closeBulkMoveModal, bulkMoveDownloadsToFolder, selectedIds]);
+  }, [closeBulkMoveModal, bulkMoveDownloadsToFolder, selectedIds, migrateLabels]);
 
   const selectedTasks = useMemo(
     () => downloads.filter(t => selectedIds.has(t.id)),
@@ -263,13 +374,16 @@ export default function DownloadsScreen() {
     setSelectedIds(new Set());
     setMoveProgress({ total: ids.length, label: 'Moving to private folder...' });
     bulkMoveDownloadsToFolder(ids, folderPath ?? null)
+      .then(idMapping => {
+        if (Object.keys(idMapping).length > 0) migrateLabels(idMapping);
+      })
       .catch(err => {
         Alert.alert('Move error', err instanceof Error ? err.message : 'Unable to move some files');
       })
       .finally(() => {
         setMoveProgress(null);
       });
-  }, [closeBulkMoveToPrivateModal, bulkMoveDownloadsToFolder, selectedIds]);
+  }, [closeBulkMoveToPrivateModal, bulkMoveDownloadsToFolder, selectedIds, migrateLabels]);
 
   const isInTrash = currentFolderPath === TRASH_FOLDER_PATH ||
     currentFolderPath.startsWith(`${TRASH_FOLDER_PATH}/`);
@@ -280,10 +394,14 @@ export default function DownloadsScreen() {
       {
         text: 'Move to Trash',
         style: 'destructive',
-        onPress: () => removeDownload(id),
+        onPress: () => {
+          removeDownload(id).then(newId => {
+            if (newId) migrateLabels({ [id]: newId });
+          });
+        },
       },
     ]);
-  }, [removeDownload]);
+  }, [removeDownload, migrateLabels]);
 
   const handleDeletePermanently = useCallback((id: string) => {
     Alert.alert('Delete Permanently', 'This file will be deleted forever and cannot be recovered.', [
@@ -291,10 +409,13 @@ export default function DownloadsScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => deleteFromTrash(id),
+        onPress: () => {
+          deleteFromTrash(id);
+          cleanupLabels(id);
+        },
       },
     ]);
-  }, [deleteFromTrash]);
+  }, [deleteFromTrash, cleanupLabels]);
 
   const handleOpenMedia = useCallback((task: DownloadTask) => {
     if (task.status !== 'completed' || !task.filePath) {
@@ -505,11 +626,14 @@ export default function DownloadsScreen() {
     closeMoveInPrivateModal();
 
     moveDownloadToFolder(taskId, folderName)
+      .then(newId => {
+        if (newId) migrateLabels({ [taskId]: newId });
+      })
       .catch(err => {
         const message = err instanceof Error ? err.message : 'Unable to move file';
         Alert.alert('Move error', message);
       });
-  }, [closeMoveInPrivateModal, moveDownloadToFolder, moveTaskInPrivate]);
+  }, [closeMoveInPrivateModal, moveDownloadToFolder, moveTaskInPrivate, migrateLabels]);
 
   const previewType = previewTask ? getMediaType(previewTask) : 'other';
   const privateFolderTreeOptions = useMemo<Array<{ path: string; name: string; depth: number }>>(
@@ -635,6 +759,7 @@ export default function DownloadsScreen() {
   const sortedFiles = useMemo(() => {
     const files = visibleDownloads
       .filter(task => filterType === 'all' || getMediaType(task) === filterType)
+      .filter(task => !labelFilter || (fileLabels[task.id] || []).includes(labelFilter))
       .map(task => ({ type: 'file' as const, task }));
     return files.slice().sort((a, b) => {
       switch (sortKey) {
@@ -662,7 +787,7 @@ export default function DownloadsScreen() {
           return 0;
       }
     });
-  }, [visibleDownloads, sortKey, filterType, getMediaType]);
+  }, [visibleDownloads, sortKey, filterType, getMediaType, labelFilter, fileLabels]);
 
   const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
   prefetchSizesRef.current = prefetchDeviceFileSizes;
@@ -723,6 +848,8 @@ export default function DownloadsScreen() {
           isSelected={selectedIdsRef.current.has(item.task.id)}
           onLongPress={handleEnterSelection}
           onSelect={handleToggleSelect}
+          labels={fileLabelsRef.current[item.task.id]}
+          onLabel={handleLabelTask}
         />
       </View>
     );
@@ -745,6 +872,7 @@ export default function DownloadsScreen() {
     handleToggleSelect,
     isInTrash,
     handleDeletePermanently,
+    handleLabelTask,
   ]);
 
   const visibleFileIds = useMemo(
@@ -833,6 +961,20 @@ export default function DownloadsScreen() {
                 style={[styles.filterChip, active && styles.filterChipActive]}
                 onPress={() => setFilterType(f)}>
                 <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{icon} {label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          {labelDefs.length > 0 && (
+            <View style={styles.filterChipDivider} />
+          )}
+          {labelDefs.map(lbl => {
+            const active = labelFilter === lbl;
+            return (
+              <TouchableOpacity
+                key={`lbl_${lbl}`}
+                style={[styles.filterChip, active && styles.filterChipLabelActive]}
+                onPress={() => setLabelFilter(active ? null : lbl)}>
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>🏷 {lbl}</Text>
               </TouchableOpacity>
             );
           })}
@@ -1076,6 +1218,12 @@ export default function DownloadsScreen() {
                   <Text style={styles.actionsDropdownLabel}>Sort</Text>
                   <Text style={styles.actionsDropdownChevron}>›</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionsDropdownRow}
+                  onPress={() => { setActionsDialogVisible(false); setActionsPage('main'); setManageLabelModalVisible(true); }}>
+                  <Text style={styles.actionsDropdownIcon}>🏷</Text>
+                  <Text style={styles.actionsDropdownLabel}>Manage labels</Text>
+                </TouchableOpacity>
               </>
             ) : (
               <>
@@ -1157,6 +1305,118 @@ export default function DownloadsScreen() {
                   <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Label picker modal */}
+      <Modal
+        visible={!!labelTaskTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLabelTaskTarget(null)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setLabelTaskTarget(null)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>🏷 Labels</Text>
+            {labelDefs.length === 0 && (
+              <Text style={styles.labelPickerEmpty}>No labels yet. Add one below.</Text>
+            )}
+            {labelDefs.map(lbl => {
+              const checked = (fileLabels[labelTaskTarget?.id ?? ''] || []).includes(lbl);
+              return (
+                <TouchableOpacity
+                  key={lbl}
+                  style={styles.labelPickerRow}
+                  onPress={() => handleToggleFileLabel(labelTaskTarget!.id, lbl)}>
+                  <View style={[styles.labelPickerCheck, checked && styles.labelPickerCheckActive]}>
+                    {checked && <Text style={styles.labelPickerCheckMark}>✓</Text>}
+                  </View>
+                  <Text style={styles.labelPickerName}>{lbl}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={styles.labelPickerAddRow}>
+              <TextInput
+                style={styles.labelPickerInput}
+                placeholder="New label..."
+                value={manageLabelNewText}
+                onChangeText={setManageLabelNewText}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  handleAddLabelDef(manageLabelNewText);
+                  setManageLabelNewText('');
+                }}
+              />
+              <TouchableOpacity
+                style={styles.labelPickerAddBtn}
+                onPress={() => {
+                  handleAddLabelDef(manageLabelNewText);
+                  setManageLabelNewText('');
+                }}>
+                <Text style={styles.labelPickerAddBtnText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalPrimaryBtn]} onPress={() => setLabelTaskTarget(null)}>
+                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Manage labels modal */}
+      <Modal
+        visible={manageLabelModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManageLabelModalVisible(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setManageLabelModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Manage Labels</Text>
+            {labelDefs.length === 0 && (
+              <Text style={styles.labelPickerEmpty}>No labels yet. Add one below.</Text>
+            )}
+            {labelDefs.map(lbl => (
+              <View key={lbl} style={styles.manageLabelRow}>
+                <Text style={styles.manageLabelName}>{lbl}</Text>
+                <TouchableOpacity
+                  style={styles.manageLabelDeleteBtn}
+                  onPress={() => handleDeleteLabelDef(lbl)}>
+                  <Text style={styles.manageLabelDeleteText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <View style={styles.labelPickerAddRow}>
+              <TextInput
+                style={styles.labelPickerInput}
+                placeholder="New label..."
+                value={manageLabelNewText}
+                onChangeText={setManageLabelNewText}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  handleAddLabelDef(manageLabelNewText);
+                  setManageLabelNewText('');
+                }}
+              />
+              <TouchableOpacity
+                style={styles.labelPickerAddBtn}
+                onPress={() => {
+                  handleAddLabelDef(manageLabelNewText);
+                  setManageLabelNewText('');
+                }}>
+                <Text style={styles.labelPickerAddBtnText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalPrimaryBtn]} onPress={() => setManageLabelModalVisible(false)}>
+                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>Done</Text>
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1554,6 +1814,15 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFF',
   },
+  filterChipLabelActive: {
+    backgroundColor: '#FF9800',
+  },
+  filterChipDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#DDD',
+    alignSelf: 'center',
+  },
   moveProgressBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -1582,5 +1851,93 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 6,
     textAlign: 'center',
+  },
+  labelPickerEmpty: {
+    fontSize: 13,
+    color: '#999',
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  labelPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+  },
+  labelPickerCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#1A73E8',
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelPickerCheckActive: {
+    backgroundColor: '#1A73E8',
+  },
+  labelPickerCheckMark: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  labelPickerName: {
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '600',
+  },
+  labelPickerAddRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  labelPickerInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 13,
+    color: '#222',
+  },
+  labelPickerAddBtn: {
+    backgroundColor: '#1A73E8',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  labelPickerAddBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  manageLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 8,
+  },
+  manageLabelName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '600',
+  },
+  manageLabelDeleteBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFEBEE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manageLabelDeleteText: {
+    color: '#C62828',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
