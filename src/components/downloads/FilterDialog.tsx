@@ -14,11 +14,11 @@ const TYPE_OPTIONS: { value: FilterType; label: string; icon: string }[] = [
 type Props = {
   visible: boolean;
   filterType: FilterType;
-  labelFilter: string | null;
+  labelFilter: string[];
   labelDefs: string[];
   isFilterActive: boolean;
   onFilterType: (f: FilterType) => void;
-  onLabelFilter: (l: string | null) => void;
+  onLabelFilter: (labels: string[]) => void;
   onClose: () => void;
   onClear: () => void;
 };
@@ -70,12 +70,18 @@ export default function FilterDialog({
               <Text style={styles.section}>LABELS</Text>
               <View style={styles.chips}>
                 {labelDefs.map((lbl) => {
-                  const active = labelFilter === lbl;
+                  const active = labelFilter.includes(lbl);
                   return (
                     <TouchableOpacity
                       key={lbl}
                       style={[styles.chip, active && styles.chipLabelActive]}
-                      onPress={() => onLabelFilter(active ? null : lbl)}
+                      onPress={() =>
+                        onLabelFilter(
+                          active
+                            ? labelFilter.filter((l) => l !== lbl)
+                            : [...labelFilter, lbl],
+                        )
+                      }
                     >
                       <Text
                         style={[styles.chipText, active && styles.chipTextActive]}

@@ -81,7 +81,7 @@ export default function DownloadsScreen() {
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [labelDefs, setLabelDefs] = useState<string[]>([]);
   const [fileLabels, setFileLabels] = useState<Record<string, string[]>>({});
-  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
   const [labelTaskTarget, setLabelTaskTarget] = useState<DownloadTask | null>(null);
   const [manageLabelModalVisible, setManageLabelModalVisible] = useState(false);
   const [manageLabelNewText, setManageLabelNewText] = useState("");
@@ -160,7 +160,7 @@ export default function DownloadsScreen() {
       AsyncStorage.setItem("@file_labels_v1", JSON.stringify(updated));
       return updated;
     });
-    setLabelFilter((lf) => (lf === label ? null : lf));
+    setLabelFilter((lf) => lf.filter((l) => l !== label));
   }, []);
 
   const migrateLabels = useCallback((idMapping: Record<string, string>) => {
@@ -684,7 +684,7 @@ export default function DownloadsScreen() {
   const sortedFiles = useMemo(() => {
     const files = visibleDownloads
       .filter((task) => filterType === "all" || getMediaType(task) === filterType)
-      .filter((task) => !labelFilter || (fileLabels[task.id] || []).includes(labelFilter))
+      .filter((task) => labelFilter.length === 0 || labelFilter.some((lbl) => (fileLabels[task.id] || []).includes(lbl)))
       .map((task) => ({ type: "file" as const, task }));
 
     return files.slice().sort((a, b) => {
@@ -724,10 +724,11 @@ export default function DownloadsScreen() {
       const icon = filterType === "video" ? "🎬" : filterType === "audio" ? "🎵" : filterType === "image" ? "🖼️" : "📄";
       parts.push(`${icon} ${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`);
     }
-    if (labelFilter) parts.push(`🏷 ${labelFilter}`);
+    if (labelFilter.length === 1) parts.push(`🏷 ${labelFilter[0]}`);
+    else if (labelFilter.length > 1) parts.push(`🏷 ${labelFilter.length} labels`);
     return parts.length > 0 ? parts.join(" · ") : "All";
   }, [filterType, labelFilter]);
-  const isFilterActive = filterType !== "all" || !!labelFilter;
+  const isFilterActive = filterType !== "all" || labelFilter.length > 0;
 
   // ── viewability (device file size prefetch) ────────────────────────────────
   const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 1 });
@@ -852,7 +853,7 @@ export default function DownloadsScreen() {
           filterSummary={filterSummary}
           isFilterActive={isFilterActive}
           onOpenFilter={() => setFilterDialogVisible(true)}
-          onClear={() => { setFilterType("all"); setLabelFilter(null); }}
+          onClear={() => { setFilterType("all"); setLabelFilter([]); }}
         />
       )}
 
@@ -975,7 +976,7 @@ export default function DownloadsScreen() {
         onFilterType={setFilterType}
         onLabelFilter={setLabelFilter}
         onClose={() => setFilterDialogVisible(false)}
-        onClear={() => { setFilterType("all"); setLabelFilter(null); }}
+        onClear={() => { setFilterType("all"); setLabelFilter([]); }}
       />
 
       <LabelPickerModal
