@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,179 @@ const PX_PER_SEC = 80;
 const CHIP_H = 36;
 const CHIP_ROW_H = 52;
 
+const CHIP_RENDER_BUFFER = 300;
+
+interface ChipRowHandle {
+  scrollTo: (x: number, animated?: boolean) => void;
+}
+
+interface ChipRowProps {
+  subtitleSegments: SubtitleSegment[];
+  activeSubtitleId: number | null;
+  editingId: number | null;
+  chipContentW: number;
+  onChipPress: (seg: SubtitleSegment) => void;
+}
+
+const SubtitleChipRow = React.memo(
+  React.forwardRef<ChipRowHandle, ChipRowProps>(
+    ({ subtitleSegments, activeSubtitleId, editingId, chipContentW, onChipPress }, ref) => {
+      const scrollViewRef = useRef<ScrollView>(null);
+      const [scrollX, setScrollX] = useState(0);
+
+      useImperativeHandle(ref, () => ({
+        scrollTo: (x: number, animated = false) => {
+          scrollViewRef.current?.scrollTo({ x, animated });
+        },
+      }));
+
+      const visibleChips = useMemo(() => {
+        const l = scrollX - CHIP_RENDER_BUFFER;
+        const r = scrollX + SCREEN_W + CHIP_RENDER_BUFFER;
+        return subtitleSegments.filter(
+          seg => seg.end * PX_PER_SEC >= l && seg.start * PX_PER_SEC <= r,
+        );
+      }, [subtitleSegments, scrollX]);
+
+      return (
+        <View style={chipRowStyles.wrapper}>
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ paddingHorizontal: SCREEN_W / 2 }}
+            onScroll={e => setScrollX(e.nativeEvent.contentOffset.x)}
+          >
+            <View style={{ width: chipContentW, height: CHIP_ROW_H, position: 'relative' }}>
+              {visibleChips.map(seg => {
+                const left = seg.start * PX_PER_SEC;
+                const chipWidth = Math.max((seg.end - seg.start) * PX_PER_SEC - 2, 28);
+                return (
+                  <TouchableOpacity
+                    key={seg.id}
+                    onPress={() => onChipPress(seg)}
+                    activeOpacity={0.75}
+                    style={[
+                      chipRowStyles.chip,
+                      { left, width: chipWidth },
+                      activeSubtitleId === seg.id && chipRowStyles.chipActive,
+                      editingId === seg.id && chipRowStyles.chipSelected,
+                    ]}
+                  >
+                    <Text style={chipRowStyles.chipText} numberOfLines={1}>
+                      {seg.text || '…'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+      );
+    },
+  ),
+);
+
+const chipRowStyles = StyleSheet.create({
+  wrapper: {
+    height: CHIP_ROW_H,
+    backgroundColor: '#111',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#222',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#222',
+  },
+  chip: {
+    position: 'absolute',
+    top: (CHIP_ROW_H - CHIP_H) / 2,
+    height: CHIP_H,
+    backgroundColor: '#4a3f28',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#6b5a38',
+  },
+  chipActive: {
+    backgroundColor: '#5c4e32',
+    borderColor: '#c89b4e',
+  },
+  chipSelected: {
+    backgroundColor: '#2a2060',
+    borderColor: '#6c63ff',
+  },
+  chipText: {
+    color: '#f0d9a0',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+});
+
+interface VideoWithSubtitleProps {
+  videoUri: string;
+  subtitleText: string | null;
+  onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+}
+
+const VideoWithSubtitle = React.memo(
+  React.forwardRef<Video, VideoWithSubtitleProps>(
+    ({ videoUri, subtitleText, onPlaybackStatusUpdate }, ref) => (
+      <View style={videoStyles.container}>
+        <Video
+          ref={ref}
+          source={{ uri: videoUri }}
+          style={videoStyles.video}
+          resizeMode={ResizeMode.CONTAIN}
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          shouldPlay={false}
+          isLooping={false}
+          useNativeControls={false}
+        />
+        {subtitleText ? (
+          <View style={videoStyles.subtitleOverlay} pointerEvents="none">
+            <Text style={videoStyles.subtitleText}>{subtitleText}</Text>
+          </View>
+        ) : null}
+      </View>
+    ),
+  ),
+);
+
+const videoStyles = StyleSheet.create({
+  container: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  subtitleOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  subtitleText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+});
+
 function fmtCompact(secs: number): string {
   const safe = Math.max(0, secs);
   const m = Math.floor(safe / 60);
@@ -60,7 +233,7 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
   const [sessionRestored, setSessionRestored] = useState(false);
   const sessionReady = useRef(false);
-  const subtitleScrollRef = useRef<ScrollView>(null);
+  const chipRowRef = useRef<ChipRowHandle>(null);
   const lastScrolledTime = useRef(-1);
 
   const durationRef = useRef(paramDuration > 0 ? paramDuration : 0);
@@ -149,7 +322,9 @@ export default function TrimScreen({ navigation, route }: Props) {
     }
 
     const posSecs = (status.positionMillis ?? 0) / 1000;
-    setCurrentTime(posSecs);
+    if (status.isPlaying) {
+      setCurrentTime(posSecs);
+    }
     setIsPlaying(status.isPlaying ?? false);
 
     // During playback: skip deleted segments, stop at end of last kept segment
@@ -225,6 +400,9 @@ export default function TrimScreen({ navigation, route }: Props) {
   // ─── Seek from timeline ─────────────────────────────────────────────────────
 
   const handleSeek = useCallback(async (seconds: number) => {
+    setCurrentTime(seconds);
+    chipRowRef.current?.scrollTo(seconds * PX_PER_SEC, false);
+    lastScrolledTime.current = seconds;
     await videoRef.current?.setPositionAsync(seconds * 1000);
   }, []);
 
@@ -294,19 +472,17 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (subtitleSegments.length === 0) return;
-    const threshold = isPlaying ? 0.25 : 0.05;
-    if (Math.abs(currentTime - lastScrolledTime.current) < threshold) return;
+    if (Math.abs(currentTime - lastScrolledTime.current) < 0.05) return;
     lastScrolledTime.current = currentTime;
-    subtitleScrollRef.current?.scrollTo({ x: currentTime * PX_PER_SEC, animated: !isPlaying });
-  }, [currentTime, isPlaying, subtitleSegments.length]);
+    chipRowRef.current?.scrollTo(currentTime * PX_PER_SEC, false);
+  }, [currentTime, subtitleSegments.length]);
 
   const handleChipPress = useCallback(async (seg: SubtitleSegment) => {
     setEditingId(seg.id);
     setEditDraft(seg.text);
     await videoRef.current?.pauseAsync();
     await videoRef.current?.setPositionAsync(seg.start * 1000);
-    const targetX = seg.start * PX_PER_SEC;
-    subtitleScrollRef.current?.scrollTo({ x: targetX, animated: true });
+    chipRowRef.current?.scrollTo(seg.start * PX_PER_SEC, true);
   }, []);
 
   const handleEditDone = useCallback(() => {
@@ -407,24 +583,13 @@ export default function TrimScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      {/* ── Video Preview ── */}
-      <View style={styles.videoContainer}>
-        <Video
-          ref={videoRef}
-          source={{ uri: videoUri }}
-          style={styles.video}
-          resizeMode={ResizeMode.CONTAIN}
-          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          shouldPlay={false}
-          isLooping={false}
-          useNativeControls={false}
-        />
-        {currentSubtitle && (
-          <View style={styles.subtitleOverlay} pointerEvents="none">
-            <Text style={styles.subtitleText}>{currentSubtitle.text}</Text>
-          </View>
-        )}
-      </View>
+      {/* ── Video + subtitle overlay ── */}
+      <VideoWithSubtitle
+        ref={videoRef}
+        videoUri={videoUri}
+        subtitleText={currentSubtitle?.text ?? null}
+        onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+      />
 
       {/* ── Controls bar ── */}
       <View style={styles.controlsBar}>
@@ -463,42 +628,14 @@ export default function TrimScreen({ navigation, route }: Props) {
         />
 
         {subtitleSegments.length > 0 && (
-          <View style={styles.chipRowWrapper}>
-            <ScrollView
-              ref={subtitleScrollRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipScroll}
-              contentContainerStyle={[styles.chipScrollContent, { paddingHorizontal: SCREEN_W / 2 }]}
-              scrollEventThrottle={16}
-            >
-              <View style={{ width: chipContentW, height: CHIP_ROW_H, position: 'relative' }}>
-              {subtitleSegments.map(seg => {
-                const left = seg.start * PX_PER_SEC;
-                const chipWidth = Math.max((seg.end - seg.start) * PX_PER_SEC - 2, 28);
-                const isActive = currentSubtitle?.id === seg.id;
-                const isSelected = editingId === seg.id;
-                return (
-                  <TouchableOpacity
-                    key={seg.id}
-                    onPress={() => handleChipPress(seg)}
-                    activeOpacity={0.75}
-                    style={[
-                      styles.chip,
-                      { left, width: chipWidth },
-                      isActive && styles.chipActive,
-                      isSelected && styles.chipSelected,
-                    ]}
-                  >
-                    <Text style={styles.chipText} numberOfLines={1}>
-                      {seg.text || '…'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-              </View>
-            </ScrollView>
-          </View>
+          <SubtitleChipRow
+            ref={chipRowRef}
+            subtitleSegments={subtitleSegments}
+            activeSubtitleId={currentSubtitle?.id ?? null}
+            editingId={editingId}
+            chipContentW={chipContentW}
+            onChipPress={handleChipPress}
+          />
         )}
 
         <View style={styles.extendedLine} pointerEvents="none" />
@@ -627,35 +764,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0d0d0d',
   },
-  videoContainer: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000',
-  },
-  video: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000',
-  },
-  subtitleOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    left: 12,
-    right: 12,
-    alignItems: 'center',
-  },
-  subtitleText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-
   // Controls bar
   controlsBar: {
     flexDirection: 'row',
@@ -803,46 +911,6 @@ const styles = StyleSheet.create({
     width: 2,
     backgroundColor: '#fff',
     zIndex: 10,
-  },
-
-  // Subtitle chip row
-  chipRowWrapper: {
-    height: CHIP_ROW_H,
-    backgroundColor: '#111',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#222',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#222',
-  },
-  chipScroll: {
-    flex: 1,
-  },
-  chipScrollContent: {
-    height: CHIP_ROW_H,
-  },
-  chip: {
-    position: 'absolute',
-    top: (CHIP_ROW_H - CHIP_H) / 2,
-    height: CHIP_H,
-    backgroundColor: '#4a3f28',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#6b5a38',
-  },
-  chipActive: {
-    backgroundColor: '#5c4e32',
-    borderColor: '#c89b4e',
-  },
-  chipSelected: {
-    backgroundColor: '#2a2060',
-    borderColor: '#6c63ff',
-  },
-  chipText: {
-    color: '#f0d9a0',
-    fontSize: 12,
-    fontWeight: '500',
   },
 
   // Inline edit bar
