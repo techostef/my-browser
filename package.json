@@ -9,11 +9,13 @@
     "start": "expo start",
     "web": "expo start --web",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",
     "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-cookies/cookies": "^6.2.1",
     "@react-navigation/bottom-tabs": "^6.5.20",
     "@react-navigation/native": "^6.1.18",
     "@wokcito/ffmpeg-kit-react-native": "^6.1.2",
@@ -41,6 +43,7 @@
     "@react-native/typescript-config": "0.74.87",
     "@types/react": "^18.2.6",
     "babel-preset-expo": "^11.0.0",
+    "patch-package": "^8.0.1",
     "typescript": "5.0.4"
   },
   "engines": {

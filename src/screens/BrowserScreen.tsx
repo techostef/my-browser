@@ -23,6 +23,7 @@ import {
 } from '../store/tabStore';
 import { DetectedVideo, HlsVariant } from '../types';
 import Browser from '@/components/Browser';
+import CookieManager from '@react-native-cookies/cookies';
 
 // Injected into the browser WebView when the user taps Preview on a stream.
 // Posts the currentTime of the most-advanced playing video element.
@@ -957,25 +958,163 @@ function WebViewListInner({
 }: WebViewListProps) {
   const tabs = useTabList();
   const activeTabId = useActiveTabId();
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
+  // True once cookies have been saved + cleared and incognito WebViews can mount.
+  const [incognitoReady, setIncognitoReady] = useState(false);
+  // True while regular tabs must stay unmounted (cookies cleared globally for incognito).
+  // Without this, switching to a regular tab during an incognito session would show
+  // the page running with no cookies — i.e. logged-out, even though session cookies
+  // were saved and will be restored when incognito closes.
+  const [regularTabsHidden, setRegularTabsHidden] = useState(false);
+  // Saved cookies: { origin → [ {name, value} ] }
+  // Only name+value are stored — the library uses the origin's host as domain,
+  // avoiding null-domain issues that cause silent set() failures on Android.
+  const savedCookiesRef = useRef<Record<string, Array<{ name: string; value: string }>> | null>(null);
+
+  const incognitoCount = tabs.filter(t => t.incognito && !t.hidden).length;
+
+  useEffect(() => {
+    console.log('[Incognito] WebViewListInner MOUNTED');
+    return () => console.log('[Incognito] WebViewListInner UNMOUNTED');
+  }, []);
+
+  useEffect(() => {
+    const hasIncognito = incognitoCount > 0;
+    const hadIncognito = savedCookiesRef.current !== null;
+    console.log('[Incognito] effect — count:', incognitoCount, 'hasIncognito:', hasIncognito, 'hadIncognito:', hadIncognito);
+
+    if (hasIncognito && !hadIncognito) {
+      // Collect every unique origin visited by regular tabs so we can snapshot
+      // their cookies. getAll() is iOS-only; on Android we fetch per-origin.
+      const origins = new Set<string>();
+      tabsRef.current.forEach(tab => {
+        if (!tab.incognito) {
+          (tab.urlHistory ?? [tab.url]).forEach(u => {
+            try {
+              const { origin } = new URL(u);
+              if (origin && origin !== 'null') origins.add(origin);
+            } catch {}
+          });
+        }
+      });
+
+      const originList = [...origins];
+      console.log('[Incognito] >>> SAVE START — scanning origins:', originList);
+      // allSettled so one failing origin doesn't abort the whole save.
+      Promise.allSettled(originList.map(o => CookieManager.get(o, false)))
+        .then(results => {
+          const saved: Record<string, Array<{ name: string; value: string }>> = {};
+          results.forEach((r, i) => {
+            if (r.status === 'fulfilled') {
+              const cookieNames = Object.keys(r.value);
+              console.log('[Incognito] get(', originList[i], ') →', cookieNames.length, 'cookies:', cookieNames);
+              const pairs = Object.values(r.value)
+                .filter(c => c.name && c.value)
+                .map(c => ({ name: c.name, value: c.value }));
+              if (pairs.length > 0) saved[originList[i]] = pairs;
+            } else {
+              console.warn('[Incognito] get(', originList[i], ') REJECTED:', r.reason);
+            }
+          });
+          const total = Object.values(saved).reduce((s, c) => s + c.length, 0);
+          if (total === 0 && originList.length > 0) {
+            console.warn('[Incognito] !!! 0 cookies captured. The native patch is not in the build. Run: npx expo run:android');
+          } else {
+            console.log('[Incognito] SAVED', total, 'cookies across', Object.keys(saved).length, 'origins');
+          }
+          savedCookiesRef.current = saved;
+          return CookieManager.clearAll(false);
+        })
+        .then(() => {
+          console.log('[Incognito] clearAll done — incognito WebView can mount, regular tabs hidden');
+          setIncognitoReady(true);
+          setRegularTabsHidden(true);
+        })
+        .catch((e: unknown) => {
+          console.warn('[Incognito] save pipeline failed:', e);
+          savedCookiesRef.current = {};
+          setIncognitoReady(true);
+          setRegularTabsHidden(true);
+        });
+    } else if (!hasIncognito && hadIncognito) {
+      // Last incognito tab closed: restore regular cookies directly.
+      // We use setFromResponse (raw Set-Cookie string) instead of set() because
+      // set() unconditionally adds a Domain attribute, and Chromium rejects
+      // __Host- prefixed cookies that carry a Domain. Building the Set-Cookie
+      // header ourselves lets us omit Domain (making cookies host-only) and
+      // include Secure for __Host-/__Secure- prefixes — both required by spec.
+      setIncognitoReady(false);
+      const saved = savedCookiesRef.current!;
+      savedCookiesRef.current = null;
+      const totalToRestore = Object.values(saved).reduce((s, c) => s + c.length, 0);
+      console.log('[Incognito] >>> RESTORE START —', totalToRestore, 'cookies across', Object.keys(saved).length, 'origins');
+      const buildSetCookie = (origin: string, name: string, value: string): string => {
+        const parts = [`${name}=${value}`, 'Path=/'];
+        if (origin.startsWith('https://')) parts.push('Secure');
+        return parts.join('; ');
+      };
+      Promise.all(
+        Object.entries(saved).flatMap(([origin, cookies]) =>
+          cookies.map(cookie =>
+            CookieManager.setFromResponse(origin, buildSetCookie(origin, cookie.name, cookie.value))
+              .then(success => {
+                if (!success) console.warn('[Incognito] REJECTED', cookie.name, 'on', origin);
+                return success;
+              })
+              .catch((e: unknown) => {
+                console.warn('[Incognito] failed to restore', cookie.name, 'on', origin, e);
+                return false;
+              }),
+          ),
+        ),
+      )
+        .then(results => {
+          const ok = results.filter(r => r === true).length;
+          console.log('[Incognito] RESTORE done —', ok, '/', results.length, 'cookies accepted');
+          return CookieManager.flush();
+        })
+        .then(() => {
+          console.log('[Incognito] flush done — regular tabs can remount');
+          setRegularTabsHidden(false);
+        })
+        .catch((e: unknown) => {
+          console.warn('[Incognito] restore pipeline failed:', e);
+          setRegularTabsHidden(false);
+        });
+    }
+  }, [incognitoCount]);
+
   return (
     <View style={styles.webviewContainer}>
-      {tabs.filter(tab => tab.url !== 'about:home').map(tab => (
-        <View
-          key={tab.id}
-          style={[
-            styles.webviewWrapper,
-            tab.id !== activeTabId && styles.hiddenTab,
-          ]}
-          pointerEvents={tab.id === activeTabId ? 'auto' : 'none'}>
-          <Browser
+      {tabs
+        .filter(tab => {
+          if (tab.url === 'about:home') return false;
+          // Incognito tab: only mount once cookies have been saved + cleared.
+          if (tab.incognito) return incognitoReady;
+          // Regular tab: keep unmounted while the global cookie jar is wiped
+          // for an incognito session, otherwise the WebView would run with no
+          // cookies and show a logged-out state.
+          return !regularTabsHidden;
+        })
+        .map(tab => (
+          <View
+            key={tab.id}
+            style={[
+              styles.webviewWrapper,
+              tab.id !== activeTabId && styles.hiddenTab,
+            ]}
+            pointerEvents={tab.id === activeTabId ? 'auto' : 'none'}>
+            <Browser
               webViewRef={(ref: WebView | null) => setWebViewRef(tab.id, ref)}
               currentUrl={tab.url}
               handleMessage={handleMessage(tab.id)}
               handleNavigationStateChange={handleNavigationStateChange(tab.id)}
               handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
             />
-        </View>
-      ))}
+          </View>
+        ))}
     </View>
   );
 }

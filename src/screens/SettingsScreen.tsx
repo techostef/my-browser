@@ -162,41 +162,6 @@ function BookmarksScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-function PrivacyScreen({ onBack }: { onBack: () => void }) {
-  const { settings, setSetting } = useSettings();
-  const c = useThemeColors();
-
-  const confirmClearData = () =>
-    Alert.alert("Clear Browsing Data", "This will clear cookies, cache, and site data.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Clear", style: "destructive", onPress: () => Alert.alert("Done", "Data cleared.") },
-    ]);
-
-  return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="Privacy & Security" onBack={onBack} />
-      <ScrollView>
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>TRACKING</Text>
-        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-          <Text style={[s.rowLabel, { color: c.text }]}>Block Trackers</Text>
-          <Switch value={settings.blockTrackers} onValueChange={(v) => setSetting("blockTrackers", v)} trackColor={{ true: "#4ECDC4" }} />
-        </View>
-        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-          <Text style={[s.rowLabel, { color: c.text }]}>Send "Do Not Track"</Text>
-          <Switch value={settings.doNotTrack} onValueChange={(v) => setSetting("doNotTrack", v)} trackColor={{ true: "#4ECDC4" }} />
-        </View>
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>DATA</Text>
-        <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-          <Text style={[s.rowLabel, { color: c.text }]}>Clear Data on Exit</Text>
-          <Switch value={settings.clearOnExit} onValueChange={(v) => setSetting("clearOnExit", v)} trackColor={{ true: "#4ECDC4" }} />
-        </View>
-        <TouchableOpacity style={[s.dangerBtn, { backgroundColor: c.surface }]} onPress={confirmClearData}>
-          <Text style={s.dangerBtnText}>Clear Browsing Data</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
 
 function AppearanceScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
@@ -250,7 +215,7 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
 
 // ─── Main Settings Screen ─────────────────────────────────────────────────────
 
-type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "privacy" | "appearance" | "about" | null;
+type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "about" | null;
 
 export default function SettingsScreen() {
   const { settings } = useSettings();
@@ -261,7 +226,6 @@ export default function SettingsScreen() {
   if (sub === "language") return <LanguageScreen onBack={() => setSub(null)} />;
   if (sub === "history") return <HistoryScreen onBack={() => setSub(null)} />;
   if (sub === "bookmarks") return <BookmarksScreen onBack={() => setSub(null)} />;
-  if (sub === "privacy") return <PrivacyScreen onBack={() => setSub(null)} />;
   if (sub === "appearance") return <AppearanceScreen onBack={() => setSub(null)} />;
   if (sub === "about") return <AboutScreen onBack={() => setSub(null)} />;
 
@@ -274,10 +238,6 @@ export default function SettingsScreen() {
         { kind: "nav", label: "🕐  History", onPress: () => setSub("history") },
         { kind: "nav", label: "🔖  Bookmarks", onPress: () => setSub("bookmarks") },
       ],
-    },
-    {
-      title: "PRIVACY",
-      data: [{ kind: "nav", label: "🔒  Privacy & Security", onPress: () => setSub("privacy") }],
     },
     {
       title: "DISPLAY",

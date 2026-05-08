@@ -114,9 +114,6 @@ const DEFAULT_SHORTCUTS: Shortcut[] = [
 export interface SettingsState {
   searchEngine: string;
   language: string;
-  blockTrackers: boolean;
-  doNotTrack: boolean;
-  clearOnExit: boolean;
   theme: string;
   compactTabs: boolean;
   shortcuts: Shortcut[];
@@ -125,9 +122,6 @@ export interface SettingsState {
 const DEFAULT_SETTINGS: SettingsState = {
   searchEngine: "Google",
   language: "English",
-  blockTrackers: true,
-  doNotTrack: false,
-  clearOnExit: false,
   theme: "System Default",
   compactTabs: false,
   shortcuts: DEFAULT_SHORTCUTS,

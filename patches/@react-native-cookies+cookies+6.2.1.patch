@@ -1,0 +1,39 @@
+diff --git a/node_modules/@react-native-cookies/cookies/android/src/main/java/com/reactnativecommunity/cookies/CookieManagerModule.java b/node_modules/@react-native-cookies/cookies/android/src/main/java/com/reactnativecommunity/cookies/CookieManagerModule.java
+index f526d03..58f9e3d 100644
+--- a/node_modules/@react-native-cookies/cookies/android/src/main/java/com/reactnativecommunity/cookies/CookieManagerModule.java
++++ b/node_modules/@react-native-cookies/cookies/android/src/main/java/com/reactnativecommunity/cookies/CookieManagerModule.java
+@@ -194,18 +194,23 @@ public class CookieManagerModule extends ReactContextBaseJavaModule {
+     private WritableMap createCookieList(String allCookies) throws Exception {
+         WritableMap allCookiesMap = Arguments.createMap();
+
++        // Android's getCookie() returns a Cookie request-header string ("n=v; n=v"),
++        // NOT a Set-Cookie response header. HttpCookie.parse() is designed for
++        // Set-Cookie headers and throws on cookie names with underscores or other
++        // characters that are valid in Cookie headers but not in RFC 2109 tokens.
++        // Use simple split-on-equals parsing instead; we only need name+value.
+         if (!isEmpty(allCookies)) {
+-            String[] cookieHeaders = allCookies.split(";");
+-            for (String singleCookie : cookieHeaders) {
+-                List<HttpCookie> cookies = HttpCookie.parse(singleCookie);
+-                for (HttpCookie cookie : cookies) {
+-                    if (cookie != null) {
+-                        String name = cookie.getName();
+-                        String value = cookie.getValue();
+-                        if (!isEmpty(name) && !isEmpty(value)) {
+-                            WritableMap cookieMap = createCookieData(cookie);
+-                            allCookiesMap.putMap(name, cookieMap);
+-                        }
++            for (String pair : allCookies.split(";")) {
++                pair = pair.trim();
++                int eqIdx = pair.indexOf('=');
++                if (eqIdx > 0) {
++                    String name = pair.substring(0, eqIdx).trim();
++                    String value = eqIdx < pair.length() - 1 ? pair.substring(eqIdx + 1) : "";
++                    if (!name.isEmpty()) {
++                        WritableMap cookieMap = Arguments.createMap();
++                        cookieMap.putString("name", name);
++                        cookieMap.putString("value", value);
++                        allCookiesMap.putMap(name, cookieMap);
+                     }
+                 }
+             }
