@@ -961,6 +961,22 @@ function WebViewListInner({
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
+  // Tabs whose WebView has been mounted at least once. Starts with just the
+  // active tab so background tabs are not loaded on startup.
+  const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(
+    () => new Set(activeTabId ? [activeTabId] : []),
+  );
+
+  useEffect(() => {
+    if (!activeTabId) return;
+    setMountedTabIds(prev => {
+      if (prev.has(activeTabId)) return prev;
+      const next = new Set(prev);
+      next.add(activeTabId);
+      return next;
+    });
+  }, [activeTabId]);
+
   // True once cookies have been saved + cleared and incognito WebViews can mount.
   const [incognitoReady, setIncognitoReady] = useState(false);
   // True while regular tabs must stay unmounted (cookies cleared globally for incognito).
@@ -1091,6 +1107,8 @@ function WebViewListInner({
       {tabs
         .filter(tab => {
           if (tab.url === 'about:home') return false;
+          // Defer mounting until the tab is first activated.
+          if (!mountedTabIds.has(tab.id)) return false;
           // Incognito tab: only mount once cookies have been saved + cleared.
           if (tab.incognito) return incognitoReady;
           // Regular tab: keep unmounted while the global cookie jar is wiped
