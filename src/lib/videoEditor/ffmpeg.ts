@@ -85,14 +85,33 @@ export async function probeVideoSize(
   return { width: 1280, height: 720 };
 }
 
+export async function transcodeVideo(
+  inputUri: string,
+  outputUri: string,
+  targetHeight: number,
+  onProgress?: (msg: string) => void,
+): Promise<void> {
+  onProgress?.(`Encoding ${targetHeight}p…`);
+  await runFFmpeg(
+    `-i "${toPath(inputUri)}" -vf scale=-2:${targetHeight}` +
+    ` -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac` +
+    ` "${toPath(outputUri)}" -y`,
+  );
+}
+
 export async function burnSubtitlesWithOverlay(
   videoUri: string,
   subtitlePngs: Array<{ id: number; start: number; end: number; pngBase64: string }>,
   outputUri: string,
   onProgress?: (msg: string) => void,
+  targetHeight?: number | null,
 ): Promise<void> {
   if (subtitlePngs.length === 0) {
-    await FileSystem.copyAsync({ from: videoUri, to: outputUri });
+    if (targetHeight) {
+      await transcodeVideo(videoUri, outputUri, targetHeight, onProgress);
+    } else {
+      await FileSystem.copyAsync({ from: videoUri, to: outputUri });
+    }
     return;
   }
 
@@ -124,15 +143,23 @@ export async function burnSubtitlesWithOverlay(
     // Escape commas inside between(t,a,b) with backslashes — single-quoting
     // the expression is unreliable when the command goes through FFmpegKit's
     // tokenizer, but `\,` works in every parsing layer.
+    // If targetHeight is set, the final overlay output is named [v_N] and a
+    // trailing scale filter produces [vout]; otherwise the last overlay is
+    // [vout] directly.
+    const willScale = !!targetHeight;
     let filterChain = '';
     for (let i = 0; i < N; i++) {
       const inLabel = i === 0 ? '[0:v]' : `[v${i}]`;
       const pngLabel = `[${i + 1}:v]`;
-      const outLabel = i === N - 1 ? '[vout]' : `[v${i + 1}]`;
+      const isLast = i === N - 1;
+      const outLabel = (isLast && !willScale) ? '[vout]' : `[v${i + 1}]`;
       const { start, end } = pngPaths[i];
       filterChain +=
         `${inLabel}${pngLabel}overlay=x=(W-w)/2:y=H-h-24:enable=between(t\\,${start.toFixed(3)}\\,${end.toFixed(3)})${outLabel}`;
-      if (i < N - 1) filterChain += ';';
+      if (!isLast) filterChain += ';';
+    }
+    if (willScale) {
+      filterChain += `;[v${N}]scale=-2:${targetHeight}[vout]`;
     }
 
     await runFFmpeg(

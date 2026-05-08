@@ -10,7 +10,7 @@ import WebView from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList, Segment } from '../../types/videoEditor';
-import { trimAndConcat, probeVideoSize, burnSubtitlesWithOverlay } from '../../lib/videoEditor/ffmpeg';
+import { trimAndConcat, probeVideoSize, burnSubtitlesWithOverlay, transcodeVideo } from '../../lib/videoEditor/ffmpeg';
 import { clearSession } from '../../lib/videoEditor/editSession';
 import { preCacheMediaDuration } from '../../services/downloadManager';
 import { buildSubtitleRenderHtml } from '../../lib/videoEditor/subtitlePng';
@@ -23,23 +23,32 @@ type WebViewMessage =
   | { type: 'done' }
   | { type: 'error'; message: string };
 
+type Resolution = { label: string; detail: string; height: number | null };
+
+const RESOLUTIONS: Resolution[] = [
+  { label: 'Original', detail: 'Full source resolution', height: null },
+  { label: '1080p', detail: 'Full HD',                   height: 1080 },
+  { label: '720p',  detail: 'HD',                        height: 720 },
+  { label: '480p',  detail: 'Smaller file',              height: 480 },
+];
+
 export default function ExportScreen({ navigation, route }: Props) {
   const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt } = route.params;
   const [status, setStatus] = useState('Preparing…');
+  const [hasStarted, setHasStarted] = useState(false);
   const [done, setDone] = useState(false);
   const [outputPath, setOutputPath] = useState('');
   const [error, setError] = useState('');
   const [webViewHtml, setWebViewHtml] = useState<string | null>(null);
-  const started = useRef(false);
   const pngBufferRef = useRef<PngResult[]>([]);
   const pngResolveRef = useRef<((pngs: PngResult[]) => void) | null>(null);
   const pngRejectRef = useRef<((err: Error) => void) | null>(null);
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    runExport();
-  }, []);
+  const startExport = (targetHeight: number | null) => {
+    if (hasStarted) return;
+    setHasStarted(true);
+    runExport(targetHeight);
+  };
 
   // Render subtitle PNGs via a hidden WebView
   const renderSubtitlePngs = (
@@ -83,7 +92,7 @@ export default function ExportScreen({ navigation, route }: Props) {
     }
   };
 
-  const runExport = async () => {
+  const runExport = async (targetHeight: number | null) => {
     try {
       const outputDir = (FileSystem.documentDirectory ?? '') + 'private_downloads/';
       await FileSystem.makeDirectoryAsync(outputDir, { intermediates: true });
@@ -109,15 +118,16 @@ export default function ExportScreen({ navigation, route }: Props) {
 
       const outputUri = `${outputDir}edited_${stamp}.mp4`;
 
-      if (subtitleSegments && subtitleSegments.length > 0 && srt) {
-        // Step 2: probe video dimensions for canvas sizing
-        setStatus('Preparing subtitles…');
-        const { width: vw, height: vh } = await probeVideoSize(tmpUri);
+      // Probe video size; skip upscaling if target >= source
+      const { width: vw, height: vh } = await probeVideoSize(tmpUri);
+      const effectiveTargetH =
+        targetHeight && vh > targetHeight ? targetHeight : null;
 
-        // Step 3: render PNGs in the hidden WebView
+      if (subtitleSegments && subtitleSegments.length > 0 && srt) {
+        // Render PNGs in the hidden WebView at the source resolution; the
+        // overlay pipeline scales to target height as the final step.
         const pngResults = await renderSubtitlePngs(subtitleSegments, vw, vh);
 
-        // Map PNGs back to their segments for timing data
         const segMap = new Map(subtitleSegments.map(s => [s.id, s]));
         const overlayItems: Array<{ id: number; start: number; end: number; pngBase64: string }> = [];
         for (const r of pngResults) {
@@ -125,11 +135,14 @@ export default function ExportScreen({ navigation, route }: Props) {
           if (seg) overlayItems.push({ id: r.id, start: seg.start, end: seg.end, pngBase64: r.png });
         }
 
-        // Step 4: burn PNGs as overlay frames
-        await burnSubtitlesWithOverlay(tmpUri, overlayItems, outputUri, setStatus);
+        await burnSubtitlesWithOverlay(tmpUri, overlayItems, outputUri, setStatus, effectiveTargetH);
+        await FileSystem.deleteAsync(tmpUri, { idempotent: true });
+      } else if (effectiveTargetH) {
+        // No subtitles, but resolution change requested — transcode
+        await transcodeVideo(tmpUri, outputUri, effectiveTargetH, setStatus);
         await FileSystem.deleteAsync(tmpUri, { idempotent: true });
       } else {
-        // No subtitles — just rename tmp to final
+        // No subtitles, original resolution — rename tmp to final
         await FileSystem.moveAsync({ from: tmpUri, to: outputUri });
       }
 
@@ -177,6 +190,30 @@ export default function ExportScreen({ navigation, route }: Props) {
     );
   }
 
+  if (!hasStarted) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.center}>
+          <Text style={styles.pickerTitle}>Export resolution</Text>
+          <Text style={styles.pickerHint}>
+            Higher resolution preserves quality. Lower resolution produces a smaller file.
+          </Text>
+          {RESOLUTIONS.map(r => (
+            <TouchableOpacity
+              key={r.label}
+              style={styles.resBtn}
+              onPress={() => startExport(r.height)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.resBtnLabel}>{r.label}</Text>
+              <Text style={styles.resBtnDetail}>{r.detail}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Hidden WebView used to render subtitle PNGs via HTML5 Canvas */}
@@ -206,6 +243,39 @@ const styles = StyleSheet.create({
     height: 1,
     opacity: 0,
     position: 'absolute',
+  },
+  pickerTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  pickerHint: {
+    color: '#777',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 18,
+  },
+  resBtn: {
+    width: '100%',
+    backgroundColor: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: '#2a2a4a',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 10,
+  },
+  resBtnLabel: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resBtnDetail: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 2,
   },
   center: {
     flex: 1,
