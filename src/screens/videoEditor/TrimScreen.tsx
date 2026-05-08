@@ -6,6 +6,11 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,6 +19,7 @@ import VideoTimeline from '../../components/videoEditor/VideoTimeline';
 import type { TimelineSegment } from '../../components/videoEditor/VideoTimeline';
 import { isFullVideo, filterSegments } from '../../utils/videoEditor/videoProcessor';
 import { parseSrt, segmentsToSrt } from '../../lib/videoEditor/srt';
+import type { Segment as SubtitleSegment } from '../../lib/videoEditor/srt';
 import { getSubtitles } from '../../lib/videoEditor/subtitles';
 import { transcribeVideo } from '../../lib/videoEditor/whisper';
 import { getOpenAIKey } from '../../lib/openaiKey';
@@ -21,7 +27,11 @@ import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/ed
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Trim'>;
 
-const MIN_SPLIT_GAP = 0.5; // minimum seconds between split points
+const MIN_SPLIT_GAP = 0.5;
+const SCREEN_W = Dimensions.get('window').width;
+const PX_PER_SEC = 80;
+const CHIP_H = 36;
+const CHIP_ROW_H = 52;
 
 function fmtCompact(secs: number): string {
   const safe = Math.max(0, secs);
@@ -40,6 +50,9 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [currentTime, setCurrentTime] = useState(0);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [subtitleSegments, setSubtitleSegments] = useState<SubtitleSegment[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState('');
 
   // Split-based editing state
   const [splitPoints, setSplitPoints] = useState<number[]>([]);
@@ -47,6 +60,8 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
   const [sessionRestored, setSessionRestored] = useState(false);
   const sessionReady = useRef(false);
+  const subtitleScrollRef = useRef<ScrollView>(null);
+  const lastScrolledTime = useRef(-1);
 
   const durationRef = useRef(paramDuration > 0 ? paramDuration : 0);
   useEffect(() => { durationRef.current = duration; }, [duration]);
@@ -60,6 +75,9 @@ export default function TrimScreen({ navigation, route }: Props) {
         setDeletedSegments(new Set(session.deletedSegments));
         setSessionRestored(true);
       }
+      if (session?.subtitleSegments && session.subtitleSegments.length > 0) {
+        setSubtitleSegments(session.subtitleSegments);
+      }
       sessionReady.current = true;
     });
   }, [videoUri]);
@@ -68,18 +86,17 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!sessionReady.current) return;
-    const t = setTimeout(async () => {
-      const existing = await loadSession(videoUri);
+    const t = setTimeout(() => {
       saveSession({
         videoUri,
         splitPoints,
         deletedSegments: [...deletedSegments],
-        subtitleSegments: existing?.subtitleSegments,
+        subtitleSegments: subtitleSegments.length > 0 ? subtitleSegments : undefined,
         updatedAt: Date.now(),
       });
     }, 600);
     return () => clearTimeout(t);
-  }, [splitPoints, deletedSegments, videoUri]);
+  }, [splitPoints, deletedSegments, subtitleSegments, videoUri]);
 
   // ─── Derive segments from split points ──────────────────────────────────────
 
@@ -268,13 +285,47 @@ export default function TrimScreen({ navigation, route }: Props) {
     await clearSession(videoUri);
   };
 
-  // ─── Direct export (no subtitles) ───────────────────────────────────────────
+  // ─── Subtitle editing ────────────────────────────────────────────────────────
+
+  const currentSubtitle = useMemo(
+    () => subtitleSegments.find(s => currentTime >= s.start && currentTime < s.end) ?? null,
+    [subtitleSegments, currentTime],
+  );
+
+  useEffect(() => {
+    if (subtitleSegments.length === 0) return;
+    const threshold = isPlaying ? 0.25 : 0.05;
+    if (Math.abs(currentTime - lastScrolledTime.current) < threshold) return;
+    lastScrolledTime.current = currentTime;
+    subtitleScrollRef.current?.scrollTo({ x: currentTime * PX_PER_SEC, animated: !isPlaying });
+  }, [currentTime, isPlaying, subtitleSegments.length]);
+
+  const handleChipPress = useCallback(async (seg: SubtitleSegment) => {
+    setEditingId(seg.id);
+    setEditDraft(seg.text);
+    await videoRef.current?.pauseAsync();
+    await videoRef.current?.setPositionAsync(seg.start * 1000);
+    const targetX = seg.start * PX_PER_SEC;
+    subtitleScrollRef.current?.scrollTo({ x: targetX, animated: true });
+  }, []);
+
+  const handleEditDone = useCallback(() => {
+    setEditingId(null);
+  }, []);
+
+  const handleTextChange = useCallback((text: string) => {
+    setEditDraft(text);
+    setSubtitleSegments(prev => prev.map(s => (s.id === editingId ? { ...s, text } : s)));
+  }, [editingId]);
+
+  // ─── Export ──────────────────────────────────────────────────────────────────
 
   const handleExport = () => {
     navigation.navigate('Export', {
       videoUri,
       timelineSegments: segments,
       duration: durationRef.current,
+      ...(subtitleSegments.length > 0 ? { srt: segmentsToSrt(subtitleSegments) } : {}),
     });
   };
 
@@ -285,19 +336,8 @@ export default function TrimScreen({ navigation, route }: Props) {
     try {
       const dur = durationRef.current;
 
-      // If the session already has subtitle edits, resume them directly
-      setStatusMsg('Loading subtitles…');
-      const existingSession = await loadSession(videoUri);
-      if (existingSession?.subtitleSegments && existingSession.subtitleSegments.length > 0) {
-        navigation.navigate('SubtitleEditor', {
-          videoUri,
-          segments: existingSession.subtitleSegments,
-          srt: segmentsToSrt(existingSession.subtitleSegments),
-          timelineSegments: segments,
-          duration: dur,
-        });
-        return;
-      }
+      // Already have subtitles — nothing to do (they're shown inline)
+      if (subtitleSegments.length > 0) return;
 
       // No saved subtitles — extract fresh
       setStatusMsg('Looking for subtitles…');
@@ -319,31 +359,14 @@ export default function TrimScreen({ navigation, route }: Props) {
 
       let allSrtSegments = parseSrt(rawSrt);
       let finalSegments = allSrtSegments;
-      let finalSrt = rawSrt;
 
       if (!isFullVideo(segments)) {
         setStatusMsg('Filtering subtitles…');
         const filtered = filterSegments(allSrtSegments, segments, dur);
         finalSegments = filtered.segments;
-        finalSrt = filtered.srt;
       }
 
-      // Persist subtitles immediately so they survive app close
-      await saveSession({
-        videoUri,
-        splitPoints,
-        deletedSegments: [...deletedSegments],
-        subtitleSegments: finalSegments,
-        updatedAt: Date.now(),
-      });
-
-      navigation.navigate('SubtitleEditor', {
-        videoUri,
-        segments: finalSegments,
-        srt: finalSrt,
-        timelineSegments: segments,
-        duration: dur,
-      });
+      setSubtitleSegments(finalSegments);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Processing failed';
       Alert.alert('Error', msg);
@@ -366,8 +389,14 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
+  const chipContentW = Math.max(duration * PX_PER_SEC, SCREEN_W);
+  const editingSeg = editingId !== null ? subtitleSegments.find(s => s.id === editingId) : null;
+
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       {/* ── Resume banner ── */}
       {sessionRestored && (
         <View style={styles.resumeBanner}>
@@ -379,16 +408,23 @@ export default function TrimScreen({ navigation, route }: Props) {
       )}
 
       {/* ── Video Preview ── */}
-      <Video
-        ref={videoRef}
-        source={{ uri: videoUri }}
-        style={styles.video}
-        resizeMode={ResizeMode.CONTAIN}
-        onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-        shouldPlay={false}
-        isLooping={false}
-        useNativeControls={false}
-      />
+      <View style={styles.videoContainer}>
+        <Video
+          ref={videoRef}
+          source={{ uri: videoUri }}
+          style={styles.video}
+          resizeMode={ResizeMode.CONTAIN}
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          shouldPlay={false}
+          isLooping={false}
+          useNativeControls={false}
+        />
+        {currentSubtitle && (
+          <View style={styles.subtitleOverlay} pointerEvents="none">
+            <Text style={styles.subtitleText}>{currentSubtitle.text}</Text>
+          </View>
+        )}
+      </View>
 
       {/* ── Controls bar ── */}
       <View style={styles.controlsBar}>
@@ -415,15 +451,58 @@ export default function TrimScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      {/* ── Timeline ── */}
-      <VideoTimeline
-        videoUri={videoUri}
-        duration={duration}
-        segments={segments}
-        selectedSegment={selectedSegment}
-        playheadFrac={playheadFrac}
-        onSeek={handleSeek}
-      />
+      {/* ── Timeline + subtitle chip row ── */}
+      <View style={styles.timelineStack}>
+        <VideoTimeline
+          videoUri={videoUri}
+          duration={duration}
+          segments={segments}
+          selectedSegment={selectedSegment}
+          playheadFrac={playheadFrac}
+          onSeek={handleSeek}
+        />
+
+        {subtitleSegments.length > 0 && (
+          <View style={styles.chipRowWrapper}>
+            <ScrollView
+              ref={subtitleScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
+              contentContainerStyle={[styles.chipScrollContent, { paddingHorizontal: SCREEN_W / 2 }]}
+              scrollEventThrottle={16}
+            >
+              <View style={{ width: chipContentW, height: CHIP_ROW_H, position: 'relative' }}>
+              {subtitleSegments.map(seg => {
+                const left = seg.start * PX_PER_SEC;
+                const chipWidth = Math.max((seg.end - seg.start) * PX_PER_SEC - 2, 28);
+                const isActive = currentSubtitle?.id === seg.id;
+                const isSelected = editingId === seg.id;
+                return (
+                  <TouchableOpacity
+                    key={seg.id}
+                    onPress={() => handleChipPress(seg)}
+                    activeOpacity={0.75}
+                    style={[
+                      styles.chip,
+                      { left, width: chipWidth },
+                      isActive && styles.chipActive,
+                      isSelected && styles.chipSelected,
+                    ]}
+                  >
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      {seg.text || '…'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
+        <View style={styles.extendedLine} pointerEvents="none" />
+      </View>
 
       {/* ── Segment info ── */}
       <View style={styles.infoRow}>
@@ -443,6 +522,28 @@ export default function TrimScreen({ navigation, route }: Props) {
           </Text>
         )}
       </View>
+
+      {/* ── Inline subtitle edit bar ── */}
+      {editingSeg ? (
+        <View style={styles.editBar}>
+          <Text style={styles.editTimestamp}>
+            {fmtCompact(editingSeg.start)} → {fmtCompact(editingSeg.end)}
+          </Text>
+          <TextInput
+            style={styles.editInput}
+            value={editDraft}
+            onChangeText={handleTextChange}
+            autoFocus
+            multiline
+            selectionColor="#a89fff"
+            placeholderTextColor="#555"
+            placeholder="Type subtitle text…"
+          />
+          <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
+            <Text style={styles.editDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* ── Status / loading ── */}
       {loading && (
@@ -515,7 +616,7 @@ export default function TrimScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -526,10 +627,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0d0d0d',
   },
+  videoContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
+  },
   video: {
     width: '100%',
     aspectRatio: 16 / 9,
     backgroundColor: '#000',
+  },
+  subtitleOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 12,
+    right: 12,
+    alignItems: 'center',
+  },
+  subtitleText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
 
   // Controls bar
@@ -664,6 +788,100 @@ const styles = StyleSheet.create({
   resumeDismiss: {
     color: '#6c63ff',
     fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Timeline stack
+  timelineStack: {
+    position: 'relative',
+  },
+  extendedLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: SCREEN_W / 2 - 1,
+    width: 2,
+    backgroundColor: '#fff',
+    zIndex: 10,
+  },
+
+  // Subtitle chip row
+  chipRowWrapper: {
+    height: CHIP_ROW_H,
+    backgroundColor: '#111',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#222',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#222',
+  },
+  chipScroll: {
+    flex: 1,
+  },
+  chipScrollContent: {
+    height: CHIP_ROW_H,
+  },
+  chip: {
+    position: 'absolute',
+    top: (CHIP_ROW_H - CHIP_H) / 2,
+    height: CHIP_H,
+    backgroundColor: '#4a3f28',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#6b5a38',
+  },
+  chipActive: {
+    backgroundColor: '#5c4e32',
+    borderColor: '#c89b4e',
+  },
+  chipSelected: {
+    backgroundColor: '#2a2060',
+    borderColor: '#6c63ff',
+  },
+  chipText: {
+    color: '#f0d9a0',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Inline edit bar
+  editBar: {
+    backgroundColor: '#1a1a2e',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2a2250',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 60,
+  },
+  editTimestamp: {
+    color: '#a89fff',
+    fontSize: 10,
+    fontVariant: ['tabular-nums'],
+    width: 80,
+  },
+  editInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#6c63ff',
+    paddingVertical: 4,
+    maxHeight: 80,
+  },
+  editDoneBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#6c63ff',
+    borderRadius: 8,
+  },
+  editDoneText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '600',
   },
 });

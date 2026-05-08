@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +20,10 @@ import { loadSession, saveSession } from '../../lib/videoEditor/editSession';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubtitleEditor'>;
 
-const CARD_HEIGHT = 68;
+const SCREEN_W = Dimensions.get('window').width;
+const PX_PER_SEC = 60;   // pixels per second on the subtitle timeline
+const CHIP_H = 36;
+const CHIP_ROW_H = 52;   // row height including vertical padding
 
 function fmtTime(secs: number): string {
   const safe = Math.max(0, secs);
@@ -29,56 +33,6 @@ function fmtTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}.${ms}`;
 }
 
-// ─── Subtitle card ────────────────────────────────────────────────────────────
-
-type CardProps = {
-  segment: Segment;
-  isActive: boolean;
-  isEditing: boolean;
-  onPress: () => void;
-  onChangeText: (id: number, text: string) => void;
-  onBlur: () => void;
-};
-
-function SubtitleCard({ segment, isActive, isEditing, onPress, onChangeText, onBlur }: CardProps) {
-  const [draft, setDraft] = useState(segment.text);
-
-  useEffect(() => {
-    setDraft(segment.text);
-  }, [segment.text]);
-
-  return (
-    <TouchableOpacity
-      style={[styles.card, isActive && styles.cardActive, isEditing && styles.cardEditing]}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
-      <Text style={[styles.cardTimestamp, isActive && styles.cardTimestampActive]}>
-        {fmtTime(segment.start)} → {fmtTime(segment.end)}
-      </Text>
-      {isEditing ? (
-        <TextInput
-          style={styles.cardInput}
-          value={draft}
-          onChangeText={t => { setDraft(t); onChangeText(segment.id, t); }}
-          onBlur={onBlur}
-          autoFocus
-          multiline
-          selectionColor="#a89fff"
-          placeholderTextColor="#555"
-          placeholder="Type subtitle text…"
-        />
-      ) : (
-        <Text style={[styles.cardText, !segment.text && styles.cardEmpty]} numberOfLines={2}>
-          {segment.text || 'Empty — tap to edit'}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
-
 export default function SubtitleEditorScreen({ navigation, route }: Props) {
   const { videoUri, segments: initial, timelineSegments, duration } = route.params;
 
@@ -86,10 +40,12 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+
   const videoRef = useRef<Video>(null);
-  const listRef = useRef<FlatList>(null);
+  const subtitleScrollRef = useRef<ScrollView>(null);
   const sessionReady = useRef(false);
-  const prevActiveIdx = useRef(-1);
+  const lastScrolledTime = useRef(-1);
 
   // ─── Session restore ───────────────────────────────────────────────────────
 
@@ -120,29 +76,22 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
     return () => clearTimeout(t);
   }, [segments, videoUri]);
 
-  // ─── Current subtitle based on playhead ───────────────────────────────────
+  // ─── Current subtitle ──────────────────────────────────────────────────────
 
   const currentSubtitle = useMemo(
     () => segments.find(s => currentTime >= s.start && currentTime < s.end) ?? null,
     [segments, currentTime],
   );
 
-  const currentActiveIdx = useMemo(
-    () => (currentSubtitle ? segments.findIndex(s => s.id === currentSubtitle.id) : -1),
-    [currentSubtitle, segments],
-  );
+  // ─── Auto-scroll subtitle row with playhead ────────────────────────────────
 
-  // Auto-scroll list to active subtitle during playback
   useEffect(() => {
-    if (!isPlaying) return;
-    if (currentActiveIdx < 0 || currentActiveIdx === prevActiveIdx.current) return;
-    prevActiveIdx.current = currentActiveIdx;
-    listRef.current?.scrollToIndex({
-      index: currentActiveIdx,
-      animated: true,
-      viewPosition: 0.4,
-    });
-  }, [currentActiveIdx, isPlaying]);
+    const threshold = isPlaying ? 0.25 : 0.05;
+    if (Math.abs(currentTime - lastScrolledTime.current) < threshold) return;
+    lastScrolledTime.current = currentTime;
+    const targetX = Math.max(0, currentTime * PX_PER_SEC - SCREEN_W / 2);
+    subtitleScrollRef.current?.scrollTo({ x: targetX, animated: !isPlaying });
+  }, [currentTime, isPlaying]);
 
   // ─── Playback ──────────────────────────────────────────────────────────────
 
@@ -164,17 +113,30 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
     await videoRef.current?.setPositionAsync(seconds * 1000);
   }, []);
 
-  // ─── Subtitle editing ──────────────────────────────────────────────────────
+  // ─── Chip press ────────────────────────────────────────────────────────────
 
-  const updateSegment = useCallback((id: number, text: string) => {
-    setSegments(prev => prev.map(s => (s.id === id ? { ...s, text } : s)));
-  }, []);
-
-  const handleCardPress = useCallback(async (segment: Segment) => {
-    setEditingId(segment.id);
+  const handleChipPress = useCallback(async (seg: Segment) => {
+    setEditingId(seg.id);
+    setEditDraft(seg.text);
     await videoRef.current?.pauseAsync();
-    await videoRef.current?.setPositionAsync(segment.start * 1000);
+    await videoRef.current?.setPositionAsync(seg.start * 1000);
+    // Scroll the subtitle row so the chip is visible
+    const targetX = Math.max(0, seg.start * PX_PER_SEC - SCREEN_W / 3);
+    subtitleScrollRef.current?.scrollTo({ x: targetX, animated: true });
   }, []);
+
+  const handleEditDone = useCallback(() => {
+    setEditingId(null);
+  }, []);
+
+  // ─── Text update ───────────────────────────────────────────────────────────
+
+  const handleTextChange = useCallback((text: string) => {
+    setEditDraft(text);
+    setSegments(prev =>
+      prev.map(s => (s.id === editingId ? { ...s, text } : s)),
+    );
+  }, [editingId]);
 
   // ─── Export ────────────────────────────────────────────────────────────────
 
@@ -190,6 +152,8 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
   // ─── Derived ───────────────────────────────────────────────────────────────
 
   const playheadFrac = duration > 0 ? currentTime / duration : 0;
+  const timelineWidth = Math.max(duration * PX_PER_SEC + SCREEN_W, SCREEN_W);
+  const editingSeg = editingId !== null ? segments.find(s => s.id === editingId) : null;
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -226,65 +190,85 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
           <TouchableOpacity style={styles.playBtn} onPress={togglePlay}>
             <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
           </TouchableOpacity>
-          <Text style={styles.segmentCount}>{segments.length} captions</Text>
+          <Text style={styles.captionCount}>{segments.length} captions</Text>
         </View>
 
-        {/* ── Timeline ── */}
-        <VideoTimeline
-          videoUri={videoUri}
-          duration={duration}
-          segments={timelineSegments}
-          selectedSegment={null}
-          playheadFrac={playheadFrac}
-          onSeek={handleSeek}
-        />
+        {/* ── Video frame timeline + subtitle chip row with shared playhead ── */}
+        <View style={styles.timelineStack}>
+          <VideoTimeline
+            videoUri={videoUri}
+            duration={duration}
+            segments={timelineSegments}
+            selectedSegment={null}
+            playheadFrac={playheadFrac}
+            onSeek={handleSeek}
+          />
 
-        {/* ── Subtitle caption markers ── */}
-        <View style={styles.captionTrack}>
-          {segments.map(seg => {
-            const left = (seg.start / duration) * 100;
-            const width = Math.max(((seg.end - seg.start) / duration) * 100, 0.5);
-            const isActive = currentSubtitle?.id === seg.id;
-            return (
-              <TouchableOpacity
-                key={seg.id}
-                onPress={() => handleCardPress(seg)}
-                style={[
-                  styles.captionChip,
-                  { left: `${left}%` as any, width: `${width}%` as any },
-                  isActive && styles.captionChipActive,
-                ]}
-              />
-            );
-          })}
+          {/* Subtitle chip row */}
+          <View style={styles.chipRowWrapper}>
+            <ScrollView
+              ref={subtitleScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
+              contentContainerStyle={[styles.chipScrollContent, { width: timelineWidth }]}
+              scrollEventThrottle={16}
+            >
+              {segments.map(seg => {
+                const left = seg.start * PX_PER_SEC;
+                const chipWidth = Math.max((seg.end - seg.start) * PX_PER_SEC - 2, 28);
+                const isActive = currentSubtitle?.id === seg.id;
+                const isSelected = editingId === seg.id;
+                return (
+                  <TouchableOpacity
+                    key={seg.id}
+                    onPress={() => handleChipPress(seg)}
+                    activeOpacity={0.75}
+                    style={[
+                      styles.chip,
+                      { left, width: chipWidth },
+                      isActive && styles.chipActive,
+                      isSelected && styles.chipSelected,
+                    ]}
+                  >
+                    <Text style={styles.chipText} numberOfLines={1}>
+                      {seg.text || '…'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Extended playhead line spanning both timeline and chip row */}
+          <View style={styles.extendedLine} pointerEvents="none" />
         </View>
 
-        {/* ── Subtitle list ── */}
-        <FlatList
-          ref={listRef}
-          data={segments}
-          keyExtractor={item => String(item.id)}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          getItemLayout={(_, index) => ({
-            length: CARD_HEIGHT,
-            offset: CARD_HEIGHT * index,
-            index,
-          })}
-          onScrollToIndexFailed={({ index }) => {
-            listRef.current?.scrollToOffset({ offset: index * CARD_HEIGHT, animated: true });
-          }}
-          renderItem={({ item }) => (
-            <SubtitleCard
-              segment={item}
-              isActive={currentSubtitle?.id === item.id}
-              isEditing={editingId === item.id}
-              onPress={() => handleCardPress(item)}
-              onChangeText={updateSegment}
-              onBlur={() => setEditingId(null)}
+        {/* ── Inline edit bar (appears when a chip is selected) ── */}
+        {editingSeg ? (
+          <View style={styles.editBar}>
+            <Text style={styles.editTimestamp}>
+              {fmtTime(editingSeg.start)} → {fmtTime(editingSeg.end)}
+            </Text>
+            <TextInput
+              style={styles.editInput}
+              value={editDraft}
+              onChangeText={handleTextChange}
+              autoFocus
+              multiline
+              selectionColor="#a89fff"
+              placeholderTextColor="#555"
+              placeholder="Type subtitle text…"
             />
-          )}
-        />
+            <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
+              <Text style={styles.editDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.editBarPlaceholder}>
+            <Text style={styles.editBarHint}>Tap a caption to edit</Text>
+          </View>
+        )}
 
         {/* ── Export button ── */}
         <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
@@ -329,7 +313,7 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 4,
@@ -364,87 +348,117 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
   },
-  segmentCount: {
+  captionCount: {
     flex: 1,
     color: '#555',
     fontSize: 12,
     textAlign: 'right',
   },
 
-  // Caption track (mini markers above list)
-  captionTrack: {
-    height: 20,
-    backgroundColor: '#111',
-    marginHorizontal: 0,
+  // Chip row
+  timelineStack: {
     position: 'relative',
-    flexDirection: 'row',
-    overflow: 'hidden',
   },
-  captionChip: {
+  extendedLine: {
     position: 'absolute',
-    height: 12,
-    top: 4,
-    backgroundColor: '#3d3670',
-    borderRadius: 2,
-    minWidth: 4,
-  },
-  captionChipActive: {
-    backgroundColor: '#6c63ff',
+    top: 0,
+    bottom: 0,
+    left: SCREEN_W / 2 - 1,
+    width: 2,
+    backgroundColor: '#fff',
+    zIndex: 10,
   },
 
-  // Subtitle list
-  list: {
-    flex: 1,
+  chipRowWrapper: {
+    height: CHIP_ROW_H,
     backgroundColor: '#111',
-  },
-  listContent: {
-    paddingVertical: 4,
-  },
-
-  // Subtitle card
-  card: {
-    height: CARD_HEIGHT,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#222',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#1e1e1e',
+    borderBottomColor: '#222',
+  },
+  chipScroll: {
+    flex: 1,
+  },
+  chipScrollContent: {
+    height: CHIP_ROW_H,
+    position: 'relative',
+  },
+  chip: {
+    position: 'absolute',
+    top: (CHIP_ROW_H - CHIP_H) / 2,
+    height: CHIP_H,
+    backgroundColor: '#4a3f28',
+    borderRadius: 6,
+    paddingHorizontal: 8,
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#6b5a38',
   },
-  cardActive: {
-    backgroundColor: '#1a1630',
-    borderLeftWidth: 3,
-    borderLeftColor: '#6c63ff',
+  chipActive: {
+    backgroundColor: '#5c4e32',
+    borderColor: '#c89b4e',
   },
-  cardEditing: {
-    backgroundColor: '#1e1a3a',
-    height: 'auto' as any,
-    minHeight: CARD_HEIGHT,
+  chipSelected: {
+    backgroundColor: '#2a2060',
+    borderColor: '#6c63ff',
   },
-  cardTimestamp: {
-    color: '#555',
+  chipText: {
+    color: '#f0d9a0',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Edit bar
+  editBar: {
+    backgroundColor: '#1a1a2e',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2a2250',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 60,
+  },
+  editTimestamp: {
+    color: '#a89fff',
     fontSize: 10,
     fontVariant: ['tabular-nums'],
-    marginBottom: 4,
+    width: 80,
   },
-  cardTimestampActive: {
-    color: '#a89fff',
-  },
-  cardText: {
-    color: '#ddd',
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  cardEmpty: {
-    color: '#444',
-    fontStyle: 'italic',
-  },
-  cardInput: {
+  editInput: {
+    flex: 1,
     color: '#fff',
     fontSize: 14,
-    lineHeight: 20,
-    paddingVertical: 2,
     borderBottomWidth: 1.5,
     borderBottomColor: '#6c63ff',
+    paddingVertical: 4,
+    maxHeight: 80,
+  },
+  editDoneBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#6c63ff',
+    borderRadius: 8,
+  },
+  editDoneText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  editBarPlaceholder: {
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1e1e1e',
+  },
+  editBarHint: {
+    color: '#333',
+    fontSize: 12,
   },
 
   // Export
