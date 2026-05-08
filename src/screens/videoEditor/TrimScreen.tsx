@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -22,6 +24,7 @@ import { parseSrt, segmentsToSrt } from '../../lib/videoEditor/srt';
 import type { Segment as SubtitleSegment } from '../../lib/videoEditor/srt';
 import { getSubtitles } from '../../lib/videoEditor/subtitles';
 import { transcribeVideo } from '../../lib/videoEditor/whisper';
+import { translateSegments } from '../../lib/videoEditor/translate';
 import { getOpenAIKey } from '../../lib/openaiKey';
 import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/editSession';
 
@@ -226,6 +229,8 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [subtitleSegments, setSubtitleSegments] = useState<SubtitleSegment[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  const [captionMenuOpen, setCaptionMenuOpen] = useState(false);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
 
   // Split-based editing state
   const [splitPoints, setSplitPoints] = useState<number[]>([]);
@@ -509,6 +514,26 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   // ─── Process locally & continue ─────────────────────────────────────────────
 
+  const handleTranslate = async (targetLanguage: string) => {
+    if (subtitleSegments.length === 0) return;
+    setLoading(true);
+    try {
+      setStatusMsg(`Translating to ${targetLanguage}…`);
+      const translated = await translateSegments(
+        subtitleSegments,
+        targetLanguage,
+        setStatusMsg,
+      );
+      setSubtitleSegments(translated);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Translation failed';
+      Alert.alert('Translation failed', msg);
+    } finally {
+      setStatusMsg('');
+      setLoading(false);
+    }
+  };
+
   const handleContinue = async () => {
     setLoading(true);
     try {
@@ -730,10 +755,10 @@ export default function TrimScreen({ navigation, route }: Props) {
             </Text>
           </TouchableOpacity>
 
-          {/* Subtitles → Whisper → SubtitleEditor */}
+          {/* Caption → menu (Generate / Translate) */}
           <TouchableOpacity
             style={[styles.toolbarItem, loading && styles.disabled]}
-            onPress={handleContinue}
+            onPress={() => setCaptionMenuOpen(true)}
             disabled={loading}
           >
             {loading ? (
@@ -741,7 +766,7 @@ export default function TrimScreen({ navigation, route }: Props) {
             ) : (
               <Text style={styles.toolbarIcon}>💬</Text>
             )}
-            <Text style={styles.toolbarLabel}>Subtitles</Text>
+            <Text style={styles.toolbarLabel}>Caption</Text>
           </TouchableOpacity>
 
           {/* Export → ExportScreen (no subtitles) */}
@@ -755,9 +780,107 @@ export default function TrimScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ── Caption menu ── */}
+      <Modal
+        visible={captionMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCaptionMenuOpen(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setCaptionMenuOpen(false)}>
+          <Pressable style={styles.menuCard} onPress={() => {}}>
+            <Text style={styles.menuTitle}>Caption</Text>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setCaptionMenuOpen(false);
+                handleContinue();
+              }}
+            >
+              <Text style={styles.menuItemIcon}>📝</Text>
+              <View style={styles.menuItemBody}>
+                <Text style={styles.menuItemLabel}>Generate caption</Text>
+                <Text style={styles.menuItemDetail}>Transcribe audio with Whisper AI</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.menuItem, subtitleSegments.length === 0 && styles.menuItemDisabled]}
+              disabled={subtitleSegments.length === 0}
+              onPress={() => {
+                setCaptionMenuOpen(false);
+                setLangPickerOpen(true);
+              }}
+            >
+              <Text style={[
+                styles.menuItemIcon,
+                subtitleSegments.length === 0 && styles.menuItemIconDisabled,
+              ]}>🌐</Text>
+              <View style={styles.menuItemBody}>
+                <Text style={[
+                  styles.menuItemLabel,
+                  subtitleSegments.length === 0 && styles.menuItemLabelDisabled,
+                ]}>Translate caption</Text>
+                <Text style={styles.menuItemDetail}>
+                  {subtitleSegments.length === 0
+                    ? 'Generate captions first'
+                    : 'Translate existing captions to another language'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Translate target language picker ── */}
+      <Modal
+        visible={langPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLangPickerOpen(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setLangPickerOpen(false)}>
+          <Pressable style={styles.menuCard} onPress={() => {}}>
+            <Text style={styles.menuTitle}>Translate to…</Text>
+            <ScrollView style={styles.langScroll}>
+              {TRANSLATION_LANGUAGES.map(lang => (
+                <TouchableOpacity
+                  key={lang}
+                  style={styles.langRow}
+                  onPress={() => {
+                    setLangPickerOpen(false);
+                    handleTranslate(lang);
+                  }}
+                >
+                  <Text style={styles.langText}>{lang}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
+
+const TRANSLATION_LANGUAGES = [
+  'English',
+  'Indonesian',
+  'Spanish',
+  'French',
+  'German',
+  'Italian',
+  'Portuguese',
+  'Vietnamese',
+  'Chinese (Simplified)',
+  'Chinese (Traditional)',
+  'Japanese',
+  'Korean',
+  'Hindi',
+  'Arabic',
+  'Russian',
+  'Thai',
+];
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -765,6 +888,83 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0d0d0d',
+  },
+  // Caption menu (Chrome-style dropdown card)
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  menuCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  menuTitle: {
+    color: '#222',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 14,
+  },
+  menuItemDisabled: {
+    opacity: 0.45,
+  },
+  menuItemIcon: {
+    fontSize: 22,
+    width: 28,
+    textAlign: 'center',
+  },
+  menuItemIconDisabled: {
+    opacity: 0.6,
+  },
+  menuItemBody: {
+    flex: 1,
+  },
+  menuItemLabel: {
+    color: '#222',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  menuItemLabelDisabled: {
+    color: '#888',
+  },
+  menuItemDetail: {
+    color: '#777',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  langScroll: {
+    maxHeight: 360,
+  },
+  langRow: {
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#eee',
+  },
+  langText: {
+    color: '#222',
+    fontSize: 15,
   },
   // Controls bar
   controlsBar: {
