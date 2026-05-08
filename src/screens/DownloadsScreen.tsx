@@ -11,23 +11,33 @@ import {
   Text,
   FlatList,
   Alert,
-  Modal,
-  Image,
-  TextInput,
-  Keyboard,
-  TouchableOpacity,
-  ActivityIndicator,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Video, ResizeMode } from "expo-av";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import DownloadItem, { DownloadMediaType } from "../components/DownloadItem";
 import { DEVICE_DOWNLOAD_MOVE_TARGET, DownloadTask } from "../types";
 import { useDownloads } from "../store/downloadStore";
+
+import { DownloadGridItem, FolderGridItem, FilterType, SortKey } from "../components/downloads/types";
+import FolderCard from "../components/downloads/FolderCard";
+import RenameModal from "../components/downloads/RenameModal";
+import FolderDialog from "../components/downloads/FolderDialog";
+import FolderPickerModal, { FolderPickerOption } from "../components/downloads/FolderPickerModal";
+import PreviewModal from "../components/downloads/PreviewModal";
+import ActionsDropdown from "../components/downloads/ActionsDropdown";
+import FilterDialog from "../components/downloads/FilterDialog";
+import LabelPickerModal from "../components/downloads/LabelPickerModal";
+import ManageLabelsModal from "../components/downloads/ManageLabelsModal";
+import MoveProgressModal from "../components/downloads/MoveProgressModal";
+import DownloadsHeader from "../components/downloads/DownloadsHeader";
+import FilterBar from "../components/downloads/FilterBar";
+
+const DEVICE_ROOT_PATH = "__device_download__";
+const TRASH_FOLDER_PATH = "__trash__";
 
 export default function DownloadsScreen() {
   const navigation = useNavigation();
@@ -52,60 +62,45 @@ export default function DownloadsScreen() {
     prefetchDeviceFileSizes,
   } = useDownloads();
 
-  const DEVICE_ROOT_PATH = "__device_download__";
-  const TRASH_FOLDER_PATH = "__trash__";
-
-  type DownloadGridItem =
-    | {
-        type: "folder";
-        path: string;
-        name: string;
-        source: "private" | "device";
-        isDeviceRoot?: boolean;
-      }
-    | { type: "file"; task: DownloadTask };
-  type FolderGridItem = Extract<DownloadGridItem, { type: "folder" }>;
-
-  type SortKey =
-    | "name_asc"
-    | "name_desc"
-    | "date_newest"
-    | "date_oldest"
-    | "size_largest"
-    | "size_smallest"
-    | "duration_longest"
-    | "duration_shortest"
-    | "type";
-  type FilterType = "all" | "video" | "audio" | "image" | "other";
-
+  // ── state ──────────────────────────────────────────────────────────────────
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
   const [renameText, setRenameText] = useState("");
   const [previewTask, setPreviewTask] = useState<DownloadTask | null>(null);
-  const [folderDialogMode, setFolderDialogMode] = useState<
-    "create" | "rename" | null
-  >(null);
+  const [folderDialogMode, setFolderDialogMode] = useState<"create" | "rename" | null>(null);
   const [activeFolderPath, setActiveFolderPath] = useState("");
   const [folderNameText, setFolderNameText] = useState("");
   const [currentFolderPath, setCurrentFolderPath] = useState("");
   const [copyTask, setCopyTask] = useState<DownloadTask | null>(null);
-  const [moveTaskInPrivate, setMoveTaskInPrivate] =
-    useState<DownloadTask | null>(null);
+  const [moveTaskInPrivate, setMoveTaskInPrivate] = useState<DownloadTask | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoveModalVisible, setBulkMoveModalVisible] = useState(false);
+  const [bulkMoveToPrivateModalVisible, setBulkMoveToPrivateModalVisible] = useState(false);
   const [actionsDialogVisible, setActionsDialogVisible] = useState(false);
-  const [actionsPage, setActionsPage] = useState<"main" | "sort">("main");
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("name_asc");
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [labelDefs, setLabelDefs] = useState<string[]>([]);
   const [fileLabels, setFileLabels] = useState<Record<string, string[]>>({});
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
-  const [labelTaskTarget, setLabelTaskTarget] = useState<DownloadTask | null>(
-    null,
-  );
+  const [labelTaskTarget, setLabelTaskTarget] = useState<DownloadTask | null>(null);
   const [manageLabelModalVisible, setManageLabelModalVisible] = useState(false);
   const [manageLabelNewText, setManageLabelNewText] = useState("");
+  const [moveProgress, setMoveProgress] = useState<{ total: number; label: string } | null>(null);
 
+  // ── refs ───────────────────────────────────────────────────────────────────
+  const currentFolderPathRef = useRef(currentFolderPath);
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+  const fileLabelsRef = useRef(fileLabels);
+  fileLabelsRef.current = fileLabels;
+  const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
+  prefetchSizesRef.current = prefetchDeviceFileSizes;
+
+  useEffect(() => {
+    currentFolderPathRef.current = currentFolderPath;
+  }, [currentFolderPath]);
+
+  // ── persistence ────────────────────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem("@downloads_sort_key").then((val) => {
       if (val) setSortKey(val as SortKey);
@@ -122,6 +117,7 @@ export default function DownloadsScreen() {
     });
   }, []);
 
+  // ── label helpers ──────────────────────────────────────────────────────────
   const saveLabelDefs = useCallback((defs: string[]) => {
     setLabelDefs(defs);
     AsyncStorage.setItem("@label_definitions_v1", JSON.stringify(defs));
@@ -167,10 +163,6 @@ export default function DownloadsScreen() {
     setLabelFilter((lf) => (lf === label ? null : lf));
   }, []);
 
-  const handleLabelTask = useCallback((task: DownloadTask) => {
-    setLabelTaskTarget(task);
-  }, []);
-
   const migrateLabels = useCallback((idMapping: Record<string, string>) => {
     setFileLabels((prev) => {
       const updated = { ...prev };
@@ -199,56 +191,39 @@ export default function DownloadsScreen() {
     });
   }, []);
 
-  const fileLabelsRef = useRef(fileLabels);
-  fileLabelsRef.current = fileLabels;
-
+  // ── sort ───────────────────────────────────────────────────────────────────
   const applySortKey = useCallback((key: SortKey) => {
     setSortKey(key);
     AsyncStorage.setItem("@downloads_sort_key", key);
   }, []);
-  const currentFolderPathRef = useRef(currentFolderPath);
-  const selectedIdsRef = useRef(selectedIds);
-  selectedIdsRef.current = selectedIds;
 
-  useEffect(() => {
-    currentFolderPathRef.current = currentFolderPath;
-  }, [currentFolderPath]);
-
+  // ── media type ─────────────────────────────────────────────────────────────
   const getMediaType = useCallback((task: DownloadTask): DownloadMediaType => {
     const source = (task.fileName || task.filePath || task.url || "")
       .toLowerCase()
       .split("?")[0]
       .split("#")[0];
     const ext = source.split(".").pop() || "";
-
-    if (
-      ["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif"].includes(ext)
-    ) {
-      return "image";
-    }
-    if (["mp4", "mov", "mkv", "webm", "avi", "m4v", "3gp"].includes(ext)) {
-      return "video";
-    }
-    if (["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext)) {
-      return "audio";
-    }
+    if (["jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif"].includes(ext)) return "image";
+    if (["mp4", "mov", "mkv", "webm", "avi", "m4v", "3gp"].includes(ext)) return "video";
+    if (["mp3", "wav", "m4a", "aac", "ogg", "flac"].includes(ext)) return "audio";
     return "other";
   }, []);
 
+  // ── refresh on focus ───────────────────────────────────────────────────────
   useFocusEffect(
     useCallback(() => {
       refreshDownloads().catch((err) => {
-        console.warn(
-          "Failed to scan private downloads on Downloads focus:",
-          err,
-        );
+        console.warn("Failed to scan private downloads on Downloads focus:", err);
       });
     }, [refreshDownloads]),
   );
 
+  // ── device path helpers ────────────────────────────────────────────────────
   const isDevicePath =
     currentFolderPath === DEVICE_ROOT_PATH ||
     currentFolderPath.startsWith(`${DEVICE_ROOT_PATH}/`);
+
   const currentDeviceFolderPath =
     currentFolderPath === DEVICE_ROOT_PATH
       ? ""
@@ -256,25 +231,146 @@ export default function DownloadsScreen() {
         ? currentFolderPath.substring(DEVICE_ROOT_PATH.length + 1)
         : "";
 
-  const openDeviceRoot = useCallback(() => {
-    setCurrentFolderPath(DEVICE_ROOT_PATH);
-  }, []);
+  const isInTrash =
+    currentFolderPath === TRASH_FOLDER_PATH ||
+    currentFolderPath.startsWith(`${TRASH_FOLDER_PATH}/`);
 
-  const handleRescanDevice = useCallback(() => {
-    scanDeviceDownloadFolder().catch((err) => {
-      Alert.alert(
-        "Scan failed",
-        err instanceof Error
-          ? err.message
-          : "Unable to scan device download folder",
-      );
-    });
-  }, [scanDeviceDownloadFolder]);
+  // ── folder navigation ──────────────────────────────────────────────────────
+  const handleBackFolder = useCallback(() => {
+    if (!currentFolderPath) return;
 
-  const handleRename = useCallback((task: DownloadTask) => {
-    if (!task.filePath) {
+    if (currentFolderPath === DEVICE_ROOT_PATH) {
+      setCurrentFolderPath("");
       return;
     }
+
+    if (currentFolderPath.startsWith(`${DEVICE_ROOT_PATH}/`)) {
+      const relative = currentFolderPath.substring(DEVICE_ROOT_PATH.length + 1);
+      const slashIndex = relative.lastIndexOf("/");
+      setCurrentFolderPath(
+        slashIndex >= 0
+          ? `${DEVICE_ROOT_PATH}/${relative.substring(0, slashIndex)}`
+          : DEVICE_ROOT_PATH,
+      );
+      return;
+    }
+
+    const slashIndex = currentFolderPath.lastIndexOf("/");
+    setCurrentFolderPath(slashIndex >= 0 ? currentFolderPath.substring(0, slashIndex) : "");
+  }, [currentFolderPath]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (currentFolderPathRef.current) {
+          handleBackFolder();
+          return true;
+        }
+        (navigation as any).navigate("Browser");
+        return true;
+      });
+      return () => sub.remove();
+    }, [handleBackFolder, navigation]),
+  );
+
+  const handleOpenFolder = useCallback(
+    (item: FolderGridItem) => {
+      if (item.isDeviceRoot) {
+        setCurrentFolderPath(DEVICE_ROOT_PATH);
+        return;
+      }
+      setCurrentFolderPath(item.path);
+    },
+    [],
+  );
+
+  // ── folder management ──────────────────────────────────────────────────────
+  const openCreateFolder = useCallback(() => {
+    setFolderDialogMode("create");
+    setActiveFolderPath("");
+    setFolderNameText("");
+  }, []);
+
+  const openRenameFolder = useCallback((folderPath: string) => {
+    const leafName = folderPath.split("/").pop() || folderPath;
+    setFolderDialogMode("rename");
+    setActiveFolderPath(folderPath);
+    setFolderNameText(leafName);
+  }, []);
+
+  const closeFolderDialog = useCallback(() => {
+    setFolderDialogMode(null);
+    setActiveFolderPath("");
+    setFolderNameText("");
+  }, []);
+
+  const submitFolderDialog = useCallback(() => {
+    const trimmed = folderNameText.trim();
+    if (!trimmed || !folderDialogMode) return;
+
+    const nextPath = currentFolderPath ? `${currentFolderPath}/${trimmed}` : trimmed;
+    const action =
+      folderDialogMode === "create"
+        ? createFolder(nextPath)
+        : renameFolder(activeFolderPath, trimmed);
+
+    action
+      .catch((err) => {
+        Alert.alert(
+          "Folder error",
+          err instanceof Error ? err.message : "Unable to update folder",
+        );
+      })
+      .finally(closeFolderDialog);
+  }, [activeFolderPath, closeFolderDialog, createFolder, currentFolderPath, folderDialogMode, folderNameText, renameFolder]);
+
+  const runDeleteFolder = useCallback(
+    (folderPath: string, force = false) => {
+      deleteFolder(folderPath, force).catch((err) => {
+        const message = err instanceof Error ? err.message : "Unable to delete folder";
+        if (!force && message.toLowerCase().includes("not empty")) {
+          Alert.alert(
+            "Delete folder and all contents?",
+            "This folder contains files or subfolders. This action cannot be undone.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Delete All", style: "destructive", onPress: () => runDeleteFolder(folderPath, true) },
+            ],
+          );
+          return;
+        }
+        Alert.alert("Folder error", message);
+      });
+    },
+    [deleteFolder],
+  );
+
+  const handleDeleteFolder = useCallback(
+    (folderPath: string) => {
+      const folderName = folderPath.split("/").pop() || folderPath;
+      Alert.alert("Delete folder", `Delete folder "${folderName}"?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => runDeleteFolder(folderPath) },
+      ]);
+    },
+    [runDeleteFolder],
+  );
+
+  const handleFolderAction = useCallback(
+    (folderPath: string) => {
+      const folderName = folderPath.split("/").pop() || folderPath;
+      Alert.alert(folderName, "Folder options", [
+        { text: "Rename", onPress: () => openRenameFolder(folderPath) },
+        { text: "Delete", style: "destructive", onPress: () => handleDeleteFolder(folderPath) },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    },
+    [handleDeleteFolder, openRenameFolder],
+  );
+
+  // ── rename file ────────────────────────────────────────────────────────────
+  const handleRename = useCallback((task: DownloadTask) => {
+    if (!task.filePath) return;
     const initialName = task.fileName || task.filePath.split("/").pop() || "";
     setRenameTask(task);
     setRenameText(initialName);
@@ -283,175 +379,20 @@ export default function DownloadsScreen() {
   const closeRenameModal = useCallback(() => {
     setRenameTask(null);
     setRenameText("");
-    Keyboard.dismiss();
   }, []);
 
   const submitRename = useCallback(() => {
-    if (!renameTask) {
-      return;
-    }
+    if (!renameTask) return;
     const trimmed = renameText.trim();
-    if (!trimmed) {
-      return;
-    }
+    if (!trimmed) return;
     const oldId = renameTask.id;
     renameDownload(oldId, trimmed)
-      .then((newId) => {
-        if (newId) migrateLabels({ [oldId]: newId });
-      })
-      .catch((err) => {
-        console.warn("Rename failed:", err);
-      })
-      .finally(() => {
-        closeRenameModal();
-      });
+      .then((newId) => { if (newId) migrateLabels({ [oldId]: newId }); })
+      .catch((err) => { console.warn("Rename failed:", err); })
+      .finally(closeRenameModal);
   }, [closeRenameModal, renameDownload, renameTask, renameText, migrateLabels]);
 
-  const isSelectionMode = selectedIds.size > 0;
-
-  const handleEnterSelection = useCallback((task: DownloadTask) => {
-    setSelectedIds(new Set([task.id]));
-  }, []);
-
-  const handleToggleSelect = useCallback((task: DownloadTask) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (!next.has(task.id)) {
-        next.add(task.id);
-      } else {
-        next.delete(task.id);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleCancelSelection = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
-
-  const handleBulkDelete = useCallback(() => {
-    const count = selectedIds.size;
-    Alert.alert(
-      `Delete ${count} item${count !== 1 ? "s" : ""}`,
-      "Remove selected downloads? This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            const ids = Array.from(selectedIds);
-            setSelectedIds(new Set());
-            Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
-              const mapping: Record<string, string> = {};
-              for (let i = 0; i < ids.length; i++) {
-                const newId = results[i];
-                if (newId) mapping[ids[i]] = newId;
-              }
-              if (Object.keys(mapping).length > 0) migrateLabels(mapping);
-            });
-          },
-        },
-      ],
-    );
-  }, [removeDownload, selectedIds, migrateLabels]);
-
-  const handleBulkMoveRequest = useCallback(() => {
-    setBulkMoveModalVisible(true);
-  }, []);
-
-  const closeBulkMoveModal = useCallback(() => {
-    setBulkMoveModalVisible(false);
-  }, []);
-
-  const handleBulkMoveTo = useCallback(
-    (folderPath?: string | null) => {
-      const ids = Array.from(selectedIds);
-      closeBulkMoveModal();
-      setSelectedIds(new Set());
-      setMoveProgress({ total: ids.length, label: "Moving files..." });
-      bulkMoveDownloadsToFolder(ids, folderPath)
-        .then((idMapping) => {
-          if (Object.keys(idMapping).length > 0) migrateLabels(idMapping);
-        })
-        .catch((err) => {
-          Alert.alert(
-            "Move error",
-            err instanceof Error ? err.message : "Unable to move some files",
-          );
-        })
-        .finally(() => {
-          setMoveProgress(null);
-        });
-    },
-    [closeBulkMoveModal, bulkMoveDownloadsToFolder, selectedIds, migrateLabels],
-  );
-
-  const selectedTasks = useMemo(
-    () => downloads.filter((t) => selectedIds.has(t.id)),
-    [downloads, selectedIds],
-  );
-  const canBulkMove =
-    selectedTasks.length > 0 &&
-    selectedTasks.every(
-      (t) => t.status === "completed" && !!t.filePath && t.source !== "device",
-    );
-  const canBulkMoveToPrivate =
-    selectedTasks.length > 0 &&
-    selectedTasks.every(
-      (t) => t.status === "completed" && !!t.filePath && t.source === "device",
-    );
-
-  const [bulkMoveToPrivateModalVisible, setBulkMoveToPrivateModalVisible] =
-    useState(false);
-  const [moveProgress, setMoveProgress] = useState<{
-    total: number;
-    label: string;
-  } | null>(null);
-
-  const handleBulkMoveToPrivateRequest = useCallback(() => {
-    setBulkMoveToPrivateModalVisible(true);
-  }, []);
-
-  const closeBulkMoveToPrivateModal = useCallback(() => {
-    setBulkMoveToPrivateModalVisible(false);
-  }, []);
-
-  const handleBulkMoveToPrivate = useCallback(
-    (folderPath?: string | null) => {
-      const ids = Array.from(selectedIds);
-      closeBulkMoveToPrivateModal();
-      setSelectedIds(new Set());
-      setMoveProgress({
-        total: ids.length,
-        label: "Moving to private folder...",
-      });
-      bulkMoveDownloadsToFolder(ids, folderPath ?? null)
-        .then((idMapping) => {
-          if (Object.keys(idMapping).length > 0) migrateLabels(idMapping);
-        })
-        .catch((err) => {
-          Alert.alert(
-            "Move error",
-            err instanceof Error ? err.message : "Unable to move some files",
-          );
-        })
-        .finally(() => {
-          setMoveProgress(null);
-        });
-    },
-    [
-      closeBulkMoveToPrivateModal,
-      bulkMoveDownloadsToFolder,
-      selectedIds,
-      migrateLabels,
-    ],
-  );
-
-  const isInTrash =
-    currentFolderPath === TRASH_FOLDER_PATH ||
-    currentFolderPath.startsWith(`${TRASH_FOLDER_PATH}/`);
-
+  // ── remove / delete ────────────────────────────────────────────────────────
   const handleRemove = useCallback(
     (id: string) => {
       Alert.alert("Move to Trash", "Move this file to the Trash folder?", [
@@ -491,295 +432,157 @@ export default function DownloadsScreen() {
     [deleteFromTrash, cleanupLabels],
   );
 
+  // ── preview ────────────────────────────────────────────────────────────────
   const handleOpenMedia = useCallback(
     (task: DownloadTask) => {
-      if (task.status !== "completed" || !task.filePath) {
-        return;
-      }
-      if (getMediaType(task) === "other") {
-        return;
-      }
+      if (task.status !== "completed" || !task.filePath) return;
+      if (getMediaType(task) === "other") return;
       setPreviewTask(task);
     },
     [getMediaType],
   );
 
-  const closePreviewModal = useCallback(() => {
-    setPreviewTask(null);
-  }, []);
-
-  const openCreateFolder = useCallback(() => {
-    setFolderDialogMode("create");
-    setActiveFolderPath("");
-    setFolderNameText("");
-  }, []);
-
-  const openRenameFolder = useCallback((folderPath: string) => {
-    const leafName = folderPath.split("/").pop() || folderPath;
-    setFolderDialogMode("rename");
-    setActiveFolderPath(folderPath);
-    setFolderNameText(leafName);
-  }, []);
-
-  const closeFolderDialog = useCallback(() => {
-    setFolderDialogMode(null);
-    setActiveFolderPath("");
-    setFolderNameText("");
-    Keyboard.dismiss();
-  }, []);
-
-  const submitFolderDialog = useCallback(() => {
-    const trimmed = folderNameText.trim();
-    if (!trimmed || !folderDialogMode) {
-      return;
-    }
-
-    const nextPath = currentFolderPath
-      ? `${currentFolderPath}/${trimmed}`
-      : trimmed;
-    const action =
-      folderDialogMode === "create"
-        ? createFolder(nextPath)
-        : renameFolder(activeFolderPath, trimmed);
-
-    action
-      .catch((err) => {
-        Alert.alert(
-          "Folder error",
-          err instanceof Error ? err.message : "Unable to update folder",
-        );
-      })
-      .finally(() => {
-        closeFolderDialog();
-      });
-  }, [
-    activeFolderPath,
-    closeFolderDialog,
-    createFolder,
-    currentFolderPath,
-    folderDialogMode,
-    folderNameText,
-    renameFolder,
-  ]);
-
-  const runDeleteFolder = useCallback(
-    (folderPath: string, force = false) => {
-      deleteFolder(folderPath, force).catch((err) => {
-        const message =
-          err instanceof Error ? err.message : "Unable to delete folder";
-
-        if (!force && message.toLowerCase().includes("not empty")) {
-          Alert.alert(
-            "Delete folder and all contents?",
-            "This folder contains files or subfolders. This action cannot be undone.",
-            [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Delete All",
-                style: "destructive",
-                onPress: () => runDeleteFolder(folderPath, true),
-              },
-            ],
-          );
-          return;
-        }
-
-        Alert.alert("Folder error", message);
-      });
-    },
-    [deleteFolder],
-  );
-
-  const handleDeleteFolder = useCallback(
-    (folderPath: string) => {
-      const folderName = folderPath.split("/").pop() || folderPath;
-      Alert.alert("Delete folder", `Delete folder "${folderName}"?`, [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => runDeleteFolder(folderPath),
-        },
-      ]);
-    },
-    [runDeleteFolder],
-  );
-
-  const handleFolderAction = useCallback(
-    (folderPath: string) => {
-      const folderName = folderPath.split("/").pop() || folderPath;
-      Alert.alert(folderName, "Folder options", [
-        {
-          text: "Rename",
-          onPress: () => openRenameFolder(folderPath),
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => handleDeleteFolder(folderPath),
-        },
-        { text: "Cancel", style: "cancel" },
-      ]);
-    },
-    [handleDeleteFolder, openRenameFolder],
-  );
-
-  const handleOpenFolder = useCallback(
-    (item: Extract<DownloadGridItem, { type: "folder" }>) => {
-      if (item.isDeviceRoot) {
-        openDeviceRoot();
-        return;
-      }
-
-      if (item.source === "device") {
-        setCurrentFolderPath(item.path);
-        return;
-      }
-
-      setCurrentFolderPath(item.path);
-    },
-    [openDeviceRoot],
-  );
-
-  const handleBackFolder = useCallback(() => {
-    if (!currentFolderPath) {
-      return;
-    }
-
-    if (currentFolderPath === DEVICE_ROOT_PATH) {
-      setCurrentFolderPath("");
-      return;
-    }
-
-    if (currentFolderPath.startsWith(`${DEVICE_ROOT_PATH}/`)) {
-      const relative = currentFolderPath.substring(DEVICE_ROOT_PATH.length + 1);
-      const slashIndex = relative.lastIndexOf("/");
-      setCurrentFolderPath(
-        slashIndex >= 0
-          ? `${DEVICE_ROOT_PATH}/${relative.substring(0, slashIndex)}`
-          : DEVICE_ROOT_PATH,
-      );
-      return;
-    }
-
-    const slashIndex = currentFolderPath.lastIndexOf("/");
-    setCurrentFolderPath(
-      slashIndex >= 0 ? currentFolderPath.substring(0, slashIndex) : "",
-    );
-  }, [currentFolderPath]);
-
-  useFocusEffect(
-    useCallback(() => {
-      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-        if (currentFolderPathRef.current) {
-          handleBackFolder();
-          return true;
-        }
-
-        (navigation as any).navigate("Browser");
-        return true;
-      });
-
-      return () => sub.remove();
-    }, [handleBackFolder, navigation]),
-  );
-
+  // ── copy / move ────────────────────────────────────────────────────────────
   const handleCopyRequest = useCallback((task: DownloadTask) => {
-    if (task.status !== "completed" || !task.filePath) {
-      return;
-    }
+    if (task.status !== "completed" || !task.filePath) return;
     setCopyTask(task);
   }, []);
 
   const handleMoveInPrivateRequest = useCallback((task: DownloadTask) => {
-    if (
-      task.status !== "completed" ||
-      !task.filePath ||
-      task.source === "device"
-    ) {
-      return;
-    }
+    if (task.status !== "completed" || !task.filePath || task.source === "device") return;
     setMoveTaskInPrivate(task);
-  }, []);
-
-  const closeCopyModal = useCallback(() => {
-    setCopyTask(null);
-  }, []);
-
-  const closeMoveInPrivateModal = useCallback(() => {
-    setMoveTaskInPrivate(null);
   }, []);
 
   const handleCopyToFolder = useCallback(
     (folderName?: string | null) => {
-      if (!copyTask) {
-        return;
-      }
-
-      const target =
-        copyTask.source === "private"
-          ? DEVICE_DOWNLOAD_MOVE_TARGET
-          : folderName;
-
+      if (!copyTask) return;
+      const target = copyTask.source === "private" ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
       moveDownloadToFolder(copyTask.id, target)
         .catch((err) => {
-          const message =
-            err instanceof Error ? err.message : "Unable to move file";
-          Alert.alert("Copy error", message);
+          Alert.alert("Copy error", err instanceof Error ? err.message : "Unable to move file");
         })
-        .finally(() => {
-          closeCopyModal();
-        });
+        .finally(() => setCopyTask(null));
     },
-    [closeCopyModal, copyTask, moveDownloadToFolder],
+    [copyTask, moveDownloadToFolder],
   );
 
   const handleMoveInPrivateToFolder = useCallback(
     (folderName?: string | null) => {
-      if (!moveTaskInPrivate) {
-        return;
-      }
-
+      if (!moveTaskInPrivate) return;
       const taskId = moveTaskInPrivate.id;
-      closeMoveInPrivateModal();
-
+      setMoveTaskInPrivate(null);
       moveDownloadToFolder(taskId, folderName)
-        .then((newId) => {
-          if (newId) migrateLabels({ [taskId]: newId });
-        })
+        .then((newId) => { if (newId) migrateLabels({ [taskId]: newId }); })
         .catch((err) => {
-          const message =
-            err instanceof Error ? err.message : "Unable to move file";
-          Alert.alert("Move error", message);
+          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move file");
         });
     },
-    [
-      closeMoveInPrivateModal,
-      moveDownloadToFolder,
-      moveTaskInPrivate,
-      migrateLabels,
-    ],
+    [moveDownloadToFolder, moveTaskInPrivate, migrateLabels],
   );
 
-  const previewType = previewTask ? getMediaType(previewTask) : "other";
-  const privateFolderTreeOptions = useMemo<
-    Array<{ path: string; name: string; depth: number }>
-  >(
-    () =>
-      folders
-        .slice()
-        .sort((a, b) => a.localeCompare(b))
-        .map((path) => {
-          const segments = path.split("/").filter(Boolean);
-          return {
-            path,
-            name: segments[segments.length - 1] || path,
-            depth: Math.max(segments.length - 1, 0),
-          };
-        }),
-    [folders],
+  // ── selection ──────────────────────────────────────────────────────────────
+  const isSelectionMode = selectedIds.size > 0;
+
+  const handleEnterSelection = useCallback((task: DownloadTask) => {
+    setSelectedIds(new Set([task.id]));
+  }, []);
+
+  const handleToggleSelect = useCallback((task: DownloadTask) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (!next.has(task.id)) next.add(task.id);
+      else next.delete(task.id);
+      return next;
+    });
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    Alert.alert(
+      `Delete ${count} item${count !== 1 ? "s" : ""}`,
+      "Remove selected downloads? This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            const ids = Array.from(selectedIds);
+            setSelectedIds(new Set());
+            Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
+              const mapping: Record<string, string> = {};
+              for (let i = 0; i < ids.length; i++) {
+                const newId = results[i];
+                if (newId) mapping[ids[i]] = newId;
+              }
+              if (Object.keys(mapping).length > 0) migrateLabels(mapping);
+            });
+          },
+        },
+      ],
+    );
+  }, [removeDownload, selectedIds, migrateLabels]);
+
+  const selectedTasks = useMemo(
+    () => downloads.filter((t) => selectedIds.has(t.id)),
+    [downloads, selectedIds],
   );
 
+  const canBulkMove =
+    selectedTasks.length > 0 &&
+    selectedTasks.every((t) => t.status === "completed" && !!t.filePath && t.source !== "device");
+
+  const canBulkMoveToPrivate =
+    selectedTasks.length > 0 &&
+    selectedTasks.every((t) => t.status === "completed" && !!t.filePath && t.source === "device");
+
+  const handleBulkMoveTo = useCallback(
+    (folderPath?: string | null) => {
+      const ids = Array.from(selectedIds);
+      setBulkMoveModalVisible(false);
+      setSelectedIds(new Set());
+      setMoveProgress({ total: ids.length, label: "Moving files..." });
+      bulkMoveDownloadsToFolder(ids, folderPath)
+        .then((idMapping) => { if (Object.keys(idMapping).length > 0) migrateLabels(idMapping); })
+        .catch((err) => {
+          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
+        })
+        .finally(() => setMoveProgress(null));
+    },
+    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels],
+  );
+
+  const handleBulkMoveToPrivate = useCallback(
+    (folderPath?: string | null) => {
+      const ids = Array.from(selectedIds);
+      setBulkMoveToPrivateModalVisible(false);
+      setSelectedIds(new Set());
+      setMoveProgress({ total: ids.length, label: "Moving to private folder..." });
+      bulkMoveDownloadsToFolder(ids, folderPath ?? null)
+        .then((idMapping) => { if (Object.keys(idMapping).length > 0) migrateLabels(idMapping); })
+        .catch((err) => {
+          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
+        })
+        .finally(() => setMoveProgress(null));
+    },
+    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels],
+  );
+
+  // ── device rescan ──────────────────────────────────────────────────────────
+  const handleRescanDevice = useCallback(() => {
+    scanDeviceDownloadFolder().catch((err) => {
+      Alert.alert(
+        "Scan failed",
+        err instanceof Error ? err.message : "Unable to scan device download folder",
+      );
+    });
+  }, [scanDeviceDownloadFolder]);
+
+  // ── folder item count ──────────────────────────────────────────────────────
   const getParentPath = useCallback((folderPath: string): string => {
     const slashIndex = folderPath.lastIndexOf("/");
     return slashIndex >= 0 ? folderPath.substring(0, slashIndex) : "";
@@ -788,226 +591,192 @@ export default function DownloadsScreen() {
   const getFolderItemCount = useCallback(
     (item: FolderGridItem): number => {
       if (item.isDeviceRoot) {
-        const childFolders = deviceFolders.filter(
-          (folderPath) => getParentPath(folderPath) === "",
-        ).length;
-        const files = downloads.filter(
-          (task) =>
-            task.status === "completed" &&
-            task.source === "device" &&
-            (task.folderPath || "") === "",
-        ).length;
-        return childFolders + files;
+        return (
+          deviceFolders.filter((fp) => getParentPath(fp) === "").length +
+          downloads.filter((t) => t.status === "completed" && t.source === "device" && (t.folderPath || "") === "").length
+        );
       }
-
       if (item.source === "device") {
-        const relativeFolderPath = item.path.startsWith(`${DEVICE_ROOT_PATH}/`)
+        const rel = item.path.startsWith(`${DEVICE_ROOT_PATH}/`)
           ? item.path.substring(DEVICE_ROOT_PATH.length + 1)
           : item.path;
-        const childFolders = deviceFolders.filter(
-          (folderPath) => getParentPath(folderPath) === relativeFolderPath,
-        ).length;
-        const files = downloads.filter(
-          (task) =>
-            task.status === "completed" &&
-            task.source === "device" &&
-            (task.folderPath || "") === relativeFolderPath,
-        ).length;
-        return childFolders + files;
+        return (
+          deviceFolders.filter((fp) => getParentPath(fp) === rel).length +
+          downloads.filter((t) => t.status === "completed" && t.source === "device" && (t.folderPath || "") === rel).length
+        );
       }
-
-      const childFolders = folders.filter(
-        (folderPath) => getParentPath(folderPath) === item.path,
-      ).length;
-      const files = downloads.filter(
-        (task) =>
-          task.status === "completed" &&
-          task.source !== "device" &&
-          (task.folderPath || "") === item.path,
-      ).length;
-      return childFolders + files;
+      return (
+        folders.filter((fp) => getParentPath(fp) === item.path).length +
+        downloads.filter((t) => t.status === "completed" && t.source !== "device" && (t.folderPath || "") === item.path).length
+      );
     },
-    [DEVICE_ROOT_PATH, deviceFolders, downloads, folders, getParentPath],
+    [deviceFolders, downloads, folders, getParentPath],
   );
 
-  const visiblePrivateFolders = !isDevicePath
-    ? folders
-        .filter((folderPath) => {
-          const slashIndex = folderPath.lastIndexOf("/");
-          const parentPath =
-            slashIndex >= 0 ? folderPath.substring(0, slashIndex) : "";
-          return parentPath === currentFolderPath;
-        })
-        .map((folderPath) => ({
-          type: "folder" as const,
-          path: folderPath,
-          name: folderPath.split("/").pop() || folderPath,
-          source: "private" as const,
-        }))
-    : [];
+  // ── visible data ───────────────────────────────────────────────────────────
+  const privateFolderTreeOptions = useMemo<Array<{ path: string; name: string; depth: number }>>(
+    () =>
+      folders
+        .slice()
+        .sort((a, b) => a.localeCompare(b))
+        .map((path) => {
+          const segments = path.split("/").filter(Boolean);
+          return { path, name: segments[segments.length - 1] || path, depth: Math.max(segments.length - 1, 0) };
+        }),
+    [folders],
+  );
 
-  const visibleDeviceFolders = isDevicePath
-    ? deviceFolders
-        .filter((folderPath) => {
-          const slashIndex = folderPath.lastIndexOf("/");
-          const parentPath =
-            slashIndex >= 0 ? folderPath.substring(0, slashIndex) : "";
-          return parentPath === currentDeviceFolderPath;
-        })
-        .map((folderPath) => ({
-          type: "folder" as const,
-          path: `${DEVICE_ROOT_PATH}/${folderPath}`,
-          name: folderPath.split("/").pop() || folderPath,
-          source: "device" as const,
-        }))
-    : [];
-
-  const visibleFolders: DownloadGridItem[] = [
-    ...visiblePrivateFolders,
-    ...(currentFolderPath === ""
-      ? [
-          {
+  const visibleFolders: DownloadGridItem[] = useMemo(() => {
+    const privateFolders = !isDevicePath
+      ? folders
+          .filter((fp) => {
+            const slashIndex = fp.lastIndexOf("/");
+            const parentPath = slashIndex >= 0 ? fp.substring(0, slashIndex) : "";
+            return parentPath === currentFolderPath;
+          })
+          .map((fp) => ({
             type: "folder" as const,
-            path: DEVICE_ROOT_PATH,
-            name: "Device Download",
+            path: fp,
+            name: fp.split("/").pop() || fp,
+            source: "private" as const,
+          }))
+      : [];
+
+    const deviceFolderItems = isDevicePath
+      ? deviceFolders
+          .filter((fp) => {
+            const slashIndex = fp.lastIndexOf("/");
+            const parentPath = slashIndex >= 0 ? fp.substring(0, slashIndex) : "";
+            return parentPath === currentDeviceFolderPath;
+          })
+          .map((fp) => ({
+            type: "folder" as const,
+            path: `${DEVICE_ROOT_PATH}/${fp}`,
+            name: fp.split("/").pop() || fp,
             source: "device" as const,
-            isDeviceRoot: true,
-          },
-        ]
-      : []),
-    ...visibleDeviceFolders,
-  ].sort((a, b) =>
-    a.type === "folder" && b.type === "folder"
-      ? a.name.localeCompare(b.name)
-      : 0,
+          }))
+      : [];
+
+    const deviceRoot =
+      currentFolderPath === ""
+        ? [{ type: "folder" as const, path: DEVICE_ROOT_PATH, name: "Device Download", source: "device" as const, isDeviceRoot: true }]
+        : [];
+
+    return [...privateFolders, ...deviceRoot, ...deviceFolderItems].sort((a, b) =>
+      a.type === "folder" && b.type === "folder" ? a.name.localeCompare(b.name) : 0,
+    );
+  }, [isDevicePath, folders, currentFolderPath, deviceFolders, currentDeviceFolderPath]);
+
+  const visibleDownloads = useMemo(
+    () =>
+      downloads.filter((task) => {
+        if (task.status !== "completed") return currentFolderPath === "";
+        if (task.source === "device") {
+          if (!isDevicePath) return false;
+          return (task.folderPath || "") === currentDeviceFolderPath;
+        }
+        if (isDevicePath) return false;
+        return (task.folderPath || "") === currentFolderPath;
+      }),
+    [downloads, currentFolderPath, isDevicePath, currentDeviceFolderPath],
   );
-
-  const visibleDownloads = downloads.filter((task) => {
-    if (task.status !== "completed") {
-      return currentFolderPath === "";
-    }
-
-    if (task.source === "device") {
-      if (!isDevicePath) {
-        return false;
-      }
-      const fileFolder = task.folderPath || "";
-      return fileFolder === currentDeviceFolderPath;
-    }
-
-    if (isDevicePath) {
-      return false;
-    }
-
-    const fileFolder = task.folderPath || "";
-    return fileFolder === currentFolderPath;
-  });
 
   const sortedFiles = useMemo(() => {
     const files = visibleDownloads
-      .filter(
-        (task) => filterType === "all" || getMediaType(task) === filterType,
-      )
-      .filter(
-        (task) =>
-          !labelFilter || (fileLabels[task.id] || []).includes(labelFilter),
-      )
+      .filter((task) => filterType === "all" || getMediaType(task) === filterType)
+      .filter((task) => !labelFilter || (fileLabels[task.id] || []).includes(labelFilter))
       .map((task) => ({ type: "file" as const, task }));
+
     return files.slice().sort((a, b) => {
       switch (sortKey) {
-        case "name_asc":
-          return (a.task.fileName || "").localeCompare(b.task.fileName || "");
-        case "name_desc":
-          return (b.task.fileName || "").localeCompare(a.task.fileName || "");
-        case "date_newest":
-          return (b.task.createdAt ?? 0) - (a.task.createdAt ?? 0);
-        case "date_oldest":
-          return (a.task.createdAt ?? 0) - (b.task.createdAt ?? 0);
-        case "size_largest":
-          return (b.task.totalBytes ?? 0) - (a.task.totalBytes ?? 0);
-        case "size_smallest":
-          return (a.task.totalBytes ?? 0) - (b.task.totalBytes ?? 0);
-        case "duration_longest":
-          return (b.task.duration ?? 0) - (a.task.duration ?? 0);
-        case "duration_shortest":
-          return (a.task.duration ?? 0) - (b.task.duration ?? 0);
+        case "name_asc": return (a.task.fileName || "").localeCompare(b.task.fileName || "");
+        case "name_desc": return (b.task.fileName || "").localeCompare(a.task.fileName || "");
+        case "date_newest": return (b.task.createdAt ?? 0) - (a.task.createdAt ?? 0);
+        case "date_oldest": return (a.task.createdAt ?? 0) - (b.task.createdAt ?? 0);
+        case "size_largest": return (b.task.totalBytes ?? 0) - (a.task.totalBytes ?? 0);
+        case "size_smallest": return (a.task.totalBytes ?? 0) - (b.task.totalBytes ?? 0);
+        case "duration_longest": return (b.task.duration ?? 0) - (a.task.duration ?? 0);
+        case "duration_shortest": return (a.task.duration ?? 0) - (b.task.duration ?? 0);
         case "type": {
-          const ext = (t: DownloadTask) =>
-            (t.fileName || "").split(".").pop()?.toLowerCase() || "";
+          const ext = (t: DownloadTask) => (t.fileName || "").split(".").pop()?.toLowerCase() || "";
           return ext(a.task).localeCompare(ext(b.task));
         }
-        default:
-          return 0;
+        default: return 0;
       }
     });
-  }, [
-    visibleDownloads,
-    sortKey,
-    filterType,
-    getMediaType,
-    labelFilter,
-    fileLabels,
-  ]);
+  }, [visibleDownloads, sortKey, filterType, getMediaType, labelFilter, fileLabels]);
 
-  const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
-  prefetchSizesRef.current = prefetchDeviceFileSizes;
+  const gridData: DownloadGridItem[] = [
+    ...(filterType === "all" ? visibleFolders : []),
+    ...sortedFiles,
+  ];
 
+  const visibleFileIds = useMemo(() => sortedFiles.map((f) => f.task.id), [sortedFiles]);
+  const allSelected = visibleFileIds.length > 0 && visibleFileIds.every((id) => selectedIds.has(id));
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(allSelected ? new Set() : new Set(visibleFileIds));
+  }, [allSelected, visibleFileIds]);
+
+  const filterSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (filterType !== "all") {
+      const icon = filterType === "video" ? "🎬" : filterType === "audio" ? "🎵" : filterType === "image" ? "🖼️" : "📄";
+      parts.push(`${icon} ${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`);
+    }
+    if (labelFilter) parts.push(`🏷 ${labelFilter}`);
+    return parts.length > 0 ? parts.join(" · ") : "All";
+  }, [filterType, labelFilter]);
+  const isFilterActive = filterType !== "all" || !!labelFilter;
+
+  // ── viewability (device file size prefetch) ────────────────────────────────
   const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 1 });
   const onViewableItemsChangedRef = useRef(
-    ({
-      viewableItems,
-    }: {
-      viewableItems: Array<{ item: DownloadGridItem }>;
-    }) => {
+    ({ viewableItems }: { viewableItems: Array<{ item: DownloadGridItem }> }) => {
       const ids: string[] = [];
       for (const v of viewableItems) {
-        if (
-          v.item.type === "file" &&
-          v.item.task.source === "device" &&
-          v.item.task.totalBytes === 0
-        ) {
+        if (v.item.type === "file" && v.item.task.source === "device" && v.item.task.totalBytes === 0) {
           ids.push(v.item.task.id);
         }
       }
-      if (ids.length > 0) {
-        prefetchSizesRef.current(ids);
-      }
+      if (ids.length > 0) prefetchSizesRef.current(ids);
     },
   );
 
+  // ── folder picker options builders ─────────────────────────────────────────
+  const privateFolderPickerOptions = useCallback(
+    (onSelect: (path: string | null) => void): FolderPickerOption[] => [
+      { label: "Root", onPress: () => onSelect(null) },
+      ...privateFolderTreeOptions.map((f) => ({
+        label: `📁 ${f.name}`,
+        depth: f.depth,
+        onPress: () => onSelect(f.path),
+      })),
+    ],
+    [privateFolderTreeOptions],
+  );
+
+  const copyModalOptions = useMemo<FolderPickerOption[]>(() => {
+    if (!copyTask) return [];
+    if (copyTask.source === "device") {
+      return privateFolderPickerOptions(handleCopyToFolder);
+    }
+    return [{ label: "Device Download", onPress: () => handleCopyToFolder(DEVICE_DOWNLOAD_MOVE_TARGET) }];
+  }, [copyTask, privateFolderPickerOptions, handleCopyToFolder]);
+
+  // ── render item ────────────────────────────────────────────────────────────
   const renderItem = useCallback(
     ({ item }: { item: DownloadGridItem }) => {
       if (item.type === "folder") {
-        const itemCount = getFolderItemCount(item);
         return (
           <View style={styles.gridItem}>
-            <View style={styles.folderCard}>
-              <TouchableOpacity
-                style={styles.folderCardBody}
-                onPress={() => handleOpenFolder(item)}
-              >
-                <Text style={styles.folderIcon}>📁</Text>
-                <Text style={styles.folderName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-              <View style={{ display: "flex", flexDirection: "row" }}>
-                <Text style={styles.folderMeta} numberOfLines={1}>
-                  {item.isDeviceRoot && isDeviceScanRunning
-                    ? "Scanning..."
-                    : `${itemCount} item${itemCount !== 1 ? "s" : ""} · Tap to open`}
-                </Text>
-                {item.source === "private" ? (
-                  <TouchableOpacity
-                    style={styles.folderMenuBtn}
-                    onPress={() => handleFolderAction(item.path)}
-                  >
-                    <Text style={styles.folderMenuText}>⋯</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-              <View style={{ height: 24 }} />
-            </View>
+            <FolderCard
+              item={item}
+              itemCount={getFolderItemCount(item)}
+              isDeviceScanRunning={isDeviceScanRunning}
+              onOpen={() => handleOpenFolder(item)}
+              onAction={item.source === "private" ? () => handleFolderAction(item.path) : undefined}
+            />
           </View>
         );
       }
@@ -1025,15 +794,13 @@ export default function DownloadsScreen() {
             onMove={handleCopyRequest}
             onMoveInPrivate={handleMoveInPrivateRequest}
             onRemove={isInTrash ? undefined : handleRemove}
-            onDeletePermanently={
-              isInTrash ? handleDeletePermanently : undefined
-            }
+            onDeletePermanently={isInTrash ? handleDeletePermanently : undefined}
             isSelectionMode={isSelectionMode}
             isSelected={selectedIdsRef.current.has(item.task.id)}
             onLongPress={handleEnterSelection}
             onSelect={handleToggleSelect}
             labels={fileLabelsRef.current[item.task.id]}
-            onLabel={handleLabelTask}
+            onLabel={setLabelTaskTarget}
           />
         </View>
       );
@@ -1057,166 +824,39 @@ export default function DownloadsScreen() {
       handleToggleSelect,
       isInTrash,
       handleDeletePermanently,
-      handleLabelTask,
     ],
   );
 
-  const visibleFileIds = useMemo(
-    () => sortedFiles.map((f) => f.task.id),
-    [sortedFiles],
-  );
-  const allSelected =
-    visibleFileIds.length > 0 &&
-    visibleFileIds.every((id) => selectedIds.has(id));
-
-  const handleSelectAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(visibleFileIds));
-    }
-  }, [allSelected, visibleFileIds]);
-
-  const filterSummary = useMemo(() => {
-    const parts: string[] = [];
-    if (filterType !== "all") {
-      const icon =
-        filterType === "video"
-          ? "🎬"
-          : filterType === "audio"
-            ? "🎵"
-            : filterType === "image"
-              ? "🖼️"
-              : "📄";
-      parts.push(
-        `${icon} ${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`,
-      );
-    }
-    if (labelFilter) parts.push(`🏷 ${labelFilter}`);
-    return parts.length > 0 ? parts.join(" · ") : "All";
-  }, [filterType, labelFilter]);
-  const isFilterActive = filterType !== "all" || !!labelFilter;
-
-  const gridData: DownloadGridItem[] = [
-    ...(filterType === "all" ? visibleFolders : []),
-    ...sortedFiles,
-  ];
-
+  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        {isSelectionMode ? (
-          <>
-            <TouchableOpacity
-              style={styles.backFolderBtn}
-              onPress={handleCancelSelection}
-            >
-              <Text style={styles.backFolderText}>✕</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.newFolderBtn}
-              onPress={handleSelectAll}
-            >
-              <Text style={styles.newFolderBtnText}>
-                {allSelected ? "Deselect all" : "Select all"}
-              </Text>
-            </TouchableOpacity>
-            <View style={{ marginRight: "auto", marginLeft: 8 }}>
-              <Text style={styles.headerTitle}>
-                {selectedIds.size} selected
-              </Text>
-            </View>
-            {canBulkMove && (
-              <TouchableOpacity
-                style={styles.newFolderBtn}
-                onPress={handleBulkMoveRequest}
-              >
-                <Text style={styles.newFolderBtnText}>Move</Text>
-              </TouchableOpacity>
-            )}
-            {canBulkMoveToPrivate && (
-              <TouchableOpacity
-                style={styles.newFolderBtn}
-                onPress={handleBulkMoveToPrivateRequest}
-              >
-                <Text style={styles.newFolderBtnText}>→ Private</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.newFolderBtn, styles.deleteSelectionBtn]}
-              onPress={handleBulkDelete}
-            >
-              <Text
-                style={[styles.newFolderBtnText, styles.deleteSelectionBtnText]}
-              >
-                Delete
-              </Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            {currentFolderPath ? (
-              <View style={styles.folderPathRow}>
-                <TouchableOpacity
-                  style={styles.backFolderBtn}
-                  onPress={handleBackFolder}
-                >
-                  <Text style={styles.backFolderText}>←</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-            <View style={{ marginRight: "auto" }}>
-              <Text style={styles.headerTitle}>
-                {(currentFolderPath || "Root").replace(
-                  DEVICE_ROOT_PATH,
-                  "Device Download",
-                )}{" "}
-                · {gridData.length} item{gridData.length !== 1 ? "s" : ""}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.actionsMenuBtn}
-              onPress={() => setActionsDialogVisible(true)}
-            >
-              <Text style={styles.actionsMenuBtnText}>⋯</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+      <DownloadsHeader
+        isSelectionMode={isSelectionMode}
+        selectedCount={selectedIds.size}
+        allSelected={allSelected}
+        canBulkMove={canBulkMove}
+        canBulkMoveToPrivate={canBulkMoveToPrivate}
+        currentFolderPath={currentFolderPath}
+        gridDataLength={gridData.length}
+        onCancelSelection={handleCancelSelection}
+        onSelectAll={handleSelectAll}
+        onBulkMove={() => setBulkMoveModalVisible(true)}
+        onBulkMoveToPrivate={() => setBulkMoveToPrivateModalVisible(true)}
+        onBulkDelete={handleBulkDelete}
+        onBack={handleBackFolder}
+        onActionsMenu={() => setActionsDialogVisible(true)}
+      />
 
       {!isSelectionMode && (
-        <View style={styles.filterBar}>
-          <TouchableOpacity
-            style={[
-              styles.filterBarBtn,
-              isFilterActive && styles.filterBarBtnActive,
-            ]}
-            onPress={() => setFilterDialogVisible(true)}
-          >
-            <Text
-              style={[
-                styles.filterBarText,
-                isFilterActive && styles.filterBarTextActive,
-              ]}
-            >
-              ▼ {filterSummary}
-            </Text>
-          </TouchableOpacity>
-          {isFilterActive && (
-            <TouchableOpacity
-              style={styles.filterBarClearBtn}
-              onPress={() => {
-                setFilterType("all");
-                setLabelFilter(null);
-              }}
-            >
-              <Text style={styles.filterBarClearText}>✕ Clear</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <FilterBar
+          filterSummary={filterSummary}
+          isFilterActive={isFilterActive}
+          onOpenFilter={() => setFilterDialogVisible(true)}
+          onClear={() => { setFilterType("all"); setLabelFilter(null); }}
+        />
       )}
 
-      {isDevicePath ? (
+      {isDevicePath && (
         <View style={styles.deviceScanStatusRow}>
           <Text style={styles.deviceScanStatusText}>
             {isDeviceScanRunning
@@ -1224,7 +864,7 @@ export default function DownloadsScreen() {
               : "Showing last scanned device download results"}
           </Text>
         </View>
-      ) : null}
+      )}
 
       {gridData.length === 0 ? (
         <View style={styles.emptyState}>
@@ -1260,734 +900,106 @@ export default function DownloadsScreen() {
         />
       )}
 
-      <Modal
+      <RenameModal
         visible={!!renameTask}
-        transparent
-        animationType="fade"
-        onRequestClose={closeRenameModal}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Rename file</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={renameText}
-              onChangeText={setRenameText}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="Enter new file name"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalBtn}
-                onPress={closeRenameModal}
-              >
-                <Text style={styles.modalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalPrimaryBtn]}
-                onPress={submitRename}
-              >
-                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>
-                  Rename
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        renameText={renameText}
+        onChangeText={setRenameText}
+        onCancel={closeRenameModal}
+        onSubmit={submitRename}
+      />
 
-      <Modal
-        visible={!!folderDialogMode}
-        transparent
-        animationType="fade"
-        onRequestClose={closeFolderDialog}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {folderDialogMode === "create"
-                ? "Create folder"
-                : "Rename folder"}
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              value={folderNameText}
-              onChangeText={setFolderNameText}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="Folder name"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalBtn}
-                onPress={closeFolderDialog}
-              >
-                <Text style={styles.modalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalPrimaryBtn]}
-                onPress={submitFolderDialog}
-              >
-                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>
-                  {folderDialogMode === "create" ? "Create" : "Save"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <FolderDialog
+        mode={folderDialogMode}
+        folderNameText={folderNameText}
+        onChangeText={setFolderNameText}
+        onCancel={closeFolderDialog}
+        onSubmit={submitFolderDialog}
+      />
 
-      <Modal
+      <FolderPickerModal
         visible={!!copyTask}
-        transparent
-        animationType="fade"
-        onRequestClose={closeCopyModal}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={closeCopyModal}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>
-              {copyTask?.source === "device"
-                ? "Copy file to private folder"
-                : "Copy file to device download"}
-            </Text>
-            <View style={styles.moveOptions}>
-              {copyTask?.source === "device" ? (
-                <>
-                  <TouchableOpacity
-                    style={styles.moveOptionBtn}
-                    onPress={() => handleCopyToFolder(null)}
-                  >
-                    <Text style={styles.moveOptionText}>Root</Text>
-                  </TouchableOpacity>
-                  {privateFolderTreeOptions.map((folder) => (
-                    <TouchableOpacity
-                      key={folder.path}
-                      style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
-                      onPress={() => handleCopyToFolder(folder.path)}
-                    >
-                      <View style={{ width: folder.depth * 16 }} />
-                      <Text style={styles.moveOptionText}>
-                        📁 {folder.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </>
-              ) : (
-                <TouchableOpacity
-                  style={styles.moveOptionBtn}
-                  onPress={() =>
-                    handleCopyToFolder(DEVICE_DOWNLOAD_MOVE_TARGET)
-                  }
-                >
-                  <Text style={styles.moveOptionText}>Device Download</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        title={
+          copyTask?.source === "device"
+            ? "Copy file to private folder"
+            : "Copy file to device download"
+        }
+        options={copyModalOptions}
+        onClose={() => setCopyTask(null)}
+      />
 
-      <Modal
+      <FolderPickerModal
         visible={!!moveTaskInPrivate}
-        transparent
-        animationType="fade"
-        onRequestClose={closeMoveInPrivateModal}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={closeMoveInPrivateModal}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>Move file to folder</Text>
-            <View style={styles.moveOptions}>
-              <TouchableOpacity
-                style={styles.moveOptionBtn}
-                onPress={() => handleMoveInPrivateToFolder(null)}
-              >
-                <Text style={styles.moveOptionText}>Root</Text>
-              </TouchableOpacity>
-              {privateFolderTreeOptions.map((folder) => (
-                <TouchableOpacity
-                  key={`move_private_${folder.path}`}
-                  style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
-                  onPress={() => handleMoveInPrivateToFolder(folder.path)}
-                >
-                  <View style={{ width: folder.depth * 16 }} />
-                  <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        title="Move file to folder"
+        options={privateFolderPickerOptions(handleMoveInPrivateToFolder)}
+        onClose={() => setMoveTaskInPrivate(null)}
+      />
 
-      <Modal
-        visible={!!previewTask}
-        animationType="slide"
-        onRequestClose={closePreviewModal}
-      >
-        <SafeAreaView style={styles.previewContainer} edges={["top"]}>
-          <View style={styles.previewHeader}>
-            <Text style={styles.previewTitle} numberOfLines={1}>
-              {previewTask?.fileName || "Media preview"}
-            </Text>
-            <TouchableOpacity
-              style={styles.previewCloseBtn}
-              onPress={closePreviewModal}
-            >
-              <Text style={styles.previewCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.previewBody}>
-            {previewTask?.filePath && previewType === "image" && (
-              <Image
-                source={{ uri: previewTask.filePath }}
-                style={styles.previewImage}
-                resizeMode="contain"
-              />
-            )}
-
-            {previewTask?.filePath &&
-              (previewType === "video" || previewType === "audio") && (
-                <Video
-                  source={{ uri: previewTask.filePath }}
-                  style={
-                    previewType === "audio"
-                      ? styles.previewAudio
-                      : styles.previewVideo
-                  }
-                  useNativeControls
-                  shouldPlay
-                  resizeMode={ResizeMode.CONTAIN}
-                />
-              )}
-          </View>
-        </SafeAreaView>
-      </Modal>
-
-      <Modal
-        visible={actionsDialogVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          setActionsDialogVisible(false);
-          setActionsPage("main");
-        }}
-      >
-        <TouchableOpacity
-          style={styles.actionsDropdownBackdrop}
-          activeOpacity={1}
-          onPress={() => {
-            setActionsDialogVisible(false);
-            setActionsPage("main");
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.actionsDropdown}
-            onPress={() => {}}
-          >
-            {actionsPage === "main" ? (
-              <>
-                {!isDevicePath && (
-                  <TouchableOpacity
-                    style={styles.actionsDropdownRow}
-                    onPress={() => {
-                      setActionsDialogVisible(false);
-                      setActionsPage("main");
-                      openCreateFolder();
-                    }}
-                  >
-                    <Text style={styles.actionsDropdownIcon}>📁</Text>
-                    <Text style={styles.actionsDropdownLabel}>New folder</Text>
-                  </TouchableOpacity>
-                )}
-                {isDevicePath && (
-                  <TouchableOpacity
-                    style={[
-                      styles.actionsDropdownRow,
-                      isDeviceScanRunning && styles.actionsSheetRowDisabled,
-                    ]}
-                    disabled={isDeviceScanRunning}
-                    onPress={() => {
-                      setActionsDialogVisible(false);
-                      setActionsPage("main");
-                      handleRescanDevice();
-                    }}
-                  >
-                    <Text style={styles.actionsDropdownIcon}>🔄</Text>
-                    <Text style={styles.actionsDropdownLabel}>
-                      {isDeviceScanRunning ? "Scanning..." : "Rescan device"}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                <View style={styles.actionsDropdownDivider} />
-                <TouchableOpacity
-                  style={styles.actionsDropdownRow}
-                  onPress={() => setActionsPage("sort")}
-                >
-                  <Text style={styles.actionsDropdownIcon}>↕️</Text>
-                  <Text style={styles.actionsDropdownLabel}>Sort</Text>
-                  <Text style={styles.actionsDropdownChevron}>›</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionsDropdownRow}
-                  onPress={() => {
-                    setActionsDialogVisible(false);
-                    setActionsPage("main");
-                    setManageLabelModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.actionsDropdownIcon}>🏷</Text>
-                  <Text style={styles.actionsDropdownLabel}>Manage labels</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.actionsDropdownRow}
-                  onPress={() => setActionsPage("main")}
-                >
-                  <Text style={styles.actionsDropdownIcon}>‹</Text>
-                  <Text
-                    style={[styles.actionsDropdownLabel, { fontWeight: "700" }]}
-                  >
-                    Sort by
-                  </Text>
-                </TouchableOpacity>
-                <View style={styles.actionsDropdownDivider} />
-                {(
-                  [
-                    ["name_asc", "Name A → Z"],
-                    ["name_desc", "Name Z → A"],
-                    ["date_newest", "Date (newest first)"],
-                    ["date_oldest", "Date (oldest first)"],
-                    ["size_largest", "Size (largest first)"],
-                    ["size_smallest", "Size (smallest first)"],
-                    ["duration_longest", "Duration (longest first)"],
-                    ["duration_shortest", "Duration (shortest first)"],
-                    ["type", "File type"],
-                  ] as [SortKey, string][]
-                ).map(([key, label]) => (
-                  <TouchableOpacity
-                    key={key}
-                    style={styles.actionsDropdownRow}
-                    onPress={() => {
-                      applySortKey(key);
-                      setActionsDialogVisible(false);
-                      setActionsPage("main");
-                    }}
-                  >
-                    <Text style={styles.actionsDropdownIcon}>
-                      {sortKey === key ? "✓" : "  "}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.actionsDropdownLabel,
-                        sortKey === key && styles.actionsSheetRowActive,
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </>
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      <Modal
+      <FolderPickerModal
         visible={bulkMoveModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeBulkMoveModal}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={closeBulkMoveModal}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>
-              Move {selectedIds.size} item{selectedIds.size !== 1 ? "s" : ""} to
-              folder
-            </Text>
-            <View style={styles.moveOptions}>
-              <TouchableOpacity
-                style={styles.moveOptionBtn}
-                onPress={() => handleBulkMoveTo(null)}
-              >
-                <Text style={styles.moveOptionText}>Root</Text>
-              </TouchableOpacity>
-              {privateFolderTreeOptions.map((folder) => (
-                <TouchableOpacity
-                  key={`bulk_move_${folder.path}`}
-                  style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
-                  onPress={() => handleBulkMoveTo(folder.path)}
-                >
-                  <View style={{ width: folder.depth * 16 }} />
-                  <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-      <Modal
+        title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to folder`}
+        options={privateFolderPickerOptions(handleBulkMoveTo)}
+        onClose={() => setBulkMoveModalVisible(false)}
+      />
+
+      <FolderPickerModal
         visible={bulkMoveToPrivateModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeBulkMoveToPrivateModal}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={closeBulkMoveToPrivateModal}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>
-              Move {selectedIds.size} item{selectedIds.size !== 1 ? "s" : ""} to
-              private folder
-            </Text>
-            <View style={styles.moveOptions}>
-              <TouchableOpacity
-                style={styles.moveOptionBtn}
-                onPress={() => handleBulkMoveToPrivate(null)}
-              >
-                <Text style={styles.moveOptionText}>Root</Text>
-              </TouchableOpacity>
-              {privateFolderTreeOptions.map((folder) => (
-                <TouchableOpacity
-                  key={`bulk_move_private_${folder.path}`}
-                  style={[styles.moveOptionBtn, styles.moveTreeOptionBtn]}
-                  onPress={() => handleBulkMoveToPrivate(folder.path)}
-                >
-                  <View style={{ width: folder.depth * 16 }} />
-                  <Text style={styles.moveOptionText}>📁 {folder.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to private folder`}
+        options={privateFolderPickerOptions(handleBulkMoveToPrivate)}
+        onClose={() => setBulkMoveToPrivateModalVisible(false)}
+      />
 
-      {/* Filter dialog */}
-      <Modal
+      <PreviewModal
+        task={previewTask}
+        mediaType={previewTask ? getMediaType(previewTask) : "other"}
+        onClose={() => setPreviewTask(null)}
+      />
+
+      <ActionsDropdown
+        visible={actionsDialogVisible}
+        isDevicePath={isDevicePath}
+        isDeviceScanRunning={isDeviceScanRunning}
+        sortKey={sortKey}
+        onClose={() => setActionsDialogVisible(false)}
+        onCreateFolder={() => { setActionsDialogVisible(false); openCreateFolder(); }}
+        onRescan={() => { setActionsDialogVisible(false); handleRescanDevice(); }}
+        onSortChange={applySortKey}
+        onManageLabels={() => { setActionsDialogVisible(false); setManageLabelModalVisible(true); }}
+      />
+
+      <FilterDialog
         visible={filterDialogVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFilterDialogVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setFilterDialogVisible(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>Filter</Text>
-            <Text style={styles.filterDialogSection}>TYPE</Text>
-            <View style={styles.filterDialogChips}>
-              {(
-                ["all", "video", "audio", "image", "other"] as FilterType[]
-              ).map((f) => {
-                const lbl =
-                  f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1);
-                const icon =
-                  f === "all"
-                    ? "🗂️"
-                    : f === "video"
-                      ? "🎬"
-                      : f === "audio"
-                        ? "🎵"
-                        : f === "image"
-                          ? "🖼️"
-                          : "📄";
-                const active = filterType === f;
-                return (
-                  <TouchableOpacity
-                    key={f}
-                    style={[
-                      styles.filterChip,
-                      active && styles.filterChipActive,
-                    ]}
-                    onPress={() => setFilterType(f)}
-                  >
-                    <Text
-                      style={[
-                        styles.filterChipText,
-                        active && styles.filterChipTextActive,
-                      ]}
-                    >
-                      {icon} {lbl}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {labelDefs.length > 0 && (
-              <>
-                <Text style={styles.filterDialogSection}>LABELS</Text>
-                <View style={styles.filterDialogChips}>
-                  {labelDefs.map((lbl) => {
-                    const active = labelFilter === lbl;
-                    return (
-                      <TouchableOpacity
-                        key={lbl}
-                        style={[
-                          styles.filterChip,
-                          active && styles.filterChipLabelActive,
-                        ]}
-                        onPress={() => setLabelFilter(active ? null : lbl)}
-                      >
-                        <Text
-                          style={[
-                            styles.filterChipText,
-                            active && styles.filterChipTextActive,
-                          ]}
-                        >
-                          🏷 {lbl}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-            <View style={styles.modalActions}>
-              {isFilterActive && (
-                <TouchableOpacity
-                  style={styles.modalBtn}
-                  onPress={() => {
-                    setFilterType("all");
-                    setLabelFilter(null);
-                  }}
-                >
-                  <Text style={styles.modalBtnText}>Clear</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalPrimaryBtn]}
-                onPress={() => setFilterDialogVisible(false)}
-              >
-                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>
-                  Done
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        filterType={filterType}
+        labelFilter={labelFilter}
+        labelDefs={labelDefs}
+        isFilterActive={isFilterActive}
+        onFilterType={setFilterType}
+        onLabelFilter={setLabelFilter}
+        onClose={() => setFilterDialogVisible(false)}
+        onClear={() => { setFilterType("all"); setLabelFilter(null); }}
+      />
 
-      {/* Label picker modal */}
-      <Modal
-        visible={!!labelTaskTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setLabelTaskTarget(null)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setLabelTaskTarget(null)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>🏷 Labels</Text>
-            {labelDefs.length === 0 && (
-              <Text style={styles.labelPickerEmpty}>
-                No labels yet. Add one below.
-              </Text>
-            )}
-            {labelDefs.map((lbl) => {
-              const checked = (
-                fileLabels[labelTaskTarget?.id ?? ""] || []
-              ).includes(lbl);
-              return (
-                <TouchableOpacity
-                  key={lbl}
-                  style={styles.labelPickerRow}
-                  onPress={() =>
-                    handleToggleFileLabel(labelTaskTarget!.id, lbl)
-                  }
-                >
-                  <View
-                    style={[
-                      styles.labelPickerCheck,
-                      checked && styles.labelPickerCheckActive,
-                    ]}
-                  >
-                    {checked && (
-                      <Text style={styles.labelPickerCheckMark}>✓</Text>
-                    )}
-                  </View>
-                  <Text style={styles.labelPickerName}>{lbl}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            <View style={styles.labelPickerAddRow}>
-              <TextInput
-                style={styles.labelPickerInput}
-                placeholder="New label..."
-                value={manageLabelNewText}
-                onChangeText={setManageLabelNewText}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  handleAddLabelDef(manageLabelNewText);
-                  setManageLabelNewText("");
-                }}
-              />
-              <TouchableOpacity
-                style={styles.labelPickerAddBtn}
-                onPress={() => {
-                  handleAddLabelDef(manageLabelNewText);
-                  setManageLabelNewText("");
-                }}
-              >
-                <Text style={styles.labelPickerAddBtnText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalPrimaryBtn]}
-                onPress={() => setLabelTaskTarget(null)}
-              >
-                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>
-                  Done
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      <LabelPickerModal
+        task={labelTaskTarget}
+        fileLabels={fileLabels}
+        labelDefs={labelDefs}
+        newLabelText={manageLabelNewText}
+        onChangeNewLabel={setManageLabelNewText}
+        onToggle={handleToggleFileLabel}
+        onAddLabel={handleAddLabelDef}
+        onClose={() => setLabelTaskTarget(null)}
+      />
 
-      {/* Manage labels modal */}
-      <Modal
+      <ManageLabelsModal
         visible={manageLabelModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setManageLabelModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setManageLabelModalVisible(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.modalCard}
-            onPress={() => {}}
-          >
-            <Text style={styles.modalTitle}>Manage Labels</Text>
-            {labelDefs.length === 0 && (
-              <Text style={styles.labelPickerEmpty}>
-                No labels yet. Add one below.
-              </Text>
-            )}
-            {labelDefs.map((lbl) => (
-              <View key={lbl} style={styles.manageLabelRow}>
-                <Text style={styles.manageLabelName}>{lbl}</Text>
-                <TouchableOpacity
-                  style={styles.manageLabelDeleteBtn}
-                  onPress={() => handleDeleteLabelDef(lbl)}
-                >
-                  <Text style={styles.manageLabelDeleteText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-            <View style={styles.labelPickerAddRow}>
-              <TextInput
-                style={styles.labelPickerInput}
-                placeholder="New label..."
-                value={manageLabelNewText}
-                onChangeText={setManageLabelNewText}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  handleAddLabelDef(manageLabelNewText);
-                  setManageLabelNewText("");
-                }}
-              />
-              <TouchableOpacity
-                style={styles.labelPickerAddBtn}
-                onPress={() => {
-                  handleAddLabelDef(manageLabelNewText);
-                  setManageLabelNewText("");
-                }}
-              >
-                <Text style={styles.labelPickerAddBtnText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.modalPrimaryBtn]}
-                onPress={() => setManageLabelModalVisible(false)}
-              >
-                <Text style={[styles.modalBtnText, styles.modalPrimaryBtnText]}>
-                  Done
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        labelDefs={labelDefs}
+        newLabelText={manageLabelNewText}
+        onChangeNewLabel={setManageLabelNewText}
+        onAddLabel={handleAddLabelDef}
+        onDeleteLabel={handleDeleteLabelDef}
+        onClose={() => setManageLabelModalVisible(false)}
+      />
 
-      <Modal
-        visible={moveProgress !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          /* block dismiss */
-        }}
-      >
-        <View style={styles.moveProgressBackdrop}>
-          <View style={styles.moveProgressCard}>
-            <ActivityIndicator size="large" color="#1A73E8" />
-            <Text style={styles.moveProgressLabel}>
-              {moveProgress?.label ?? "Working..."}
-            </Text>
-            <Text style={styles.moveProgressSubLabel}>
-              {moveProgress?.total ?? 0} item
-              {(moveProgress?.total ?? 0) !== 1 ? "s" : ""} · please wait
-            </Text>
-          </View>
-        </View>
-      </Modal>
+      <MoveProgressModal progress={moveProgress} />
     </SafeAreaView>
   );
 }
@@ -1996,78 +1008,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F5F5",
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#DDD",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#888",
-    marginTop: 2,
-  },
-  newFolderBtn: {
-    backgroundColor: "#E3F2FD",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  newFolderBtnText: {
-    color: "#1A73E8",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  deleteSelectionBtn: {
-    backgroundColor: "#FFEBEE",
-    marginLeft: 8,
-  },
-  deleteSelectionBtnText: {
-    color: "#C62828",
-  },
-  rescanBtn: {
-    backgroundColor: "#E7F7ED",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  rescanBtnDisabled: {
-    opacity: 0.65,
-  },
-  rescanBtnText: {
-    color: "#1F8A4C",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  folderPathRow: {
-    paddingHorizontal: 4,
-  },
-  deviceScanStatusRow: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
-  deviceScanStatusText: {
-    fontSize: 12,
-    color: "#4A6A8A",
-  },
-  backFolderBtn: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  backFolderText: {
-    color: "#1F4E79",
-    fontSize: 14,
-    fontWeight: "600",
   },
   listContent: {
     flexGrow: 1,
@@ -2081,57 +1021,13 @@ const styles = StyleSheet.create({
     width: "48.5%",
     marginBottom: 10,
   },
-  folderCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 10,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+  deviceScanStatusRow: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
   },
-  folderCardBody: {
-    height: 120,
-    borderRadius: 10,
-    backgroundColor: "#E8F0FE",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
-  },
-  folderIcon: {
-    fontSize: 34,
-    marginBottom: 8,
-  },
-  folderName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2B2B2B",
-  },
-  folderMeta: {
-    fontSize: 10,
-    color: "#6A6A6A",
-    marginTop: 8,
-    paddingVertical: 8,
-  },
-  folderMenuBtn: {
-    marginLeft: "auto",
-    marginTop: 8,
-    alignSelf: "flex-end",
-    width: 20,
-    height: 30,
-    paddingRight: 4,
-    borderRadius: 8,
-    backgroundColor: "#F2F2F2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  folderMenuText: {
-    fontSize: 18,
-    lineHeight: 18,
-    color: "#444",
-    marginTop: -4,
-    transform: [{ rotate: "90deg" }],
+  deviceScanStatusText: {
+    fontSize: 12,
+    color: "#4A6A8A",
   },
   emptyState: {
     flex: 1,
@@ -2154,377 +1050,5 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     lineHeight: 20,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 16,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 10,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: "#222",
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 12,
-    gap: 8,
-  },
-  modalBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "#EEE",
-  },
-  modalPrimaryBtn: {
-    backgroundColor: "#2196F3",
-  },
-  modalBtnText: {
-    color: "#333",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  modalPrimaryBtnText: {
-    color: "#FFF",
-  },
-  moveOptions: {
-    gap: 8,
-  },
-  moveOptionBtn: {
-    borderRadius: 8,
-    backgroundColor: "#F2F2F2",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  moveTreeOptionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  moveOptionText: {
-    fontSize: 14,
-    color: "#222",
-    fontWeight: "600",
-  },
-  previewContainer: {
-    flex: 1,
-    backgroundColor: "#111",
-  },
-  previewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#2E2E2E",
-  },
-  previewTitle: {
-    flex: 1,
-    fontSize: 14,
-    color: "#FFF",
-    marginRight: 12,
-    fontWeight: "600",
-  },
-  previewCloseBtn: {
-    backgroundColor: "#2B2B2B",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  previewCloseText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  previewBody: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 12,
-  },
-  previewImage: {
-    width: "100%",
-    height: "100%",
-  },
-  previewVideo: {
-    width: "100%",
-    height: "70%",
-  },
-  previewAudio: {
-    width: "100%",
-    height: 90,
-  },
-  actionsMenuBtn: {
-    paddingHorizontal: 2,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  actionsMenuBtnText: {
-    fontSize: 18,
-    color: "#444",
-    fontWeight: "700",
-    lineHeight: 18,
-    transform: [{ rotate: "90deg" }],
-  },
-  actionsDropdownBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.15)",
-  },
-  actionsDropdown: {
-    position: "absolute",
-    top: 56,
-    right: 12,
-    width: 240,
-    backgroundColor: "#FFF",
-    borderRadius: 8,
-    paddingVertical: 4,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-  },
-  actionsDropdownRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-  },
-  actionsDropdownIcon: {
-    fontSize: 16,
-    width: 28,
-    color: "#444",
-  },
-  actionsDropdownLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: "#222",
-  },
-  actionsDropdownChevron: {
-    fontSize: 20,
-    color: "#999",
-    lineHeight: 20,
-  },
-  actionsDropdownDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "#E0E0E0",
-    marginVertical: 4,
-    marginHorizontal: 16,
-  },
-  actionsSheetRowDisabled: {
-    opacity: 0.45,
-  },
-  actionsSheetRowActive: {
-    color: "#1A73E8",
-    fontWeight: "700",
-  },
-  filterBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#FFF",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#DDD",
-    gap: 8,
-  },
-  filterBarBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#F0F0F0",
-  },
-  filterBarBtnActive: {
-    backgroundColor: "#E3F2FD",
-  },
-  filterBarText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#555",
-  },
-  filterBarTextActive: {
-    color: "#1A73E8",
-  },
-  filterBarClearBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#FFEBEE",
-  },
-  filterBarClearText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#C62828",
-  },
-  filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#F0F0F0",
-  },
-  filterChipActive: {
-    backgroundColor: "#1A73E8",
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#555",
-  },
-  filterChipTextActive: {
-    color: "#FFF",
-  },
-  filterChipLabelActive: {
-    backgroundColor: "#FF9800",
-  },
-  filterDialogSection: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#999",
-    letterSpacing: 0.5,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  filterDialogChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  moveProgressBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-  },
-  moveProgressCard: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    alignItems: "center",
-  },
-  moveProgressLabel: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#222",
-    marginTop: 14,
-    textAlign: "center",
-  },
-  moveProgressSubLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 6,
-    textAlign: "center",
-  },
-  labelPickerEmpty: {
-    fontSize: 13,
-    color: "#999",
-    marginBottom: 10,
-    fontStyle: "italic",
-  },
-  labelPickerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    gap: 10,
-  },
-  labelPickerCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#1A73E8",
-    backgroundColor: "#FFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  labelPickerCheckActive: {
-    backgroundColor: "#1A73E8",
-  },
-  labelPickerCheckMark: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 14,
-  },
-  labelPickerName: {
-    fontSize: 14,
-    color: "#222",
-    fontWeight: "600",
-  },
-  labelPickerAddRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-    alignItems: "center",
-  },
-  labelPickerInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    fontSize: 13,
-    color: "#222",
-  },
-  labelPickerAddBtn: {
-    backgroundColor: "#1A73E8",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  labelPickerAddBtnText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  manageLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    gap: 8,
-  },
-  manageLabelName: {
-    flex: 1,
-    fontSize: 14,
-    color: "#222",
-    fontWeight: "600",
-  },
-  manageLabelDeleteBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#FFEBEE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  manageLabelDeleteText: {
-    color: "#C62828",
-    fontSize: 12,
-    fontWeight: "700",
   },
 });
