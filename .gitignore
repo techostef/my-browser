@@ -21,3 +21,5 @@ ios/build/
 .vscode/
 *.swp
 *.swo
+
+*.env

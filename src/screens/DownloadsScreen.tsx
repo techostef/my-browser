@@ -953,6 +953,13 @@ export default function DownloadsScreen() {
         task={previewTask}
         mediaType={previewTask ? getMediaType(previewTask) : "other"}
         onClose={() => setPreviewTask(null)}
+        onEditVideo={() => {
+          const task = previewTask;
+          setPreviewTask(null);
+          if (task?.filePath) {
+            (navigation as any).navigate('Trim', { videoUri: task.filePath, duration: 0 });
+          }
+        }}
       />
 
       <ActionsDropdown

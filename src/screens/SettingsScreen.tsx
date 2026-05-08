@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   Switch,
   Alert,
   SectionList,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useSettings, useThemeColors, HistoryEntry } from "../store/settingsStore";
+import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from "../lib/openaiKey";
 import { useActiveTabId, useTabActions } from "../store/tabStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -212,6 +214,78 @@ function AppearanceScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
+function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
+  const c = useThemeColors();
+  const [key, setKey] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    getOpenAIKey().then(k => { if (k) setKey(k); });
+  }, []);
+
+  const handleSave = async () => {
+    if (!key.trim()) return;
+    await setOpenAIKey(key.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleClear = () =>
+    Alert.alert('Remove API Key', 'Remove your OpenAI API key from this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => { await clearOpenAIKey(); setKey(''); } },
+    ]);
+
+  const preview = key.length > 8 ? key.slice(0, 4) + '••••••••' + key.slice(-4) : key ? '••••••••' : '';
+
+  return (
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={['top']}>
+      <ScreenHeader title="AI Subtitles" onBack={onBack} />
+      <ScrollView keyboardShouldPersistTaps="handled">
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>OPENAI API KEY</Text>
+        <View style={[s.keyCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <View style={[s.keyInputRow, { borderColor: c.border }]}>
+            <TextInput
+              style={[s.keyInput, { color: c.text }]}
+              value={key}
+              onChangeText={setKey}
+              placeholder="sk-..."
+              placeholderTextColor={c.textSecondary}
+              secureTextEntry={!visible}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity onPress={() => setVisible(v => !v)} style={s.eyeBtn}>
+              <Text style={{ color: c.textSecondary, fontSize: 16 }}>{visible ? '🙈' : '👁️'}</Text>
+            </TouchableOpacity>
+          </View>
+          {preview ? (
+            <Text style={[s.keyPreview, { color: c.textSecondary }]}>Stored: {preview}</Text>
+          ) : null}
+          <View style={s.keyBtnRow}>
+            <TouchableOpacity
+              style={[s.keyBtn, { backgroundColor: '#6c63ff', opacity: key.trim() ? 1 : 0.4 }]}
+              onPress={handleSave}
+              disabled={!key.trim()}
+            >
+              <Text style={s.keyBtnText}>{saved ? 'Saved ✓' : 'Save'}</Text>
+            </TouchableOpacity>
+            {preview ? (
+              <TouchableOpacity style={[s.keyBtn, { backgroundColor: '#FF3B30' }]} onPress={handleClear}>
+                <Text style={s.keyBtnText}>Remove</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+        <Text style={[s.keyHint, { color: c.textSecondary }]}>
+          Your key is stored only on this device and never shared. It is used to transcribe video audio via OpenAI Whisper when no embedded or sidecar subtitles are found.
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 function AboutScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
   return (
@@ -239,7 +313,7 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
 
 // ─── Main Settings Screen ─────────────────────────────────────────────────────
 
-type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "about" | null;
+type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "aiSubtitles" | "about" | null;
 
 export default function SettingsScreen() {
   const { settings } = useSettings();
@@ -251,6 +325,7 @@ export default function SettingsScreen() {
   if (sub === "history") return <HistoryScreen onBack={() => setSub(null)} />;
   if (sub === "bookmarks") return <BookmarksScreen onBack={() => setSub(null)} />;
   if (sub === "appearance") return <AppearanceScreen onBack={() => setSub(null)} />;
+  if (sub === "aiSubtitles") return <AISubtitlesScreen onBack={() => setSub(null)} />;
   if (sub === "about") return <AboutScreen onBack={() => setSub(null)} />;
 
   const sections: Section[] = [
@@ -266,6 +341,10 @@ export default function SettingsScreen() {
     {
       title: "DISPLAY",
       data: [{ kind: "nav", label: "🎨  Appearance", onPress: () => setSub("appearance") }],
+    },
+    {
+      title: "AI",
+      data: [{ kind: "nav", label: "🤖  AI Subtitles", onPress: () => setSub("aiSubtitles") }],
     },
     {
       title: "INFO",
@@ -400,4 +479,23 @@ const s = StyleSheet.create({
     marginLeft: 8,
   },
   bookmarkDeleteText: { fontSize: 14, color: "#FF3B30" },
+  keyCard: {
+    marginHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  keyInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+  },
+  keyInput: { flex: 1, fontSize: 15, paddingVertical: 14 },
+  eyeBtn: { padding: 8 },
+  keyPreview: { fontSize: 12, paddingHorizontal: 12, paddingTop: 8 },
+  keyBtnRow: { flexDirection: "row", gap: 8, padding: 12 },
+  keyBtn: { flex: 1, borderRadius: 8, paddingVertical: 10, alignItems: "center" },
+  keyBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  keyHint: { fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
 });

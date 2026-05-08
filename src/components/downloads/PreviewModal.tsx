@@ -16,9 +16,10 @@ type Props = {
   task: DownloadTask | null;
   mediaType: DownloadMediaType;
   onClose: () => void;
+  onEditVideo?: () => void;
 };
 
-export default function PreviewModal({ task, mediaType, onClose }: Props) {
+export default function PreviewModal({ task, mediaType, onClose, onEditVideo }: Props) {
   return (
     <Modal
       visible={!!task}
@@ -30,6 +31,11 @@ export default function PreviewModal({ task, mediaType, onClose }: Props) {
           <Text style={styles.previewTitle} numberOfLines={1}>
             {task?.fileName || "Media preview"}
           </Text>
+          {mediaType === 'video' && onEditVideo && (
+            <TouchableOpacity style={styles.editBtn} onPress={onEditVideo}>
+              <Text style={styles.editBtnText}>✂️ Edit</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.previewCloseBtn} onPress={onClose}>
             <Text style={styles.previewCloseText}>Close</Text>
           </TouchableOpacity>
@@ -82,6 +88,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#FFF",
     marginRight: 12,
+    fontWeight: "600",
+  },
+  editBtn: {
+    backgroundColor: "#6c63ff",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  editBtnText: {
+    color: "#FFF",
+    fontSize: 12,
     fontWeight: "600",
   },
   previewCloseBtn: {
