@@ -416,11 +416,14 @@ export default function BrowserScreen() {
   const handleGoBack = useCallback((tabId: string): boolean => {
     const tab = getTabsSnapshot().find(t => t.id === tabId);
     if (!tab || tab.historyIndex <= 0) return false;
+    const prevUrl = tab.urlHistory[tab.historyIndex - 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, -1);
-    webViewRefs.current[tabId]?.goBack();
+    // Use injectNavigation instead of goBack() so restored tabs (which have no
+    // native WebView history) navigate correctly via window.location.href.
+    injectNavigation(tabId, prevUrl);
     return true;
-  }, [navigateHistory, getTabsSnapshot]);
+  }, [navigateHistory, getTabsSnapshot, injectNavigation]);
 
   // Hardware back: navigate browser history first, then fall back to default
   // (which exits the app at the root). Without this, Android's back button
@@ -451,10 +454,11 @@ export default function BrowserScreen() {
   const handleGoForward = useCallback((tabId: string) => {
     const tab = getTabsSnapshot().find(t => t.id === tabId);
     if (!tab || tab.historyIndex >= tab.urlHistory.length - 1) return;
+    const nextUrl = tab.urlHistory[tab.historyIndex + 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, 1);
-    webViewRefs.current[tabId]?.goForward();
-  }, [navigateHistory, getTabsSnapshot]);
+    injectNavigation(tabId, nextUrl);
+  }, [navigateHistory, getTabsSnapshot, injectNavigation]);
 
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
     if (!navState.url) return;
