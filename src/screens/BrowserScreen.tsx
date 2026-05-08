@@ -3,7 +3,7 @@ import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHa
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 
 import AddressBar from '../components/AddressBar';
@@ -112,6 +112,7 @@ export default function BrowserScreen() {
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
   const { pushHistory } = useSettings();
   const previousUrl = useRef('');
+  const navigation = useNavigation();
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
@@ -451,6 +452,18 @@ export default function BrowserScreen() {
     });
     return () => sub.remove();
   }, [isVideoPlaying, handleToggleFullscreen]);
+
+  // Hide the bottom tab bar while a video is in fullscreen, restore on exit.
+  // BrowserScreen is registered as a Tab.Screen, so its own navigation is
+  // the bottom-tab navigation — setOptions there sets per-screen tab options.
+  useEffect(() => {
+    if (isVideoPlaying) {
+      (navigation as any).setOptions({ tabBarStyle: { display: 'none' } });
+      return () => {
+        (navigation as any).setOptions({ tabBarStyle: undefined });
+      };
+    }
+  }, [isVideoPlaying, navigation]);
 
   const handleGoForward = useCallback((tabId: string) => {
     const tab = getTabsSnapshot().find(t => t.id === tabId);
