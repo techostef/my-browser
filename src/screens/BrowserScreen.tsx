@@ -1017,7 +1017,7 @@ function WebViewListInner({
       });
 
       const originList = [...origins];
-      console.log('[Incognito] >>> SAVE START — scanning origins:', originList);
+      // console.log('[Incognito] >>> SAVE START — scanning origins:', originList);
       // allSettled so one failing origin doesn't abort the whole save.
       Promise.allSettled(originList.map(o => CookieManager.get(o, false)))
         .then(results => {
@@ -1025,7 +1025,7 @@ function WebViewListInner({
           results.forEach((r, i) => {
             if (r.status === 'fulfilled') {
               const cookieNames = Object.keys(r.value);
-              console.log('[Incognito] get(', originList[i], ') →', cookieNames.length, 'cookies:', cookieNames);
+              // console.log('[Incognito] get(', originList[i], ') →', cookieNames.length, 'cookies:', cookieNames);
               const pairs = Object.values(r.value)
                 .filter(c => c.name && c.value)
                 .map(c => ({ name: c.name, value: c.value }));
@@ -1036,20 +1036,20 @@ function WebViewListInner({
           });
           const total = Object.values(saved).reduce((s, c) => s + c.length, 0);
           if (total === 0 && originList.length > 0) {
-            console.warn('[Incognito] !!! 0 cookies captured. The native patch is not in the build. Run: npx expo run:android');
+            // console.warn('[Incognito] !!! 0 cookies captured. The native patch is not in the build. Run: npx expo run:android');
           } else {
-            console.log('[Incognito] SAVED', total, 'cookies across', Object.keys(saved).length, 'origins');
+            // console.log('[Incognito] SAVED', total, 'cookies across', Object.keys(saved).length, 'origins');
           }
           savedCookiesRef.current = saved;
           return CookieManager.clearAll(false);
         })
         .then(() => {
-          console.log('[Incognito] clearAll done — incognito WebView can mount, regular tabs hidden');
+          // console.log('[Incognito] clearAll done — incognito WebView can mount, regular tabs hidden');
           setIncognitoReady(true);
           setRegularTabsHidden(true);
         })
         .catch((e: unknown) => {
-          console.warn('[Incognito] save pipeline failed:', e);
+          // console.warn('[Incognito] save pipeline failed:', e);
           savedCookiesRef.current = {};
           setIncognitoReady(true);
           setRegularTabsHidden(true);
@@ -1065,7 +1065,7 @@ function WebViewListInner({
       const saved = savedCookiesRef.current!;
       savedCookiesRef.current = null;
       const totalToRestore = Object.values(saved).reduce((s, c) => s + c.length, 0);
-      console.log('[Incognito] >>> RESTORE START —', totalToRestore, 'cookies across', Object.keys(saved).length, 'origins');
+      // console.log('[Incognito] >>> RESTORE START —', totalToRestore, 'cookies across', Object.keys(saved).length, 'origins');
       const buildSetCookie = (origin: string, name: string, value: string): string => {
         const parts = [`${name}=${value}`, 'Path=/'];
         if (origin.startsWith('https://')) parts.push('Secure');
@@ -1076,11 +1076,11 @@ function WebViewListInner({
           cookies.map(cookie =>
             CookieManager.setFromResponse(origin, buildSetCookie(origin, cookie.name, cookie.value))
               .then(success => {
-                if (!success) console.warn('[Incognito] REJECTED', cookie.name, 'on', origin);
+                // if (!success) console.warn('[Incognito] REJECTED', cookie.name, 'on', origin);
                 return success;
               })
               .catch((e: unknown) => {
-                console.warn('[Incognito] failed to restore', cookie.name, 'on', origin, e);
+                // console.warn('[Incognito] failed to restore', cookie.name, 'on', origin, e);
                 return false;
               }),
           ),
@@ -1088,15 +1088,15 @@ function WebViewListInner({
       )
         .then(results => {
           const ok = results.filter(r => r === true).length;
-          console.log('[Incognito] RESTORE done —', ok, '/', results.length, 'cookies accepted');
+          // console.log('[Incognito] RESTORE done —', ok, '/', results.length, 'cookies accepted');
           return CookieManager.flush();
         })
         .then(() => {
-          console.log('[Incognito] flush done — regular tabs can remount');
+          // console.log('[Incognito] flush done — regular tabs can remount');
           setRegularTabsHidden(false);
         })
         .catch((e: unknown) => {
-          console.warn('[Incognito] restore pipeline failed:', e);
+          // console.warn('[Incognito] restore pipeline failed:', e);
           setRegularTabsHidden(false);
         });
     }
