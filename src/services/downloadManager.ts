@@ -36,9 +36,25 @@ function durationCacheKey(filePath: string, size: number, mtime: number): string
   return `${filePath}|${size}|${mtime}`;
 }
 
+async function concurrentMap<T, R>(items: T[], fn: (item: T) => Promise<R>, concurrency: number): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 // Cap concurrent media-decoder loads. Each Audio.Sound allocates a native decoder;
 // running 100s in parallel exhausts memory and crashes the app on Android.
 const PROBE_CONCURRENCY = 2;
+// Cap concurrent file-stat calls. Each FileSystem.getInfoAsync registers a native bridge
+// callback; firing hundreds at once triggers the "Excessive pending callbacks" warning.
+const STAT_CONCURRENCY = 20;
 let probeInFlight = 0;
 const probeQueue: Array<() => void> = [];
 
@@ -192,11 +208,11 @@ class DownloadManager {
     const walk = async (dirPath: string, folderPath: string): Promise<void> => {
       const entries = await FileSystem.readDirectoryAsync(dirPath);
 
-      const infos = await Promise.all(entries.map(async entry => {
+      const infos = await concurrentMap(entries, async entry => {
         const entryPath = `${dirPath}${entry}`;
         const info = await FileSystem.getInfoAsync(entryPath);
         return { entry, entryPath, info };
-      }));
+      }, STAT_CONCURRENCY);
 
       const subDirs: Array<{ entry: string; entryPath: string }> = [];
       const fileEntries: Array<{ entry: string; entryPath: string; size: number; modificationTime: number }> = [];
@@ -216,7 +232,7 @@ class DownloadManager {
         }
       }
 
-      const fileTasks = await Promise.all(fileEntries.map(async ({ entry, entryPath, size, modificationTime }) => {
+      const fileTasks = await concurrentMap(fileEntries, async ({ entry, entryPath, size, modificationTime }) => {
         const createdAt = this.normalizeTimestamp(modificationTime);
         const mtime = modificationTime;
         const duration = await probeMediaDuration(entryPath, size, mtime);
@@ -235,7 +251,7 @@ class DownloadManager {
           createdAt,
           duration,
         };
-      }));
+      }, STAT_CONCURRENCY) as DownloadTask[];
       files.push(...fileTasks);
 
       await Promise.all(subDirs.map(({ entry, entryPath }) => {
