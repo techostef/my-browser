@@ -1008,14 +1008,8 @@ function WebViewListInner({
   const incognitoCount = tabs.filter(t => t.incognito && !t.hidden).length;
 
   useEffect(() => {
-    console.log('[Incognito] WebViewListInner MOUNTED');
-    return () => console.log('[Incognito] WebViewListInner UNMOUNTED');
-  }, []);
-
-  useEffect(() => {
     const hasIncognito = incognitoCount > 0;
     const hadIncognito = savedCookiesRef.current !== null;
-    console.log('[Incognito] effect — count:', incognitoCount, 'hasIncognito:', hasIncognito, 'hadIncognito:', hadIncognito);
 
     if (hasIncognito && !hadIncognito) {
       // Collect every unique origin visited by regular tabs so we can snapshot

@@ -13,7 +13,7 @@ import type { RootStackParamList } from '../../types/videoEditor';
 import VideoTimeline from '../../components/videoEditor/VideoTimeline';
 import type { TimelineSegment } from '../../components/videoEditor/VideoTimeline';
 import { isFullVideo, filterSegments } from '../../utils/videoEditor/videoProcessor';
-import { parseSrt } from '../../lib/videoEditor/srt';
+import { parseSrt, segmentsToSrt } from '../../lib/videoEditor/srt';
 import { getSubtitles } from '../../lib/videoEditor/subtitles';
 import { transcribeVideo } from '../../lib/videoEditor/whisper';
 import { getOpenAIKey } from '../../lib/openaiKey';
@@ -68,11 +68,13 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!sessionReady.current) return;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
+      const existing = await loadSession(videoUri);
       saveSession({
         videoUri,
         splitPoints,
         deletedSegments: [...deletedSegments],
+        subtitleSegments: existing?.subtitleSegments,
         updatedAt: Date.now(),
       });
     }, 600);
@@ -283,6 +285,21 @@ export default function TrimScreen({ navigation, route }: Props) {
     try {
       const dur = durationRef.current;
 
+      // If the session already has subtitle edits, resume them directly
+      setStatusMsg('Loading subtitles…');
+      const existingSession = await loadSession(videoUri);
+      if (existingSession?.subtitleSegments && existingSession.subtitleSegments.length > 0) {
+        navigation.navigate('SubtitleEditor', {
+          videoUri,
+          segments: existingSession.subtitleSegments,
+          srt: segmentsToSrt(existingSession.subtitleSegments),
+          timelineSegments: segments,
+          duration: dur,
+        });
+        return;
+      }
+
+      // No saved subtitles — extract fresh
       setStatusMsg('Looking for subtitles…');
       let rawSrt = await getSubtitles(videoUri);
 
@@ -310,6 +327,15 @@ export default function TrimScreen({ navigation, route }: Props) {
         finalSegments = filtered.segments;
         finalSrt = filtered.srt;
       }
+
+      // Persist subtitles immediately so they survive app close
+      await saveSession({
+        videoUri,
+        splitPoints,
+        deletedSegments: [...deletedSegments],
+        subtitleSegments: finalSegments,
+        updatedAt: Date.now(),
+      });
 
       navigation.navigate('SubtitleEditor', {
         videoUri,

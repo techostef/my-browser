@@ -8,12 +8,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BrowserScreen from './src/screens/BrowserScreen';
 import DownloadsScreen from './src/screens/DownloadsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import ProjectsScreen from './src/screens/ProjectsScreen';
 import TrimScreen from './src/screens/videoEditor/TrimScreen';
 import SubtitleEditorScreen from './src/screens/videoEditor/SubtitleEditorScreen';
 import ExportScreen from './src/screens/videoEditor/ExportScreen';
 import { DownloadProvider } from './src/store/downloadStore';
 import { TabProvider } from './src/store/tabStore';
 import { SettingsProvider, useSettings } from './src/store/settingsStore';
+import { ProjectProvider } from './src/store/projectStore';
 import type { RootStackParamList } from './src/types/videoEditor';
 
 const Tab = createBottomTabNavigator();
@@ -59,6 +61,14 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
+        name="Projects"
+        component={ProjectsScreen}
+        options={{
+          tabBarLabel: 'Projects',
+          tabBarIcon: () => <TabIcon label="🎬" />,
+        }}
+      />
+      <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
@@ -94,11 +104,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SettingsProvider>
-        <TabProvider>
-          <DownloadProvider>
-            <AppNavigator />
-          </DownloadProvider>
-        </TabProvider>
+        <ProjectProvider>
+          <TabProvider>
+            <DownloadProvider>
+              <AppNavigator />
+            </DownloadProvider>
+          </TabProvider>
+        </ProjectProvider>
       </SettingsProvider>
     </SafeAreaProvider>
   );

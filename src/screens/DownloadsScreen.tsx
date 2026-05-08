@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useProjects } from "../store/projectStore";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -41,6 +42,7 @@ const TRASH_FOLDER_PATH = "__trash__";
 
 export default function DownloadsScreen() {
   const navigation = useNavigation();
+  const { addOrUpdateProject } = useProjects();
   const {
     downloads,
     folders,
@@ -953,10 +955,12 @@ export default function DownloadsScreen() {
         task={previewTask}
         mediaType={previewTask ? getMediaType(previewTask) : "other"}
         onClose={() => setPreviewTask(null)}
-        onEditVideo={() => {
+        onEditVideo={async () => {
           const task = previewTask;
           setPreviewTask(null);
           if (task?.filePath) {
+            const name = task.fileName || task.filePath.split('/').pop() || 'Video';
+            await addOrUpdateProject(task.filePath, name, 0);
             (navigation as any).navigate('Trim', { videoUri: task.filePath, duration: 0 });
           }
         }}

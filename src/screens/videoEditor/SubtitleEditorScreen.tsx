@@ -95,7 +95,7 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     loadSession(videoUri).then(session => {
-      if (session?.subtitleSegments && session.subtitleSegments.length === initial.length) {
+      if (session?.subtitleSegments && session.subtitleSegments.length > 0) {
         setSegments(session.subtitleSegments);
       }
       sessionReady.current = true;
