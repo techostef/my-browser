@@ -10,7 +10,9 @@ import {
   SectionList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 import { useSettings, useThemeColors, HistoryEntry } from "../store/settingsStore";
+import { useActiveTabId, useTabActions } from "../store/tabStore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,27 +135,49 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
 
 function BookmarksScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
-  const [bookmarks] = useState([
-    { id: "1", title: "Google", url: "https://google.com" },
-    { id: "2", title: "GitHub", url: "https://github.com" },
-    { id: "3", title: "YouTube", url: "https://youtube.com" },
-  ]);
+  const { bookmarks, removeBookmark } = useSettings();
+  const navigation = useNavigation();
+  const activeTabId = useActiveTabId();
+  const { pushUrl } = useTabActions();
+
+  const handleOpen = (url: string) => {
+    pushUrl(activeTabId, url);
+    navigation.navigate("Browser" as never);
+  };
+
+  const confirmDelete = (id: string, title: string) =>
+    Alert.alert("Remove bookmark", `Remove "${title}"?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => removeBookmark(id) },
+    ]);
+
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <ScreenHeader title="Bookmarks" onBack={onBack} />
       <ScrollView>
         {bookmarks.length === 0 ? (
-          <Text style={[s.emptyText, { color: c.textSecondary }]}>No bookmarks yet.</Text>
+          <Text style={[s.emptyText, { color: c.textSecondary }]}>No bookmarks yet. Tap ☆ in the address bar to save a page.</Text>
         ) : (
           bookmarks.map((b) => (
-            <TouchableOpacity key={b.id} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => {}}>
+            <TouchableOpacity
+              key={b.id}
+              style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}
+              onPress={() => handleOpen(b.url)}
+            >
               <View style={[s.bookmarkIcon, { backgroundColor: c.surfaceSecondary }]}>
                 <Text>🔖</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[s.rowLabel, { color: c.text }]}>{b.title}</Text>
+                <Text style={[s.rowLabel, { color: c.text }]} numberOfLines={1}>{b.title}</Text>
                 <Text style={[s.rowSub, { color: c.textSecondary }]} numberOfLines={1}>{b.url}</Text>
               </View>
+              <TouchableOpacity
+                onPress={() => confirmDelete(b.id, b.title)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={s.bookmarkDeleteBtn}
+              >
+                <Text style={s.bookmarkDeleteText}>✕</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
           ))
         )}
@@ -371,4 +395,9 @@ const s = StyleSheet.create({
   },
   aboutAppName: { fontSize: 22, fontWeight: "700" },
   aboutVersion: { fontSize: 14, marginTop: 4 },
+  bookmarkDeleteBtn: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  bookmarkDeleteText: { fontSize: 14, color: "#FF3B30" },
 });

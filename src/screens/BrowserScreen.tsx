@@ -927,6 +927,20 @@ interface AddressBarContainerProps {
 
 function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload }: AddressBarContainerProps) {
   const activeTab = useActiveTab();
+  const { bookmarks, addBookmark, removeBookmark } = useSettings();
+
+  const currentBookmark = bookmarks.find((b) => b.url === activeTab.url);
+
+  const handleToggleBookmark = useCallback(() => {
+    if (currentBookmark) {
+      removeBookmark(currentBookmark.id);
+    } else {
+      addBookmark({ title: activeTab.title || activeTab.url, url: activeTab.url });
+    }
+  }, [currentBookmark, activeTab, addBookmark, removeBookmark]);
+
+  const showBookmark = activeTab.url !== 'about:home';
+
   return (
     <AddressBar
       initialUrl={activeTab.url}
@@ -937,6 +951,8 @@ function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload 
       canGoBack={activeTab.historyIndex > 0}
       canGoForward={activeTab.historyIndex < activeTab.urlHistory.length - 1}
       loading={false}
+      isBookmarked={!!currentBookmark}
+      onToggleBookmark={showBookmark ? handleToggleBookmark : undefined}
       tabTrigger={<TabBarContainer />}
     />
   );

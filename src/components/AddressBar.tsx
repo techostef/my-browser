@@ -18,6 +18,8 @@ interface Props {
   canGoBack: boolean;
   canGoForward: boolean;
   loading: boolean;
+  isBookmarked?: boolean;
+  onToggleBookmark?: () => void;
   tabTrigger?: React.ReactNode;
 }
 
@@ -30,6 +32,8 @@ export default function AddressBar({
   canGoBack,
   canGoForward,
   loading,
+  isBookmarked,
+  onToggleBookmark,
   tabTrigger,
 }: Props) {
   const { searchUrl, themeColors: c } = useSettings();
@@ -93,6 +97,13 @@ export default function AddressBar({
           <Text style={[styles.navBtnText, { color: c.text }]}>↻</Text>
         )}
       </TouchableOpacity>
+      {onToggleBookmark && (
+        <TouchableOpacity onPress={onToggleBookmark} style={[styles.navBtn, { backgroundColor: c.navButton }]}>
+          <Text style={[styles.navBtnText, { color: isBookmarked ? '#FFD60A' : c.text }]}>
+            {isBookmarked ? '★' : '☆'}
+          </Text>
+        </TouchableOpacity>
+      )}
       {tabTrigger}
     </View>
   );

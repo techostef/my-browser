@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "@browser_settings";
 const HISTORY_KEY = "@browser_history";
+const BOOKMARKS_KEY = "@browser_bookmarks";
 
 // ─── Search engines ───────────────────────────────────────────────────────────
 
@@ -140,6 +141,33 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
   }
 }
 
+// ─── Bookmarks ────────────────────────────────────────────────────────────────
+
+export interface Bookmark {
+  id: string;
+  title: string;
+  url: string;
+  createdAt: number;
+}
+
+type BookmarkAction =
+  | { type: "ADD"; payload: Bookmark }
+  | { type: "REMOVE"; payload: { id: string } }
+  | { type: "RESTORE"; payload: Bookmark[] };
+
+function bookmarkReducer(state: Bookmark[], action: BookmarkAction): Bookmark[] {
+  switch (action.type) {
+    case "ADD":
+      return [action.payload, ...state.filter((b) => b.url !== action.payload.url)];
+    case "REMOVE":
+      return state.filter((b) => b.id !== action.payload.id);
+    case "RESTORE":
+      return action.payload;
+    default:
+      return state;
+  }
+}
+
 // ─── History ──────────────────────────────────────────────────────────────────
 
 export interface HistoryEntry {
@@ -178,6 +206,9 @@ interface SettingsContextValue {
   history: HistoryEntry[];
   pushHistory: (entry: Omit<HistoryEntry, "id" | "timestamp">) => void;
   clearHistory: () => void;
+  bookmarks: Bookmark[];
+  addBookmark: (entry: Omit<Bookmark, "id" | "createdAt">) => void;
+  removeBookmark: (id: string) => void;
   searchUrl: (query: string) => string;
   homeUrl: () => string;
   addShortcut: (shortcut: Omit<Shortcut, "id">) => void;
@@ -192,19 +223,22 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, dispatchSettings] = useReducer(settingsReducer, DEFAULT_SETTINGS);
   const [history, dispatchHistory] = useReducer(historyReducer, []);
+  const [bookmarks, dispatchBookmarks] = useReducer(bookmarkReducer, []);
   const [isReady, setIsReady] = React.useState(false);
   const systemScheme = useColorScheme();
 
   const saveSettingsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHistoryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveBookmarksTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load on mount
   useEffect(() => {
     (async () => {
       try {
-        const [rawSettings, rawHistory] = await Promise.all([
+        const [rawSettings, rawHistory, rawBookmarks] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(HISTORY_KEY),
+          AsyncStorage.getItem(BOOKMARKS_KEY),
         ]);
         if (rawSettings) {
           const parsed = JSON.parse(rawSettings) as Partial<SettingsState>;
@@ -213,6 +247,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (rawHistory) {
           const parsed = JSON.parse(rawHistory) as HistoryEntry[];
           if (Array.isArray(parsed)) dispatchHistory({ type: "RESTORE", payload: parsed });
+        }
+        if (rawBookmarks) {
+          const parsed = JSON.parse(rawBookmarks) as Bookmark[];
+          if (Array.isArray(parsed)) dispatchBookmarks({ type: "RESTORE", payload: parsed });
         }
       } catch (e) {
         console.warn("Failed to restore settings/history:", e);
@@ -243,6 +281,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }, 500);
   }, [history, isReady]);
 
+  // Persist bookmarks on change (debounced)
+  useEffect(() => {
+    if (!isReady) return;
+    if (saveBookmarksTimeout.current) clearTimeout(saveBookmarksTimeout.current);
+    saveBookmarksTimeout.current = setTimeout(() => {
+      AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks)).catch((e) =>
+        console.warn("Failed to save bookmarks:", e)
+      );
+    }, 300);
+  }, [bookmarks, isReady]);
+
   const setSetting = useCallback(<K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
     dispatchSettings({ type: "SET", payload: { [key]: value } });
   }, []);
@@ -260,6 +309,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const clearHistory = useCallback(() => {
     dispatchHistory({ type: "CLEAR" });
+  }, []);
+
+  const addBookmark = useCallback((entry: Omit<Bookmark, "id" | "createdAt">) => {
+    dispatchBookmarks({
+      type: "ADD",
+      payload: {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        createdAt: Date.now(),
+        ...entry,
+      },
+    });
+  }, []);
+
+  const removeBookmark = useCallback((id: string) => {
+    dispatchBookmarks({ type: "REMOVE", payload: { id } });
   }, []);
 
   const settingsRef = useRef(settings);
@@ -297,8 +361,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const themeColors = THEME_COLORS[resolvedScheme];
 
   const value = useMemo<SettingsContextValue>(
-    () => ({ settings, setSetting, history, pushHistory, clearHistory, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady }),
-    [settings, setSetting, history, pushHistory, clearHistory, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady]
+    () => ({ settings, setSetting, history, pushHistory, clearHistory, bookmarks, addBookmark, removeBookmark, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady }),
+    [settings, setSetting, history, pushHistory, clearHistory, bookmarks, addBookmark, removeBookmark, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
