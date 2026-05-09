@@ -567,7 +567,7 @@ export default function TrimScreen({ navigation, route }: Props) {
           return;
         }
         setStatusMsg('Transcribing with Whisper AI…');
-        const result = await transcribeVideo(videoUri);
+        const result = await transcribeVideo(videoUri, setStatusMsg);
         rawSrt = result.srt;
       }
 

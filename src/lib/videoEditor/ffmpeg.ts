@@ -102,6 +102,18 @@ export async function extractAudio(
   );
 }
 
+export async function splitAudio(
+  inputUri: string,
+  startSec: number,
+  durationSec: number,
+  outputUri: string,
+): Promise<void> {
+  await runFFmpeg(
+    `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
+    ` -c:a aac -b:a 128k "${toPath(outputUri)}" -y`,
+  );
+}
+
 export async function probeVideoSize(
   videoUri: string,
 ): Promise<{ width: number; height: number }> {
