@@ -3,12 +3,12 @@ import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
 import { extractAudio, splitAudio } from './ffmpeg';
 
-// Audio is mono 64 kbps AAC (extractAudio). Sizes:
-//   10-minute chunk ≈ 4.8 MB — small enough for slow connections, safely under
-//   OpenAI's 25 MB hard limit even with HTTP overhead.
+// Audio is 16 kHz mono 32 kbps AAC (extractAudio). Sizes:
+//   10-minute chunk ≈ 2.4 MB — well under OpenAI's 25 MB limit.
+//   A 60-minute video ≈ 14.4 MB, stays under the single-upload threshold.
 const CHUNK_SECS = 600;
 const MAX_BYTES = 24 * 1024 * 1024;
-const AUDIO_BPS = 8000; // 64 kbps / 8
+const AUDIO_BPS = 4000; // 32 kbps / 8
 
 // One upload should never block forever. After this we abandon the request and
 // retry — Whisper occasionally hangs on the response side and a fresh request

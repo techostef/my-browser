@@ -154,11 +154,11 @@ export async function extractAudio(
   inputUri: string,
   outputUri: string,
 ): Promise<void> {
-  // Mono 64 kbps AAC. Whisper transcribes mono speech as well as stereo, and
-  // halving the bitrate roughly halves upload size — the difference between a
-  // 39-minute video squeezing under the 25 MB Whisper limit vs needing chunks.
+  // 16 kHz mono 32 kbps AAC. Whisper resamples to 16 kHz internally anyway, so
+  // doing it here cuts upload size ~4× vs the source — a 60-min video stays
+  // under the 25 MB single-upload limit instead of needing chunking.
   await runFFmpeg(
-    `-i "${toPath(inputUri)}" -vn -ac 1 -c:a aac -b:a 64k "${toPath(outputUri)}" -y`,
+    `-i "${toPath(inputUri)}" -vn -ar 16000 -ac 1 -c:a aac -b:a 32k "${toPath(outputUri)}" -y`,
   );
 }
 
