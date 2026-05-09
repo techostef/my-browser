@@ -17,7 +17,6 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 const THUMB_HEIGHT = 56;
 const TICK_ROW_HEIGHT = 22;
 const PX_PER_SEC = 80;
-const MIN_ZOOM = 1;
 const MAX_ZOOM = 20;
 const RENDER_BUFFER = 300;
 const SCREEN_W = Dimensions.get('window').width;
@@ -36,10 +35,16 @@ function fmtTime(secs: number, showMs: boolean): string {
 }
 
 function getTickConfig(zoom: number) {
-  if (zoom >= 12) return { interval: 0.1, labelEvery: 0.5, showMs: true };
-  if (zoom >= 6) return { interval: 0.25, labelEvery: 1, showMs: true };
-  if (zoom >= 3) return { interval: 0.5, labelEvery: 2, showMs: false };
-  return { interval: 1, labelEvery: 2, showMs: false };
+  const pps = PX_PER_SEC * zoom; // actual pixels per second
+  if (pps >= 960)  return { interval: 0.1,   labelEvery: 0.5,   showMs: true  };
+  if (pps >= 480)  return { interval: 0.25,  labelEvery: 1,     showMs: true  };
+  if (pps >= 240)  return { interval: 0.5,   labelEvery: 2,     showMs: false };
+  if (pps >= 80)   return { interval: 1,     labelEvery: 5,     showMs: false };
+  if (pps >= 16)   return { interval: 5,     labelEvery: 30,    showMs: false };
+  if (pps >= 3.2)  return { interval: 30,    labelEvery: 120,   showMs: false };
+  if (pps >= 0.6)  return { interval: 120,   labelEvery: 600,   showMs: false };
+  if (pps >= 0.15) return { interval: 600,   labelEvery: 1800,  showMs: false };
+                   return { interval: 1800,  labelEvery: 3600,  showMs: false };
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,7 +76,14 @@ export default function VideoTimeline({
 }: VideoTimelineProps) {
   const scrollRef = useRef<ScrollView>(null);
   const [containerW, setContainerW] = useState(SCREEN_W - 32);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.2);
+
+  // Minimum zoom: shrink until the full video fits in the container.
+  // For a 2-hour video at PX_PER_SEC=80 this would be ~0.0006 instead of 1.
+  const minZoom = useMemo(
+    () => (duration > 0 ? Math.min(0.2, containerW / Math.max(1, duration * PX_PER_SEC)) : 0.2),
+    [containerW, duration],
+  );
   const [scrollX, setScrollX] = useState(0);
   const [thumbnails, setThumbnails] = useState<{ time: number; uri: string }[]>([]);
 
@@ -157,7 +169,7 @@ export default function VideoTimeline({
 
   // ─── Zoom ───────────────────────────────────────────────────────────────────
   const zoomIn = useCallback(() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.5)), []);
-  const zoomOut = useCallback(() => setZoom((z) => Math.max(MIN_ZOOM, z / 1.5)), []);
+  const zoomOut = useCallback(() => setZoom((z) => Math.max(minZoom, z / 1.5)), [minZoom]);
 
   // ─── Visible range (film-relative px) for virtualization ────────────────────
   const vL = scrollX - RENDER_BUFFER;
@@ -311,7 +323,7 @@ export default function VideoTimeline({
           <TouchableOpacity style={styles.zoomBtn} onPress={zoomOut}>
             <Text style={styles.zBtnTxt}>−</Text>
           </TouchableOpacity>
-          <Text style={styles.zLbl}>{zoom.toFixed(1)}×</Text>
+          <Text style={styles.zLbl}>{zoom >= 10 ? zoom.toFixed(0) : zoom >= 1 ? zoom.toFixed(1) : zoom >= 0.1 ? zoom.toFixed(2) : zoom.toFixed(3)}×</Text>
           <TouchableOpacity style={styles.zoomBtn} onPress={zoomIn}>
             <Text style={styles.zBtnTxt}>+</Text>
           </TouchableOpacity>
