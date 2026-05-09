@@ -126,6 +126,12 @@ export default function ExportScreen({ navigation, route }: Props) {
         keptRanges[0].start <= 0.01 &&
         keptRanges[0].end >= duration - 0.01;
 
+      // Actual duration of what gets exported. For a full video this == duration;
+      // for a trim it's the sum of kept ranges. Used for both encode-progress math
+      // (so the bar tracks the real source length) and the duration cache (so the
+      // Downloads screen shows the trimmed length, not the original).
+      const outputDurationSec = keptRanges.reduce((sum, r) => sum + (r.end - r.start), 0);
+
       const hasSubs = !!(subtitleSegments && subtitleSegments.length > 0 && srt);
 
       // Phase boundaries (0-100).
@@ -196,7 +202,7 @@ export default function ExportScreen({ navigation, route }: Props) {
           outputUri,
           setStatus,
           effectiveTargetH,
-          duration,
+          outputDurationSec,
           (frac) => setProgress(P_ENC + 5 + frac * (P_DONE - P_ENC - 5)),
         );
       } else if (effectiveTargetH) {
@@ -206,7 +212,7 @@ export default function ExportScreen({ navigation, route }: Props) {
           effectiveTargetH,
           setStatus,
           (frac) => setProgress(P_ENC + frac * (P_DONE - P_ENC)),
-          duration,
+          outputDurationSec,
         );
       } else if (trimmedTmp) {
         setStatus('Finalising…');
@@ -224,8 +230,8 @@ export default function ExportScreen({ navigation, route }: Props) {
       }
 
       setProgress(98);
-      if (duration > 0) {
-        await preCacheMediaDuration(outputUri, duration * 1000);
+      if (outputDurationSec > 0) {
+        await preCacheMediaDuration(outputUri, outputDurationSec * 1000);
       }
 
       setOutputPath(outputUri);
