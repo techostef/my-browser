@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
+  Animated,
 } from 'react-native';
 import WebView from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
@@ -27,9 +27,9 @@ type Resolution = { label: string; detail: string; height: number | null };
 
 const RESOLUTIONS: Resolution[] = [
   { label: 'Original', detail: 'Full source resolution', height: null },
-  { label: '1080p', detail: 'Full HD',                   height: 1080 },
-  { label: '720p',  detail: 'HD',                        height: 720 },
-  { label: '480p',  detail: 'Smaller file',              height: 480 },
+  { label: '1080p',    detail: 'Full HD',                height: 1080 },
+  { label: '720p',     detail: 'HD',                     height: 720 },
+  { label: '480p',     detail: 'Smaller file',           height: 480 },
 ];
 
 export default function ExportScreen({ navigation, route }: Props) {
@@ -40,9 +40,24 @@ export default function ExportScreen({ navigation, route }: Props) {
   const [outputPath, setOutputPath] = useState('');
   const [error, setError] = useState('');
   const [webViewHtml, setWebViewHtml] = useState<string | null>(null);
+
+  const [displayPct, setDisplayPct] = useState(0);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const pngPhaseRef = useRef<{ start: number; end: number; total: number } | null>(null);
+
   const pngBufferRef = useRef<PngResult[]>([]);
   const pngResolveRef = useRef<((pngs: PngResult[]) => void) | null>(null);
   const pngRejectRef = useRef<((err: Error) => void) | null>(null);
+
+  const setProgress = (pct: number) => {
+    const clamped = Math.min(100, Math.max(0, pct));
+    setDisplayPct(Math.round(clamped));
+    Animated.timing(progressAnim, {
+      toValue: clamped,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  };
 
   const startExport = (targetHeight: number | null) => {
     if (hasStarted) return;
@@ -50,7 +65,6 @@ export default function ExportScreen({ navigation, route }: Props) {
     runExport(targetHeight);
   };
 
-  // Render subtitle PNGs via a hidden WebView
   const renderSubtitlePngs = (
     segs: Segment[],
     videoWidth: number,
@@ -68,6 +82,7 @@ export default function ExportScreen({ navigation, route }: Props) {
   const finishWebView = () => {
     pngResolveRef.current = null;
     pngRejectRef.current = null;
+    pngPhaseRef.current = null;
     setWebViewHtml(null);
   };
 
@@ -81,6 +96,10 @@ export default function ExportScreen({ navigation, route }: Props) {
     if (msg.type === 'png') {
       pngBufferRef.current.push({ id: msg.id, png: msg.png });
       setStatus(`Rendering subtitles ${msg.index + 1}/${msg.total}…`);
+      if (pngPhaseRef.current) {
+        const { start, end, total } = pngPhaseRef.current;
+        setProgress(start + ((msg.index + 1) / Math.max(1, total)) * (end - start));
+      }
     } else if (msg.type === 'done') {
       const pngs = pngBufferRef.current;
       pngBufferRef.current = [];
@@ -107,43 +126,56 @@ export default function ExportScreen({ navigation, route }: Props) {
         keptRanges[0].start <= 0.01 &&
         keptRanges[0].end >= duration - 0.01;
 
-      // Step 1: only re-encode if the user actually trimmed segments. For a
-      // full-length export we feed the source straight into the burn/transcode
-      // pass — that one re-encode is mandatory anyway, and avoiding the
-      // intermediate copy roughly halves total export time.
+      const hasSubs = !!(subtitleSegments && subtitleSegments.length > 0 && srt);
+
+      // Phase boundaries (0-100) — computed once so callbacks can reference them
+      const P_TRIM  = isFullVideo ? 0 : 25;
+      const P_PNG   = P_TRIM + (hasSubs ? 20 : 0);
+      const P_ENC   = P_PNG;
+      const P_DONE  = 96;
+
+      setProgress(0);
+
       const tmpUri = `${outputDir}edited_${stamp}_tmp.mp4`;
       let sourceUri: string;
       let trimmedTmp = false;
+
       if (isFullVideo) {
         sourceUri = videoUri;
+        setProgress(P_TRIM);
       } else {
-        await trimAndConcat(videoUri, keptRanges, tmpUri, setStatus);
+        await trimAndConcat(
+          videoUri,
+          keptRanges,
+          tmpUri,
+          setStatus,
+          (frac) => setProgress(frac * P_TRIM),
+        );
         sourceUri = tmpUri;
         trimmedTmp = true;
+        setProgress(P_TRIM);
       }
 
       const outputUri = `${outputDir}edited_${stamp}.mp4`;
-
-      // Probe video size; skip upscaling if target >= source
       const { width: vw, height: vh } = await probeVideoSize(sourceUri);
       const effectiveTargetH =
         targetHeight && vh > targetHeight ? targetHeight : null;
 
-      if (subtitleSegments && subtitleSegments.length > 0 && srt) {
-        // Render PNGs at the dimensions the overlays will actually run at.
-        // The burn pipeline scales the source FIRST when targetHeight is set,
-        // so overlays operate on smaller frames — but the PNG dimensions
-        // must match those scaled frames or text will be wrong-size.
+      if (hasSubs) {
         const renderH = effectiveTargetH ?? vh;
         const renderWraw = Math.round((vw * renderH) / vh);
-        const renderW = renderWraw - (renderWraw % 2); // keep even for yuv420p
-        const pngResults = await renderSubtitlePngs(subtitleSegments, renderW, renderH);
+        const renderW = renderWraw - (renderWraw % 2);
 
-        // Separate the gap-filler blank PNG (id -1) from the real subtitles
+        // Tell the PNG progress handler which overall range to fill
+        const pngTotal = subtitleSegments!.length + 1; // +1 for blank
+        pngPhaseRef.current = { start: P_PNG, end: P_ENC + 5, total: pngTotal };
+
+        const pngResults = await renderSubtitlePngs(subtitleSegments!, renderW, renderH);
+
         const blank = pngResults.find(r => r.id === -1);
         if (!blank) throw new Error('Subtitle renderer did not produce a blank PNG');
 
-        const segMap = new Map(subtitleSegments.map(s => [s.id, s]));
+        const segMap = new Map(subtitleSegments!.map(s => [s.id, s]));
         const overlayItems: Array<{ id: number; start: number; end: number; pngBase64: string }> = [];
         for (const r of pngResults) {
           if (r.id === -1) continue;
@@ -151,6 +183,7 @@ export default function ExportScreen({ navigation, route }: Props) {
           if (seg) overlayItems.push({ id: r.id, start: seg.start, end: seg.end, pngBase64: r.png });
         }
 
+        setProgress(P_ENC + 5);
         await burnSubtitlesWithOverlay(
           sourceUri,
           overlayItems,
@@ -159,31 +192,40 @@ export default function ExportScreen({ navigation, route }: Props) {
           setStatus,
           effectiveTargetH,
           duration,
+          (frac) => setProgress(P_ENC + 5 + frac * (P_DONE - P_ENC - 5)),
         );
       } else if (effectiveTargetH) {
-        // No subtitles, but resolution change requested — transcode
-        await transcodeVideo(sourceUri, outputUri, effectiveTargetH, setStatus);
+        await transcodeVideo(
+          sourceUri,
+          outputUri,
+          effectiveTargetH,
+          setStatus,
+          (frac) => setProgress(P_ENC + frac * (P_DONE - P_ENC)),
+          duration,
+        );
       } else if (trimmedTmp) {
-        // No subtitles, original resolution, but we already trimmed — rename tmp to final
+        setStatus('Finalising…');
         await FileSystem.moveAsync({ from: tmpUri, to: outputUri });
         trimmedTmp = false;
+        setProgress(P_DONE);
       } else {
-        // Full video, original resolution, no subtitles — straight copy
         setStatus('Copying file…');
         await FileSystem.copyAsync({ from: videoUri, to: outputUri });
+        setProgress(P_DONE);
       }
 
       if (trimmedTmp) {
         await FileSystem.deleteAsync(tmpUri, { idempotent: true });
       }
 
-      // Pre-cache duration so the Downloads scan never probes this file
+      setProgress(98);
       if (duration > 0) {
         await preCacheMediaDuration(outputUri, duration * 1000);
       }
 
       setOutputPath(outputUri);
       await clearSession(videoUri);
+      setProgress(100);
       setDone(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Export failed');
@@ -247,7 +289,6 @@ export default function ExportScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Hidden WebView used to render subtitle PNGs via HTML5 Canvas */}
       {webViewHtml ? (
         <WebView
           style={styles.hiddenWebView}
@@ -257,7 +298,20 @@ export default function ExportScreen({ navigation, route }: Props) {
         />
       ) : null}
       <View style={styles.center}>
-        <ActivityIndicator color="#fff" size="large" style={styles.spinner} />
+        <Text style={styles.progressPct}>{displayPct}%</Text>
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[
+              styles.progressFill,
+              {
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                }),
+              },
+            ]}
+          />
+        </View>
         <Text style={styles.statusText}>{status}</Text>
       </View>
     </View>
@@ -314,12 +368,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  spinner: {
-    marginBottom: 20,
+  progressPct: {
+    color: '#fff',
+    fontSize: 48,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    marginBottom: 16,
+  },
+  progressTrack: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4ECDC4',
+    borderRadius: 4,
   },
   statusText: {
-    color: '#aaa',
-    fontSize: 15,
+    color: '#666',
+    fontSize: 13,
     textAlign: 'center',
   },
   errorIcon: {
