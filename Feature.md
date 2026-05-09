@@ -1,0 +1,3 @@
+- Ads block
+- Block popup
+- when a new tab prevent to go to other browser like browser download youtube to mp4 

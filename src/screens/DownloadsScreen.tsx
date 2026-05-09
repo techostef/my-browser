@@ -714,6 +714,32 @@ export default function DownloadsScreen() {
   ];
 
   const visibleFileIds = useMemo(() => sortedFiles.map((f) => f.task.id), [sortedFiles]);
+
+  // Preview navigation: prev/next walks through the same sorted list the grid
+  // shows, but only over previewable media (skips "other" file types).
+  const playableTasks = useMemo(
+    () =>
+      sortedFiles
+        .map((f) => f.task)
+        .filter(
+          (t) =>
+            t.status === "completed" &&
+            !!t.filePath &&
+            getMediaType(t) !== "other",
+        ),
+    [sortedFiles, getMediaType],
+  );
+  const previewIdx = previewTask
+    ? playableTasks.findIndex((t) => t.id === previewTask.id)
+    : -1;
+  const handlePreviewPrev = useCallback(() => {
+    if (previewIdx > 0) setPreviewTask(playableTasks[previewIdx - 1]);
+  }, [previewIdx, playableTasks]);
+  const handlePreviewNext = useCallback(() => {
+    if (previewIdx >= 0 && previewIdx < playableTasks.length - 1) {
+      setPreviewTask(playableTasks[previewIdx + 1]);
+    }
+  }, [previewIdx, playableTasks]);
   const allSelected = visibleFileIds.length > 0 && visibleFileIds.every((id) => selectedIds.has(id));
 
   const handleSelectAll = useCallback(() => {
@@ -955,6 +981,10 @@ export default function DownloadsScreen() {
         task={previewTask}
         mediaType={previewTask ? getMediaType(previewTask) : "other"}
         onClose={() => setPreviewTask(null)}
+        onPrev={handlePreviewPrev}
+        onNext={handlePreviewNext}
+        hasPrev={previewIdx > 0}
+        hasNext={previewIdx >= 0 && previewIdx < playableTasks.length - 1}
         onEditVideo={async () => {
           const task = previewTask;
           setPreviewTask(null);
