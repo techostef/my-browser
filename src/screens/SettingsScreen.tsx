@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,17 @@ import {
   Alert,
   SectionList,
   TextInput,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system";
+import * as DocumentPicker from "expo-document-picker";
 import { useSettings, useThemeColors, HistoryEntry } from "../store/settingsStore";
 import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from "../lib/openaiKey";
 import { useActiveTabId, useTabActions } from "../store/tabStore";
+import { LOCAL_MODEL_PATH } from "../lib/videoEditor/whisper";
+import { clearAllSubtitles, getSubtitleCount } from "../lib/videoEditor/subtitleCache";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,6 +291,129 @@ function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
+function WhisperModelScreen({ onBack }: { onBack: () => void }) {
+  const c = useThemeColors();
+  const [modelSize, setModelSize] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const info = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH, { size: true });
+    setModelSize(info.exists && 'size' in info ? (info as any).size : null);
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleImport = async () => {
+    try {
+      setImporting(true);
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const file = result.assets[0];
+      const dir = LOCAL_MODEL_PATH.substring(0, LOCAL_MODEL_PATH.lastIndexOf('/'));
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+      await FileSystem.copyAsync({ from: file.uri, to: LOCAL_MODEL_PATH });
+      await refresh();
+      Alert.alert('Model imported', 'Whisper model is ready. Use "Generate (on-device)" in the video editor.');
+    } catch (e) {
+      Alert.alert('Import failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleDelete = () =>
+    Alert.alert('Delete model', 'Remove the Whisper model from this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await FileSystem.deleteAsync(LOCAL_MODEL_PATH, { idempotent: true });
+          await refresh();
+        },
+      },
+    ]);
+
+  const sizeMB = modelSize ? (modelSize / (1024 * 1024)).toFixed(0) + ' MB' : null;
+  const installed = modelSize !== null;
+
+  const MODELS = [
+    { name: 'ggml-tiny.bin',   size: '~75 MB',  note: 'Fastest, lowest accuracy' },
+    { name: 'ggml-base.bin',   size: '~142 MB', note: 'Balanced (recommended)' },
+    { name: 'ggml-small.bin',  size: '~466 MB', note: 'Slower, higher accuracy' },
+    { name: 'ggml-medium.bin', size: '~1.5 GB', note: 'Very slow, best accuracy' },
+  ];
+
+  return (
+    <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={['top']}>
+      <ScreenHeader title="Whisper Model" onBack={onBack} />
+      <ScrollView keyboardShouldPersistTaps="handled">
+
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>STATUS</Text>
+        <View style={[s.wmCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={s.wmStatusDot}>{installed ? '🟢' : '⚪'}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.wmStatusLabel, { color: c.text }]}>
+              {installed ? 'Model installed' : 'No model installed'}
+            </Text>
+            {sizeMB ? <Text style={[s.wmStatusSub, { color: c.textSecondary }]}>{sizeMB}</Text> : null}
+          </View>
+        </View>
+
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>HOW TO USE</Text>
+        <View style={[s.wmCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+          {[
+            'Open the HuggingFace link below and download a .bin model file.',
+            'Transfer the file to your device (e.g. via USB, cloud, or browser download).',
+            'Tap "Import Model" below and select the .bin file.',
+            'In the video editor, tap Caption → Generate (on-device).',
+            'Transcription runs fully offline — no internet or API key required.',
+          ].map((step, i) => (
+            <View key={i} style={s.wmStep}>
+              <Text style={[s.wmStepNum, { color: '#4ECDC4' }]}>{i + 1}</Text>
+              <Text style={[s.wmStepText, { color: c.text }]}>{step}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>DOWNLOAD</Text>
+        <TouchableOpacity
+          style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}
+          onPress={() => Linking.openURL('https://huggingface.co/ggerganov/whisper.cpp/tree/main')}
+        >
+          <Text style={[s.rowLabel, { color: '#4ECDC4' }]}>Open HuggingFace ↗</Text>
+        </TouchableOpacity>
+
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>AVAILABLE MODELS</Text>
+        {MODELS.map((m) => (
+          <View key={m.name} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.rowLabel, { color: c.text }]}>{m.name}</Text>
+              <Text style={[s.rowSub, { color: c.textSecondary }]}>{m.note}</Text>
+            </View>
+            <Text style={[s.rowValue, { color: c.textSecondary }]}>{m.size}</Text>
+          </View>
+        ))}
+
+        <View style={s.wmActions}>
+          {!installed ? (
+            <TouchableOpacity
+              style={[s.wmBtn, { backgroundColor: '#4ECDC4', opacity: importing ? 0.6 : 1 }]}
+              onPress={handleImport}
+              disabled={importing}
+            >
+              <Text style={s.wmBtnText}>{importing ? 'Importing…' : 'Import Model'}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={[s.wmBtn, { backgroundColor: '#FF3B30' }]} onPress={handleDelete}>
+              <Text style={s.wmBtnText}>Delete Model</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 function AboutScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
   return (
@@ -313,12 +441,37 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
 
 // ─── Main Settings Screen ─────────────────────────────────────────────────────
 
-type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "aiSubtitles" | "about" | null;
+type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "aiSubtitles" | "whisperModel" | "about" | null;
 
 export default function SettingsScreen() {
   const { settings } = useSettings();
   const c = useThemeColors();
   const [sub, setSub] = useState<SubScreen>(null);
+  const [subtitleCount, setSubtitleCount] = useState(0);
+
+  useEffect(() => {
+    getSubtitleCount().then(setSubtitleCount);
+  }, []);
+
+  const handleClearSubtitles = () => {
+    if (subtitleCount === 0) {
+      Alert.alert('No subtitles', 'There are no cached subtitles to delete.');
+      return;
+    }
+    Alert.alert(
+      'Delete all subtitles',
+      `This will permanently delete cached subtitles for ${subtitleCount} video${subtitleCount === 1 ? '' : 's'}. The videos themselves are not affected.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete all', style: 'destructive', onPress: async () => {
+            await clearAllSubtitles();
+            setSubtitleCount(0);
+          },
+        },
+      ],
+    );
+  };
 
   if (sub === "searchEngine") return <SearchEngineScreen onBack={() => setSub(null)} />;
   if (sub === "language") return <LanguageScreen onBack={() => setSub(null)} />;
@@ -326,6 +479,7 @@ export default function SettingsScreen() {
   if (sub === "bookmarks") return <BookmarksScreen onBack={() => setSub(null)} />;
   if (sub === "appearance") return <AppearanceScreen onBack={() => setSub(null)} />;
   if (sub === "aiSubtitles") return <AISubtitlesScreen onBack={() => setSub(null)} />;
+  if (sub === "whisperModel") return <WhisperModelScreen onBack={() => setSub(null)} />;
   if (sub === "about") return <AboutScreen onBack={() => setSub(null)} />;
 
   const sections: Section[] = [
@@ -344,7 +498,11 @@ export default function SettingsScreen() {
     },
     {
       title: "AI",
-      data: [{ kind: "nav", label: "🤖  AI Subtitles", onPress: () => setSub("aiSubtitles") }],
+      data: [
+        { kind: "nav", label: "🤖  AI Subtitles", onPress: () => setSub("aiSubtitles") },
+        { kind: "nav", label: "🎙️  Whisper Model", onPress: () => setSub("whisperModel") },
+        ...(subtitleCount > 0 ? [{ kind: "nav" as const, label: "🗑️  Delete All Subtitles", value: `${subtitleCount} cached`, onPress: handleClearSubtitles }] : []),
+      ],
     },
     {
       title: "INFO",
@@ -498,4 +656,18 @@ const s = StyleSheet.create({
   keyBtn: { flex: 1, borderRadius: 8, paddingVertical: 10, alignItems: "center" },
   keyBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   keyHint: { fontSize: 12, lineHeight: 18, marginHorizontal: 16, marginTop: 12 },
+  wmCard: {
+    marginHorizontal: 16, borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth, padding: 14,
+    gap: 10,
+  },
+  wmStatusDot: { fontSize: 20 },
+  wmStatusLabel: { fontSize: 15, fontWeight: "600" },
+  wmStatusSub: { fontSize: 12, marginTop: 2 },
+  wmStep: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  wmStepNum: { fontSize: 14, fontWeight: "700", minWidth: 18, marginTop: 1 },
+  wmStepText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  wmActions: { margin: 16, marginTop: 24 },
+  wmBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  wmBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });

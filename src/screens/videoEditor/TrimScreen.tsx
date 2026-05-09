@@ -25,7 +25,7 @@ import type { Segment as SubtitleSegment } from '../../lib/videoEditor/srt';
 import { getSubtitles } from '../../lib/videoEditor/subtitles';
 import { transcribeVideo } from '../../lib/videoEditor/whisper';
 import { translateSegments } from '../../lib/videoEditor/translate';
-import { loadSubtitles, saveSubtitles } from '../../lib/videoEditor/subtitleCache';
+import { loadSubtitles, saveSubtitles, clearSubtitles } from '../../lib/videoEditor/subtitleCache';
 import { getOpenAIKey } from '../../lib/openaiKey';
 import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/editSession';
 
@@ -545,7 +545,7 @@ export default function TrimScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleContinue = async () => {
+  const handleContinue = async (source: 'ai' | 'local' = 'ai') => {
     setLoading(true);
     try {
       const dur = durationRef.current;
@@ -558,16 +558,18 @@ export default function TrimScreen({ navigation, route }: Props) {
       let rawSrt = await getSubtitles(videoUri);
 
       if (!rawSrt) {
-        const apiKey = await getOpenAIKey();
-        if (!apiKey) {
-          Alert.alert(
-            'No subtitles found',
-            'This video has no embedded or sidecar subtitle file.\n\nAdd your OpenAI API key in Settings → AI Subtitles to enable automatic transcription.',
-          );
-          return;
+        if (source === 'ai') {
+          const apiKey = await getOpenAIKey();
+          if (!apiKey) {
+            Alert.alert(
+              'No subtitles found',
+              'This video has no embedded or sidecar subtitle file.\n\nAdd your OpenAI API key in Settings → AI Subtitles to enable automatic transcription.',
+            );
+            return;
+          }
         }
-        setStatusMsg('Transcribing with Whisper AI…');
-        const result = await transcribeVideo(videoUri, setStatusMsg);
+        setStatusMsg(source === 'local' ? 'Transcribing on-device…' : 'Transcribing with Whisper AI…');
+        const result = await transcribeVideo(videoUri, setStatusMsg, source);
         rawSrt = result.srt;
       }
 
@@ -812,15 +814,55 @@ export default function TrimScreen({ navigation, route }: Props) {
               style={styles.menuItem}
               onPress={() => {
                 setCaptionMenuOpen(false);
-                handleContinue();
+                handleContinue('ai');
               }}
             >
               <Text style={styles.menuItemIcon}>📝</Text>
               <View style={styles.menuItemBody}>
-                <Text style={styles.menuItemLabel}>Generate caption</Text>
+                <Text style={styles.menuItemLabel}>Generate caption (AI)</Text>
                 <Text style={styles.menuItemDetail}>Transcribe audio with Whisper AI</Text>
               </View>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setCaptionMenuOpen(false);
+                handleContinue('local');
+              }}
+            >
+              <Text style={styles.menuItemIcon}>📱</Text>
+              <View style={styles.menuItemBody}>
+                <Text style={styles.menuItemLabel}>Generate caption (on-device)</Text>
+                <Text style={styles.menuItemDetail}>Transcribe using local Whisper model, no internet needed</Text>
+              </View>
+            </TouchableOpacity>
+            {subtitleSegments.length > 0 && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setCaptionMenuOpen(false);
+                  Alert.alert(
+                    'Delete subtitles',
+                    'Remove subtitles for this video?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete', style: 'destructive', onPress: async () => {
+                          await clearSubtitles(videoUri);
+                          setSubtitleSegments([]);
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                <Text style={styles.menuItemIcon}>🗑️</Text>
+                <View style={styles.menuItemBody}>
+                  <Text style={styles.menuItemLabel}>Delete subtitles</Text>
+                  <Text style={styles.menuItemDetail}>Remove subtitles for this video</Text>
+                </View>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.menuItem, subtitleSegments.length === 0 && styles.menuItemDisabled]}
               disabled={subtitleSegments.length === 0}

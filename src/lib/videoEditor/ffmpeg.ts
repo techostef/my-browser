@@ -160,7 +160,7 @@ export async function extractAudio(
 }
 
 // Extracts a time-bounded audio chunk directly from the source (video or audio).
-// 16 kHz mono 32 kbps AAC — each 5-minute chunk is ~1.2 MB, well under OpenAI's 25 MB limit.
+// Mono 64 kbps AAC — each 5-minute chunk is ~2.4 MB, well under OpenAI's 25 MB limit.
 export async function extractAudioChunk(
   inputUri: string,
   startSec: number,
@@ -169,7 +169,7 @@ export async function extractAudioChunk(
 ): Promise<void> {
   await runFFmpeg(
     `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
-    ` -vn -ar 16000 -ac 1 -c:a aac -b:a 32k "${toPath(outputUri)}" -y`,
+    ` -vn -ac 1 -c:a aac -b:a 64k "${toPath(outputUri)}" -y`,
   );
 }
 
@@ -221,13 +221,15 @@ export async function probeVideoInfo(uri: string): Promise<{
       totalKbps = parseInt(tbrMatch[1], 10);
     }
 
-    const durMatch = msg.match(/Duration:\s+(\d+):(\d+):(\d+)\.(\d+)/);
+    // \s* instead of \s+ to tolerate any whitespace variant; decimal part optional
+    const durMatch = msg.match(/Duration:\s*(\d+):(\d+):(\d+)(?:\.(\d+))?/);
     if (durMatch) {
+      const frac = durMatch[4] ? parseInt(durMatch[4]) / Math.pow(10, durMatch[4].length) : 0;
       durationSec =
         parseInt(durMatch[1]) * 3600 +
         parseInt(durMatch[2]) * 60 +
         parseInt(durMatch[3]) +
-        parseInt(durMatch[4]) / 100;
+        frac;
     }
   }
 

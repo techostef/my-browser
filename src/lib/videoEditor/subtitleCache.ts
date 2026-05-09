@@ -37,3 +37,16 @@ export async function loadSubtitles(videoUri: string): Promise<Segment[] | null>
 export async function clearSubtitles(videoUri: string): Promise<void> {
   await AsyncStorage.removeItem(key(videoUri));
 }
+
+export async function clearAllSubtitles(): Promise<void> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  const subtitleKeys = allKeys.filter(k => k.startsWith(PREFIX));
+  if (subtitleKeys.length > 0) {
+    await AsyncStorage.multiRemove(subtitleKeys);
+  }
+}
+
+export async function getSubtitleCount(): Promise<number> {
+  const allKeys = await AsyncStorage.getAllKeys();
+  return allKeys.filter(k => k.startsWith(PREFIX)).length;
+}

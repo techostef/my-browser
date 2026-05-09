@@ -3,14 +3,18 @@ import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
 import { extractAudioChunk, probeVideoInfo } from './ffmpeg';
 
-// Each 5-minute chunk at 16 kHz mono 32 kbps ≈ 1.2 MB — well under the 25 MB limit.
+// Each 5-minute chunk at mono 64 kbps AAC ≈ 2.4 MB — well under the 25 MB limit.
 const CHUNK_SECS = 300;
 
-// One upload should never block forever. After this we abandon the request and
-// retry — the API occasionally hangs on the response side and a fresh request
-// usually succeeds.
+// User-imported model lives here. Import via Settings → Whisper Model.
+export const LOCAL_MODEL_PATH = `${FileSystem.documentDirectory ?? ''}whisper_model/model.bin`;
+
 const UPLOAD_TIMEOUT_MS = 180_000; // 3 minutes
 const MAX_ATTEMPTS = 3;
+
+// ---------------------------------------------------------------------------
+// OpenAI API path
+// ---------------------------------------------------------------------------
 
 async function uploadOnce(audioUri: string, apiKey: string): Promise<Segment[]> {
   const upload = FileSystem.uploadAsync(
@@ -65,50 +69,166 @@ async function uploadWithRetry(
   throw lastErr ?? new Error('Whisper upload failed');
 }
 
-export async function transcribeVideo(
+// Upload is network-bound — run this many chunks simultaneously.
+const API_CONCURRENCY = 4;
+
+async function transcribeWithApi(
   fileUri: string,
+  chunkCount: number,
+  tmpDir: string,
+  apiKey: string,
   onProgress?: (msg: string) => void,
-): Promise<{ segments: Segment[]; srt: string }> {
-  const apiKey = await getOpenAIKey();
-  if (!apiKey) {
-    throw new Error('No OpenAI API key set. Add it in Settings → AI Subtitles.');
+): Promise<Segment[]> {
+  // chunkCount of 500 means duration was unknown; don't show a misleading total.
+  const showTotal = chunkCount < 500;
+  const resultsByChunk: (Segment[] | null)[] = [];
+
+  for (let batchStart = 0; batchStart < chunkCount; batchStart += API_CONCURRENCY) {
+    const batchEnd = Math.min(batchStart + API_CONCURRENCY, chunkCount);
+    const rangeLabel = batchEnd - batchStart === 1
+      ? `part ${batchStart + 1}`
+      : `parts ${batchStart + 1}–${batchEnd}`;
+    onProgress?.(showTotal
+      ? `Transcribing ${rangeLabel} / ${chunkCount}…`
+      : `Transcribing ${rangeLabel}…`);
+
+    const batchResults = await Promise.all(
+      Array.from({ length: batchEnd - batchStart }, async (_, j) => {
+        const i = batchStart + j;
+        const start = i * CHUNK_SECS;
+        const chunkPath = `${tmpDir}chunk_${i}.m4a`;
+
+        await extractAudioChunk(fileUri, start, CHUNK_SECS, chunkPath);
+        const info = await FileSystem.getInfoAsync(chunkPath, { size: true });
+        if (!info.exists || (info as any).size < 1000) return null;
+
+        const segs = await uploadWithRetry(chunkPath, apiKey);
+        return segs.map(seg => ({
+          id: 0,
+          start: seg.start + start,
+          end: seg.end + start,
+          text: seg.text,
+        }));
+      }),
+    );
+
+    let reachedEnd = false;
+    for (const result of batchResults) {
+      resultsByChunk.push(result);
+      if (result === null) { reachedEnd = true; break; }
+    }
+    if (reachedEnd) break;
   }
 
-  const { durationSec } = await probeVideoInfo(fileUri);
-  const chunkCount = Math.max(1, Math.ceil(durationSec / CHUNK_SECS));
+  // Flatten in chunk order and assign final IDs.
+  const allSegments: Segment[] = [];
+  for (const segs of resultsByChunk) {
+    if (!segs) continue;
+    for (const seg of segs) {
+      allSegments.push({ ...seg, id: allSegments.length + 1 });
+    }
+  }
+  return allSegments;
+}
 
-  const tmpDir = `${FileSystem.cacheDirectory ?? ''}whisper_chunks_${Date.now()}/`;
-  await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
+// ---------------------------------------------------------------------------
+// On-device path (whisper.rn)
+// Fails fast if the package isn't installed or the model file is missing —
+// the caller catches and falls back to the API path.
+// ---------------------------------------------------------------------------
 
+async function transcribeLocally(
+  fileUri: string,
+  chunkCount: number,
+  tmpDir: string,
+  onProgress?: (msg: string) => void,
+): Promise<Segment[]> {
+  let initWhisper: ((opts: { filePath: string }) => Promise<any>) | undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    initWhisper = require('whisper.rn').initWhisper;
+  } catch {
+    throw new Error('whisper.rn not installed');
+  }
+
+  const modelInfo = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH);
+  if (!modelInfo.exists) throw new Error('No local Whisper model found. Import one in Settings → Whisper Model.');
+
+  const ctx = await initWhisper!({ filePath: LOCAL_MODEL_PATH });
   const allSegments: Segment[] = [];
   try {
     for (let i = 0; i < chunkCount; i++) {
       const start = i * CHUNK_SECS;
       const label = chunkCount === 1
-        ? 'Transcribing…'
-        : `Transcribing part ${i + 1}/${chunkCount}…`;
+        ? 'Transcribing (on-device)…'
+        : `Transcribing part ${i + 1}/${chunkCount} (on-device)…`;
       onProgress?.(label);
 
       const chunkPath = `${tmpDir}chunk_${i}.m4a`;
       await extractAudioChunk(fileUri, start, CHUNK_SECS, chunkPath);
 
       const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
-      if (!chunkInfo.exists || (chunkInfo as any).size < 1000) continue;
+      if (!chunkInfo.exists || (chunkInfo as any).size < 1000) break;
 
-      const chunkSegs = await uploadWithRetry(chunkPath, apiKey, onProgress, label);
-      for (const seg of chunkSegs) {
+      // whisper.rn returns t0/t1 in centiseconds
+      const { promise } = ctx.transcribe(chunkPath, {
+        language: 'ja',
+        maxLen: 1,
+        tokenTimestamps: true,
+      });
+      const { segments } = await promise;
+
+      for (const seg of (segments ?? []) as any[]) {
+        const text = String(seg.text ?? '').trim();
+        if (!text) continue;
         allSegments.push({
           id: allSegments.length + 1,
-          start: seg.start + start,
-          end: seg.end + start,
-          text: seg.text,
+          start: (seg.t0 as number) / 100 + start,
+          end: (seg.t1 as number) / 100 + start,
+          text,
         });
       }
     }
   } finally {
+    await ctx.release?.();
+  }
+  return allSegments;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export async function transcribeVideo(
+  fileUri: string,
+  onProgress?: (msg: string) => void,
+  source: 'ai' | 'local' = 'ai',
+): Promise<{ segments: Segment[]; srt: string }> {
+  const { durationSec } = await probeVideoInfo(fileUri);
+  // If probe fails (returns 0) use a large upper bound — the loop breaks on the
+  // first empty chunk so we won't overshoot by more than one iteration.
+  const chunkCount = durationSec > 0
+    ? Math.max(1, Math.ceil(durationSec / CHUNK_SECS))
+    : 500;
+
+  const tmpDir = `${FileSystem.cacheDirectory ?? ''}whisper_chunks_${Date.now()}/`;
+  await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
+
+  try {
+    if (source === 'local') {
+      // On-device only — throws if model is missing or inference fails.
+      const segments = await transcribeLocally(fileUri, chunkCount, tmpDir, onProgress);
+      return { segments, srt: segmentsToSrt(segments) };
+    }
+
+    // AI path
+    const apiKey = await getOpenAIKey();
+    if (!apiKey) {
+      throw new Error('No OpenAI API key set. Add it in Settings → AI Subtitles.');
+    }
+    const segments = await transcribeWithApi(fileUri, chunkCount, tmpDir, apiKey, onProgress);
+    return { segments, srt: segmentsToSrt(segments) };
+  } finally {
     await FileSystem.deleteAsync(tmpDir, { idempotent: true });
   }
-
-  const srt = segmentsToSrt(allSegments);
-  return { segments: allSegments, srt };
 }
