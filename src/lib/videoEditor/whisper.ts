@@ -3,18 +3,26 @@ import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
 import { extractAudio, splitAudio } from './ffmpeg';
 
-// 128 kbps AAC: 20 minutes ≈ 19.2 MB — safely under OpenAI's 25 MB hard limit
-const CHUNK_SECS = 1200;
+// Audio is mono 64 kbps AAC (extractAudio). Sizes:
+//   10-minute chunk ≈ 4.8 MB — small enough for slow connections, safely under
+//   OpenAI's 25 MB hard limit even with HTTP overhead.
+const CHUNK_SECS = 600;
 const MAX_BYTES = 24 * 1024 * 1024;
-const AUDIO_BPS = 16000; // 128 kbps / 8
+const AUDIO_BPS = 8000; // 64 kbps / 8
+
+// One upload should never block forever. After this we abandon the request and
+// retry — Whisper occasionally hangs on the response side and a fresh request
+// usually succeeds.
+const UPLOAD_TIMEOUT_MS = 180_000; // 3 minutes
+const MAX_ATTEMPTS = 3;
 
 function isAudioFile(uri: string): boolean {
   const ext = uri.split('.').pop()?.toLowerCase() ?? '';
   return ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'].includes(ext);
 }
 
-async function uploadChunk(audioUri: string, apiKey: string): Promise<Segment[]> {
-  const result = await FileSystem.uploadAsync(
+async function uploadOnce(audioUri: string, apiKey: string): Promise<Segment[]> {
+  const upload = FileSystem.uploadAsync(
     'https://api.openai.com/v1/audio/transcriptions',
     audioUri,
     {
@@ -26,10 +34,44 @@ async function uploadChunk(audioUri: string, apiKey: string): Promise<Segment[]>
       headers: { Authorization: `Bearer ${apiKey}` },
     },
   );
+
+  // Soft timeout — uploadAsync can't be cancelled, but we can stop waiting on
+  // it. The orphaned request finishes in the background harmlessly.
+  const result = await Promise.race([
+    upload,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Upload timed out')), UPLOAD_TIMEOUT_MS),
+    ),
+  ]);
+
   if (result.status < 200 || result.status >= 300) {
     throw new Error(`Whisper API error (${result.status}): ${result.body}`);
   }
   return parseSrt(result.body);
+}
+
+async function uploadWithRetry(
+  audioUri: string,
+  apiKey: string,
+  onProgress?: (msg: string) => void,
+  baseLabel?: string,
+): Promise<Segment[]> {
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 1 && baseLabel) {
+        onProgress?.(`${baseLabel} (retry ${attempt - 1}/${MAX_ATTEMPTS - 1})…`);
+      }
+      return await uploadOnce(audioUri, apiKey);
+    } catch (e) {
+      lastErr = e as Error;
+      if (attempt < MAX_ATTEMPTS) {
+        // Exponential backoff: 2s, 4s
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+      }
+    }
+  }
+  throw lastErr ?? new Error('Whisper upload failed');
 }
 
 export async function transcribeVideo(
@@ -58,10 +100,10 @@ export async function transcribeVideo(
     let allSegments: Segment[];
 
     if (fileSize <= MAX_BYTES) {
-      onProgress?.('Transcribing…');
-      allSegments = await uploadChunk(uploadUri, apiKey);
+      const label = 'Transcribing…';
+      onProgress?.(label);
+      allSegments = await uploadWithRetry(uploadUri, apiKey, onProgress, label);
     } else {
-      // Estimated duration from file size; FFmpeg clips silently at real EOF
       const estimatedDuration = Math.ceil(fileSize / AUDIO_BPS);
       const chunkCount = Math.ceil(estimatedDuration / CHUNK_SECS);
       const tmpDir = `${FileSystem.cacheDirectory ?? ''}whisper_chunks_${Date.now()}/`;
@@ -71,17 +113,16 @@ export async function transcribeVideo(
       try {
         for (let i = 0; i < chunkCount; i++) {
           const start = i * CHUNK_SECS;
-          onProgress?.(`Transcribing part ${i + 1}/${chunkCount}…`);
+          const label = `Transcribing part ${i + 1}/${chunkCount}…`;
+          onProgress?.(label);
           const chunkPath = `${tmpDir}chunk_${i}.m4a`;
           await splitAudio(uploadUri, start, CHUNK_SECS, chunkPath);
 
-          // Skip chunk if FFmpeg produced nothing (past real EOF)
           const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
           if (!chunkInfo.exists || (chunkInfo as any).size < 1000) continue;
 
-          const chunkSegs = await uploadChunk(chunkPath, apiKey);
+          const chunkSegs = await uploadWithRetry(chunkPath, apiKey, onProgress, label);
 
-          // Shift timestamps by chunk start offset and re-assign IDs
           const offset = start;
           for (const seg of chunkSegs) {
             allSegments.push({

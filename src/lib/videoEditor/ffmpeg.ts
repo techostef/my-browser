@@ -154,8 +154,11 @@ export async function extractAudio(
   inputUri: string,
   outputUri: string,
 ): Promise<void> {
+  // Mono 64 kbps AAC. Whisper transcribes mono speech as well as stereo, and
+  // halving the bitrate roughly halves upload size — the difference between a
+  // 39-minute video squeezing under the 25 MB Whisper limit vs needing chunks.
   await runFFmpeg(
-    `-i "${toPath(inputUri)}" -vn -c:a aac -b:a 128k "${toPath(outputUri)}" -y`,
+    `-i "${toPath(inputUri)}" -vn -ac 1 -c:a aac -b:a 64k "${toPath(outputUri)}" -y`,
   );
 }
 
@@ -165,9 +168,11 @@ export async function splitAudio(
   durationSec: number,
   outputUri: string,
 ): Promise<void> {
+  // Stream-copy: input from extractAudio is already mono 64k AAC, so re-encoding
+  // each slice would just waste time and re-introduce compression artifacts.
   await runFFmpeg(
     `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
-    ` -c:a aac -b:a 128k "${toPath(outputUri)}" -y`,
+    ` -c:a copy -avoid_negative_ts make_zero "${toPath(outputUri)}" -y`,
   );
 }
 
