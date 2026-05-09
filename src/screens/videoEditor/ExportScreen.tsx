@@ -128,8 +128,13 @@ export default function ExportScreen({ navigation, route }: Props) {
 
       const hasSubs = !!(subtitleSegments && subtitleSegments.length > 0 && srt);
 
-      // Phase boundaries (0-100) — computed once so callbacks can reference them
-      const P_TRIM  = isFullVideo ? 0 : 25;
+      // Phase boundaries (0-100).
+      // Trim-only (no subtitles, no resolution downscale requested): trim is the
+      // sole heavy operation so it gets the full 0-95% range.
+      // When other phases follow (PNG render, re-encode), trim is compressed to
+      // 0-30% so downstream phases have room.
+      const trimIsOnlyOp = !isFullVideo && !hasSubs && targetHeight === null;
+      const P_TRIM  = isFullVideo ? 0 : trimIsOnlyOp ? 95 : 30;
       const P_PNG   = P_TRIM + (hasSubs ? 20 : 0);
       const P_ENC   = P_PNG;
       const P_DONE  = 96;
