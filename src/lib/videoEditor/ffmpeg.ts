@@ -159,8 +159,23 @@ export async function extractAudio(
   );
 }
 
+// Extracts a time-bounded audio chunk as 16 kHz 16-bit mono PCM WAV.
+// whisper.cpp processes at 16 kHz internally, so this is lossless from its perspective.
+// Each 5-minute chunk ≈ 9.6 MB — fine for on-device use (no upload needed).
+export async function extractAudioChunkWav(
+  inputUri: string,
+  startSec: number,
+  durationSec: number,
+  outputUri: string,
+): Promise<void> {
+  await runFFmpeg(
+    `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
+    ` -vn -ar 16000 -ac 1 -c:a pcm_s16le "${toPath(outputUri)}" -y`,
+  );
+}
+
 // Extracts a time-bounded audio chunk directly from the source (video or audio).
-// Mono 64 kbps AAC — each 5-minute chunk is ~2.4 MB, well under OpenAI's 25 MB limit.
+// Mono 128 kbps AAC — each 5-minute chunk is ~4.8 MB, well under OpenAI's 25 MB limit.
 export async function extractAudioChunk(
   inputUri: string,
   startSec: number,
@@ -169,7 +184,7 @@ export async function extractAudioChunk(
 ): Promise<void> {
   await runFFmpeg(
     `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
-    ` -vn -ac 1 -c:a aac -b:a 64k "${toPath(outputUri)}" -y`,
+    ` -vn -ac 1 -c:a aac -b:a 128k "${toPath(outputUri)}" -y`,
   );
 }
 

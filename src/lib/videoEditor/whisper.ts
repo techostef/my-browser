@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
-import { extractAudioChunk, probeVideoInfo } from './ffmpeg';
+import { extractAudioChunk, extractAudioChunkWav, probeVideoInfo } from './ffmpeg';
 
 // Each 5-minute chunk at mono 64 kbps AAC ≈ 2.4 MB — well under the 25 MB limit.
 const CHUNK_SECS = 300;
@@ -71,6 +71,8 @@ async function uploadWithRetry(
 
 // Upload is network-bound — run this many chunks simultaneously.
 const API_CONCURRENCY = 4;
+// Each local context holds the full model in RAM; keep concurrency low.
+const LOCAL_CONCURRENCY = 1;
 
 async function transcribeWithApi(
   fileUri: string,
@@ -154,43 +156,75 @@ async function transcribeLocally(
   const modelInfo = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH);
   if (!modelInfo.exists) throw new Error('No local Whisper model found. Import one in Settings → Whisper Model.');
 
-  const ctx = await initWhisper!({ filePath: LOCAL_MODEL_PATH });
-  const allSegments: Segment[] = [];
+  // Load model contexts once upfront — creating them inside the parallel batch
+  // causes concurrent initWhisper calls that can fail on some devices.
+  // whisper.rn returns t0/t1 in centiseconds.
+  const ctxPool: any[] = [];
+  for (let p = 0; p < LOCAL_CONCURRENCY; p++) {
+    ctxPool.push(await initWhisper!({ filePath: LOCAL_MODEL_PATH }));
+  }
+
+  const showTotal = chunkCount < 500;
+  const resultsByChunk: (Segment[] | null)[] = [];
+
   try {
-    for (let i = 0; i < chunkCount; i++) {
-      const start = i * CHUNK_SECS;
-      const label = chunkCount === 1
-        ? 'Transcribing (on-device)…'
-        : `Transcribing part ${i + 1}/${chunkCount} (on-device)…`;
-      onProgress?.(label);
+    for (let batchStart = 0; batchStart < chunkCount; batchStart += LOCAL_CONCURRENCY) {
+      const batchEnd = Math.min(batchStart + LOCAL_CONCURRENCY, chunkCount);
+      const rangeLabel = batchEnd - batchStart === 1
+        ? `part ${batchStart + 1}`
+        : `parts ${batchStart + 1}–${batchEnd}`;
+      onProgress?.(showTotal
+        ? `Transcribing ${rangeLabel} / ${chunkCount} (on-device)…`
+        : `Transcribing ${rangeLabel} (on-device)…`);
 
-      const chunkPath = `${tmpDir}chunk_${i}.m4a`;
-      await extractAudioChunk(fileUri, start, CHUNK_SECS, chunkPath);
+      const batchResults = await Promise.all(
+        Array.from({ length: batchEnd - batchStart }, async (_, j) => {
+          const i = batchStart + j;
+          const start = i * CHUNK_SECS;
+          const chunkPath = `${tmpDir}chunk_${i}.wav`;
 
-      const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
-      if (!chunkInfo.exists || (chunkInfo as any).size < 1000) break;
+          await extractAudioChunkWav(fileUri, start, CHUNK_SECS, chunkPath);
+          const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
+          if (!chunkInfo.exists || (chunkInfo as any).size < 1000) return null;
 
-      // whisper.rn returns t0/t1 in centiseconds
-      const { promise } = ctx.transcribe(chunkPath, {
-        language: 'ja',
-        maxLen: 1,
-        tokenTimestamps: true,
-      });
-      const { segments } = await promise;
+          const ctx = ctxPool[j];
+          const { promise } = ctx.transcribe(chunkPath, {
+            language: 'ja',
+            maxLen: 1,
+            tokenTimestamps: true,
+          });
+          const { segments } = await promise;
+          const result: Segment[] = [];
+          for (const seg of (segments ?? []) as any[]) {
+            const text = String(seg.text ?? '').trim();
+            if (text) result.push({
+              id: 0,
+              start: (seg.t0 as number) / 100 + start,
+              end: (seg.t1 as number) / 100 + start,
+              text,
+            });
+          }
+          return result;
+        }),
+      );
 
-      for (const seg of (segments ?? []) as any[]) {
-        const text = String(seg.text ?? '').trim();
-        if (!text) continue;
-        allSegments.push({
-          id: allSegments.length + 1,
-          start: (seg.t0 as number) / 100 + start,
-          end: (seg.t1 as number) / 100 + start,
-          text,
-        });
+      let reachedEnd = false;
+      for (const result of batchResults) {
+        resultsByChunk.push(result);
+        if (result === null) { reachedEnd = true; break; }
       }
+      if (reachedEnd) break;
     }
   } finally {
-    await ctx.release?.();
+    await Promise.all(ctxPool.map((ctx) => ctx.release?.()));
+  }
+
+  const allSegments: Segment[] = [];
+  for (const segs of resultsByChunk) {
+    if (!segs) continue;
+    for (const seg of segs) {
+      allSegments.push({ ...seg, id: allSegments.length + 1 });
+    }
   }
   return allSegments;
 }
