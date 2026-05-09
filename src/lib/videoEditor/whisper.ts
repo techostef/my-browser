@@ -1,25 +1,16 @@
 import * as FileSystem from 'expo-file-system';
 import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
-import { extractAudio, splitAudio } from './ffmpeg';
+import { extractAudioChunk, probeVideoInfo } from './ffmpeg';
 
-// Audio is 16 kHz mono 32 kbps AAC (extractAudio). Sizes:
-//   10-minute chunk ≈ 2.4 MB — well under OpenAI's 25 MB limit.
-//   A 60-minute video ≈ 14.4 MB, stays under the single-upload threshold.
-const CHUNK_SECS = 600;
-const MAX_BYTES = 24 * 1024 * 1024;
-const AUDIO_BPS = 4000; // 32 kbps / 8
+// Each 5-minute chunk at 16 kHz mono 32 kbps ≈ 1.2 MB — well under the 25 MB limit.
+const CHUNK_SECS = 300;
 
 // One upload should never block forever. After this we abandon the request and
-// retry — Whisper occasionally hangs on the response side and a fresh request
+// retry — the API occasionally hangs on the response side and a fresh request
 // usually succeeds.
 const UPLOAD_TIMEOUT_MS = 180_000; // 3 minutes
 const MAX_ATTEMPTS = 3;
-
-function isAudioFile(uri: string): boolean {
-  const ext = uri.split('.').pop()?.toLowerCase() ?? '';
-  return ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'].includes(ext);
-}
 
 async function uploadOnce(audioUri: string, apiKey: string): Promise<Segment[]> {
   const upload = FileSystem.uploadAsync(
@@ -30,7 +21,7 @@ async function uploadOnce(audioUri: string, apiKey: string): Promise<Segment[]> 
       uploadType: FileSystem.FileSystemUploadType.MULTIPART,
       fieldName: 'file',
       mimeType: 'audio/mp4',
-      parameters: { model: 'gpt-4o-mini-transcribe', response_format: 'srt' },
+      parameters: { model: 'whisper-1', response_format: 'srt' },
       headers: { Authorization: `Bearer ${apiKey}` },
     },
   );
@@ -83,66 +74,41 @@ export async function transcribeVideo(
     throw new Error('No OpenAI API key set. Add it in Settings → AI Subtitles.');
   }
 
-  let uploadUri = fileUri;
-  let tempAudio: string | null = null;
+  const { durationSec } = await probeVideoInfo(fileUri);
+  const chunkCount = Math.max(1, Math.ceil(durationSec / CHUNK_SECS));
 
-  if (!isAudioFile(fileUri)) {
-    onProgress?.('Extracting audio…');
-    tempAudio = `${FileSystem.cacheDirectory ?? ''}whisper_audio_${Date.now()}.m4a`;
-    await extractAudio(fileUri, tempAudio);
-    uploadUri = tempAudio;
-  }
+  const tmpDir = `${FileSystem.cacheDirectory ?? ''}whisper_chunks_${Date.now()}/`;
+  await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
 
+  const allSegments: Segment[] = [];
   try {
-    const info = await FileSystem.getInfoAsync(uploadUri, { size: true });
-    const fileSize = (info.exists && 'size' in info) ? (info as any).size as number : 0;
-
-    let allSegments: Segment[];
-
-    if (fileSize <= MAX_BYTES) {
-      const label = 'Transcribing…';
+    for (let i = 0; i < chunkCount; i++) {
+      const start = i * CHUNK_SECS;
+      const label = chunkCount === 1
+        ? 'Transcribing…'
+        : `Transcribing part ${i + 1}/${chunkCount}…`;
       onProgress?.(label);
-      allSegments = await uploadWithRetry(uploadUri, apiKey, onProgress, label);
-    } else {
-      const estimatedDuration = Math.ceil(fileSize / AUDIO_BPS);
-      const chunkCount = Math.ceil(estimatedDuration / CHUNK_SECS);
-      const tmpDir = `${FileSystem.cacheDirectory ?? ''}whisper_chunks_${Date.now()}/`;
-      await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
 
-      allSegments = [];
-      try {
-        for (let i = 0; i < chunkCount; i++) {
-          const start = i * CHUNK_SECS;
-          const label = `Transcribing part ${i + 1}/${chunkCount}…`;
-          onProgress?.(label);
-          const chunkPath = `${tmpDir}chunk_${i}.m4a`;
-          await splitAudio(uploadUri, start, CHUNK_SECS, chunkPath);
+      const chunkPath = `${tmpDir}chunk_${i}.m4a`;
+      await extractAudioChunk(fileUri, start, CHUNK_SECS, chunkPath);
 
-          const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
-          if (!chunkInfo.exists || (chunkInfo as any).size < 1000) continue;
+      const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
+      if (!chunkInfo.exists || (chunkInfo as any).size < 1000) continue;
 
-          const chunkSegs = await uploadWithRetry(chunkPath, apiKey, onProgress, label);
-
-          const offset = start;
-          for (const seg of chunkSegs) {
-            allSegments.push({
-              id: allSegments.length + 1,
-              start: seg.start + offset,
-              end: seg.end + offset,
-              text: seg.text,
-            });
-          }
-        }
-      } finally {
-        await FileSystem.deleteAsync(tmpDir, { idempotent: true });
+      const chunkSegs = await uploadWithRetry(chunkPath, apiKey, onProgress, label);
+      for (const seg of chunkSegs) {
+        allSegments.push({
+          id: allSegments.length + 1,
+          start: seg.start + start,
+          end: seg.end + start,
+          text: seg.text,
+        });
       }
     }
-
-    const srt = segmentsToSrt(allSegments);
-    return { segments: allSegments, srt };
   } finally {
-    if (tempAudio) {
-      await FileSystem.deleteAsync(tempAudio, { idempotent: true });
-    }
+    await FileSystem.deleteAsync(tmpDir, { idempotent: true });
   }
+
+  const srt = segmentsToSrt(allSegments);
+  return { segments: allSegments, srt };
 }

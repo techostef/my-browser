@@ -154,11 +154,22 @@ export async function extractAudio(
   inputUri: string,
   outputUri: string,
 ): Promise<void> {
-  // 16 kHz mono 32 kbps AAC. Whisper resamples to 16 kHz internally anyway, so
-  // doing it here cuts upload size ~4× vs the source — a 60-min video stays
-  // under the 25 MB single-upload limit instead of needing chunking.
   await runFFmpeg(
     `-i "${toPath(inputUri)}" -vn -ar 16000 -ac 1 -c:a aac -b:a 32k "${toPath(outputUri)}" -y`,
+  );
+}
+
+// Extracts a time-bounded audio chunk directly from the source (video or audio).
+// 16 kHz mono 32 kbps AAC — each 5-minute chunk is ~1.2 MB, well under OpenAI's 25 MB limit.
+export async function extractAudioChunk(
+  inputUri: string,
+  startSec: number,
+  durationSec: number,
+  outputUri: string,
+): Promise<void> {
+  await runFFmpeg(
+    `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
+    ` -vn -ar 16000 -ac 1 -c:a aac -b:a 32k "${toPath(outputUri)}" -y`,
   );
 }
 
@@ -168,8 +179,6 @@ export async function splitAudio(
   durationSec: number,
   outputUri: string,
 ): Promise<void> {
-  // Stream-copy: input from extractAudio is already mono 64k AAC, so re-encoding
-  // each slice would just waste time and re-introduce compression artifacts.
   await runFFmpeg(
     `-ss ${startSec} -i "${toPath(inputUri)}" -t ${durationSec}` +
     ` -c:a copy -avoid_negative_ts make_zero "${toPath(outputUri)}" -y`,
