@@ -43,7 +43,7 @@ async function translateChunk(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini-',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'You are a professional translator. Respond only with the requested JSON.' },
         { role: 'user', content: userPrompt },

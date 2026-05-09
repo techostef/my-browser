@@ -30,7 +30,7 @@ async function uploadOnce(audioUri: string, apiKey: string): Promise<Segment[]> 
       uploadType: FileSystem.FileSystemUploadType.MULTIPART,
       fieldName: 'file',
       mimeType: 'audio/mp4',
-      parameters: { model: 'whisper-1', response_format: 'srt' },
+      parameters: { model: 'gpt-4o-mini-transcribe', response_format: 'srt' },
       headers: { Authorization: `Bearer ${apiKey}` },
     },
   );
