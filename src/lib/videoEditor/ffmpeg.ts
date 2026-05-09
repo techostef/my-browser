@@ -39,38 +39,55 @@ async function runFFmpeg(
   }
 }
 
-// MediaCodec (Android hardware H.264) is dramatically faster than libx264 —
-// often 5-10× on a flagship phone. Picking a sane bitrate per resolution
-// keeps file sizes reasonable since MediaCodec is bitrate-driven, not CRF.
-function bitrateForHeight(h?: number | null): string {
-  if (!h) return '5000k';
-  if (h <= 480) return '1500k';
-  if (h <= 720) return '3000k';
-  if (h <= 1080) return '5000k';
-  return '8000k';
+// MediaCodec (Android hardware H.264) is bitrate-driven (not CRF), so picking
+// the right target bitrate is the difference between a 470 MB and a 1.2 GB
+// output for the same content. We match the source bitrate (+15% headroom for
+// re-encoding losses) and clamp by the per-resolution ceiling. Without this,
+// trimming a 1.6 Mbps source ends up at 5 Mbps — way bigger than the original.
+function chooseBitrate(targetHeight?: number | null, sourceKbps?: number): string {
+  const ceiling = !targetHeight ? 8000
+    : targetHeight <= 480 ? 600
+    : targetHeight <= 720 ? 1600
+    : targetHeight <= 1080 ? 3200
+    : 4800;
+
+  if (!sourceKbps || sourceKbps <= 0) {
+    return `${ceiling}k`;
+  }
+  const target = Math.max(500, Math.min(ceiling, Math.round(sourceKbps * 1.15)));
+  return `${target}k`;
 }
 
-const HW_VENC = (h?: number | null) =>
-  `-c:v h264_mediacodec -b:v ${bitrateForHeight(h)}`;
+const HW_VENC = (h?: number | null, sourceKbps?: number) =>
+  `-c:v h264_mediacodec -b:v ${chooseBitrate(h, sourceKbps)}`;
 
-const SW_VENC =
-  `-c:v libx264 -preset ultrafast -tune zerolatency -crf 26 -pix_fmt yuv420p -threads 0`;
+// Software fallback also needs to honor the source bitrate. Plain CRF 26 +
+// ultrafast often emits ~3 Mbps regardless of input, which cancels out the
+// hardware path's bitrate matching whenever MediaCodec rejects the input.
+const SW_VENC = (h?: number | null, sourceKbps?: number) => {
+  if (sourceKbps && sourceKbps > 0) {
+    const br = chooseBitrate(h, sourceKbps);
+    const brNum = parseInt(br, 10);
+    return `-c:v libx264 -preset ultrafast -b:v ${br} -maxrate ${br} -bufsize ${brNum * 2}k -pix_fmt yuv420p -threads 0`;
+  }
+  return `-c:v libx264 -preset ultrafast -tune zerolatency -crf 26 -pix_fmt yuv420p -threads 0`;
+};
 
 async function runWithEncoderFallback(
   build: (encoderArgs: string) => string,
   outputUri: string,
   targetHeight?: number | null,
   onStats?: (timeMs: number) => void,
+  sourceKbps?: number,
 ): Promise<void> {
   try {
-    await runFFmpeg(build(HW_VENC(targetHeight)), onStats);
+    await runFFmpeg(build(HW_VENC(targetHeight, sourceKbps)), onStats);
     return;
   } catch {
-    // Clean any partial output before retrying; reset progress for the retry
     await FileSystem.deleteAsync(outputUri, { idempotent: true });
     onStats?.(0);
   }
-  await runFFmpeg(build(SW_VENC), onStats);
+  await runFFmpeg(build(SW_VENC(targetHeight, sourceKbps)), onStats);
 }
 
 export async function trimAndConcat(
@@ -81,6 +98,10 @@ export async function trimAndConcat(
   onEncodeProgress?: (fraction: number) => void,
 ): Promise<void> {
   if (keptRanges.length === 0) throw new Error('No segments to export');
+
+  // Match the source's bitrate so output size scales with trim duration instead
+  // of ballooning to the per-resolution ceiling.
+  const { videoKbps, height: srcH } = await probeVideoInfo(inputUri);
 
   const tmpDir = FileSystem.cacheDirectory + 'trim_tmp_' + Date.now() + '/';
   await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
@@ -107,7 +128,7 @@ export async function trimAndConcat(
         `-ss ${start} -i "${toPath(inputUri)}" -t ${segDur}` +
         ` ${enc} -c:a aac -avoid_negative_ts make_zero` +
         ` "${toPath(segPath)}" -y`;
-      await runWithEncoderFallback(build, segPath, undefined, onStats);
+      await runWithEncoderFallback(build, segPath, srcH, onStats, videoKbps);
       doneSecs += segDur;
       segmentPaths.push(segPath);
     }
@@ -150,19 +171,82 @@ export async function splitAudio(
   );
 }
 
+export async function probeVideoInfo(uri: string): Promise<{
+  width: number;
+  height: number;
+  videoKbps: number;
+  durationSec: number;
+}> {
+  const session = await FFmpegKit.execute(`-hide_banner -i "${toPath(uri)}"`);
+  const logs = await session.getLogs();
+
+  let width = 1280;
+  let height = 720;
+  let videoKbps = 0;
+  let totalKbps = 0;
+  let durationSec = 0;
+
+  for (const log of logs) {
+    const msg = String(log.getMessage());
+
+    const sizeMatch = msg.match(/\bVideo:.*?\b(\d{2,5})x(\d{2,5})\b/);
+    if (sizeMatch) {
+      width = parseInt(sizeMatch[1], 10);
+      height = parseInt(sizeMatch[2], 10);
+    }
+
+    // Per-stream video bitrate: "Video: ... , 1500 kb/s, 25 fps ..."
+    const vbrMatch = msg.match(/Video:.*?,\s*(\d+)\s*kb\/s/);
+    if (vbrMatch) {
+      videoKbps = parseInt(vbrMatch[1], 10);
+    }
+
+    // Container-level overall bitrate: "Duration: ..., bitrate: 1600 kb/s"
+    const tbrMatch = msg.match(/Duration:.*?bitrate:\s*(\d+)\s*kb\/s/);
+    if (tbrMatch) {
+      totalKbps = parseInt(tbrMatch[1], 10);
+    }
+
+    const durMatch = msg.match(/Duration:\s+(\d+):(\d+):(\d+)\.(\d+)/);
+    if (durMatch) {
+      durationSec =
+        parseInt(durMatch[1]) * 3600 +
+        parseInt(durMatch[2]) * 60 +
+        parseInt(durMatch[3]) +
+        parseInt(durMatch[4]) / 100;
+    }
+  }
+
+  // Fallback 1: subtract typical AAC audio (128k) from container bitrate
+  if (!videoKbps && totalKbps) {
+    videoKbps = Math.max(500, totalKbps - 128);
+  }
+
+  // Fallback 2: compute from file size and duration. Catches files where
+  // FFmpeg's log doesn't include a bitrate field (some MP4s with stripped
+  // metadata or VBR streams). Without this we'd silently use the per-resolution
+  // ceiling — exactly the bug that bloats trimmed exports back to source size.
+  if (!videoKbps && durationSec > 0) {
+    try {
+      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      const fileBytes = (info.exists && 'size' in info) ? ((info as any).size as number) : 0;
+      if (fileBytes > 0) {
+        const overallKbps = (fileBytes * 8) / 1000 / durationSec;
+        videoKbps = Math.max(500, Math.round(overallKbps - 128));
+      }
+    } catch {
+      // leave videoKbps at 0; chooseBitrate will use the resolution ceiling
+    }
+  }
+
+  return { width, height, videoKbps, durationSec };
+}
+
 export async function probeVideoSize(
   videoUri: string,
 ): Promise<{ width: number; height: number }> {
-  const session = await FFmpegKit.execute(`-hide_banner -i "${toPath(videoUri)}"`);
-  const logs = await session.getLogs();
-  for (const log of logs) {
-    const msg = String(log.getMessage());
-    const m = msg.match(/\bVideo:.*?\b(\d{2,5})x(\d{2,5})\b/);
-    if (m) {
-      return { width: parseInt(m[1], 10), height: parseInt(m[2], 10) };
-    }
-  }
-  return { width: 1280, height: 720 };
+  const info = await probeVideoInfo(videoUri);
+  return { width: info.width, height: info.height };
 }
 
 export async function transcodeVideo(
@@ -174,6 +258,13 @@ export async function transcodeVideo(
   totalDuration?: number,
 ): Promise<void> {
   onProgress?.(`Encoding ${targetHeight}p…`);
+  const { videoKbps, height: srcH } = await probeVideoInfo(inputUri);
+
+  // Scale source bitrate by area ratio when downscaling — a 1.6 Mbps 720p
+  // doesn't need 1.6 Mbps at 480p; (480/720)² ≈ 0.44, so ~700 kbps suffices.
+  const areaRatio = srcH > 0 ? (targetHeight * targetHeight) / (srcH * srcH) : 1;
+  const scaledKbps = videoKbps > 0 ? Math.round(videoKbps * Math.min(1, areaRatio)) : 0;
+
   const onStats = (onEncodeProgress && totalDuration)
     ? (timeMs: number) => onEncodeProgress(Math.min(1, timeMs / Math.max(1, totalDuration * 1000)))
     : undefined;
@@ -181,7 +272,7 @@ export async function transcodeVideo(
     `-i "${toPath(inputUri)}" -vf scale=-2:${targetHeight}` +
     ` ${enc} -c:a copy -movflags +faststart` +
     ` "${toPath(outputUri)}" -y`;
-  await runWithEncoderFallback(build, outputUri, targetHeight, onStats);
+  await runWithEncoderFallback(build, outputUri, targetHeight, onStats, scaledKbps);
 }
 
 export async function burnSubtitlesWithOverlay(
@@ -253,6 +344,13 @@ export async function burnSubtitlesWithOverlay(
       ? (timeMs: number) => onEncodeProgress(Math.min(1, timeMs / Math.max(1, videoDuration * 1000)))
       : undefined;
 
+    const { videoKbps, height: srcH } = await probeVideoInfo(videoUri);
+    // Scale by area when downscaling, same logic as transcodeVideo
+    const areaRatio = (targetHeight && srcH > 0)
+      ? (targetHeight * targetHeight) / (srcH * srcH)
+      : 1;
+    const scaledKbps = videoKbps > 0 ? Math.round(videoKbps * Math.min(1, areaRatio)) : 0;
+
     const build = (enc: string) =>
       `-i "${toPath(videoUri)}"` +
       ` -f concat -safe 0 -i "${toPath(listPath)}"` +
@@ -260,7 +358,7 @@ export async function burnSubtitlesWithOverlay(
       ` -map "[vout]" -map 0:a?` +
       ` ${enc} -c:a copy` +
       ` -shortest -movflags +faststart "${toPath(outputUri)}" -y`;
-    await runWithEncoderFallback(build, outputUri, targetHeight, onStats);
+    await runWithEncoderFallback(build, outputUri, targetHeight, onStats, scaledKbps);
   } finally {
     await FileSystem.deleteAsync(tmpDir, { idempotent: true });
   }
