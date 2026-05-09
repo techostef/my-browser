@@ -49,11 +49,12 @@ interface ChipRowProps {
   editingId: number | null;
   chipContentW: number;
   onChipPress: (seg: SubtitleSegment) => void;
+  onChipDelete: (seg: SubtitleSegment) => void;
 }
 
 const SubtitleChipRow = React.memo(
   React.forwardRef<ChipRowHandle, ChipRowProps>(
-    ({ subtitleSegments, activeSubtitleId, editingId, chipContentW, onChipPress }, ref) => {
+    ({ subtitleSegments, activeSubtitleId, editingId, chipContentW, onChipPress, onChipDelete }, ref) => {
       const scrollViewRef = useRef<ScrollView>(null);
       const [scrollX, setScrollX] = useState(0);
 
@@ -100,6 +101,13 @@ const SubtitleChipRow = React.memo(
                     <Text style={chipRowStyles.chipText} numberOfLines={1}>
                       {seg.text || '…'}
                     </Text>
+                    <TouchableOpacity
+                      onPress={() => onChipDelete(seg)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      style={chipRowStyles.chipDeleteBtn}
+                    >
+                      <Text style={chipRowStyles.chipDeleteText}>×</Text>
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 );
               })}
@@ -127,7 +135,8 @@ const chipRowStyles = StyleSheet.create({
     backgroundColor: '#4a3f28',
     borderRadius: 6,
     paddingHorizontal: 8,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#6b5a38',
   },
@@ -143,6 +152,22 @@ const chipRowStyles = StyleSheet.create({
     color: '#f0d9a0',
     fontSize: 12,
     fontWeight: '500',
+    flex: 1,
+  },
+  chipDeleteBtn: {
+    marginLeft: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,82,82,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipDeleteText: {
+    color: '#ff5252',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });
 
@@ -498,9 +523,38 @@ export default function TrimScreen({ navigation, route }: Props) {
     chipRowRef.current?.scrollTo(seg.start * PX_PER_SEC, true);
   }, []);
 
+  const handleChipDelete = useCallback((seg: SubtitleSegment) => {
+    Alert.alert('Delete subtitle', `Remove "${seg.text}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          setSubtitleSegments(prev => prev.filter(s => s.id !== seg.id));
+          if (editingId === seg.id) setEditingId(null);
+        },
+      },
+    ]);
+  }, [editingId]);
+
   const handleEditDone = useCallback(() => {
     setEditingId(null);
   }, []);
+
+  const handleDeleteSubtitle = useCallback(() => {
+    if (editingId === null) return;
+    Alert.alert('Delete subtitle', 'Remove this subtitle segment?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          setSubtitleSegments(prev => prev.filter(s => s.id !== editingId));
+          setEditingId(null);
+        },
+      },
+    ]);
+  }, [editingId]);
 
   const handleTextChange = useCallback((text: string) => {
     setEditDraft(text);
@@ -681,6 +735,7 @@ export default function TrimScreen({ navigation, route }: Props) {
             editingId={editingId}
             chipContentW={chipContentW}
             onChipPress={handleChipPress}
+            onChipDelete={handleChipDelete}
           />
         )}
 
@@ -722,6 +777,9 @@ export default function TrimScreen({ navigation, route }: Props) {
             placeholderTextColor="#555"
             placeholder="Type subtitle text…"
           />
+          <TouchableOpacity style={styles.editDeleteBtn} onPress={handleDeleteSubtitle}>
+            <Text style={styles.editDeleteText}>Delete</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
             <Text style={styles.editDoneText}>Done</Text>
           </TouchableOpacity>
@@ -1201,6 +1259,19 @@ const styles = StyleSheet.create({
     borderBottomColor: '#6c63ff',
     paddingVertical: 4,
     maxHeight: 80,
+  },
+  editDeleteBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#3a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ff5252',
+  },
+  editDeleteText: {
+    color: '#ff5252',
+    fontSize: 13,
+    fontWeight: '600',
   },
   editDoneBtn: {
     paddingHorizontal: 12,
