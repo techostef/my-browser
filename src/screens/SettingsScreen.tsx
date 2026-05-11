@@ -444,7 +444,7 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
 type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "aiSubtitles" | "whisperModel" | "about" | null;
 
 export default function SettingsScreen() {
-  const { settings } = useSettings();
+  const { settings, setSetting } = useSettings();
   const c = useThemeColors();
   const [sub, setSub] = useState<SubScreen>(null);
   const [subtitleCount, setSubtitleCount] = useState(0);
@@ -488,6 +488,8 @@ export default function SettingsScreen() {
       data: [
         { kind: "nav", label: "🔍  Search Engine", value: settings.searchEngine, onPress: () => setSub("searchEngine") },
         { kind: "nav", label: "🌐  Language", value: settings.language, onPress: () => setSub("language") },
+        { kind: "toggle", label: "🛡️  Ad Blocker", value: settings.adBlockEnabled, onToggle: (v) => setSetting("adBlockEnabled", v) },
+        { kind: "toggle", label: "🚫  Popup Blocker", value: settings.popupBlockEnabled, onToggle: (v) => setSetting("popupBlockEnabled", v) },
         { kind: "nav", label: "🕐  History", onPress: () => setSub("history") },
         { kind: "nav", label: "🔖  Bookmarks", onPress: () => setSub("bookmarks") },
       ],

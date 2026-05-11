@@ -117,6 +117,8 @@ export interface SettingsState {
   language: string;
   theme: string;
   compactTabs: boolean;
+  adBlockEnabled: boolean;
+  popupBlockEnabled: boolean;
   shortcuts: Shortcut[];
 }
 
@@ -125,6 +127,8 @@ const DEFAULT_SETTINGS: SettingsState = {
   language: "English",
   theme: "System Default",
   compactTabs: false,
+  adBlockEnabled: true,
+  popupBlockEnabled: true,
   shortcuts: DEFAULT_SHORTCUTS,
 };
 

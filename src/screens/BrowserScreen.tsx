@@ -23,6 +23,7 @@ import {
 } from '../store/tabStore';
 import { DetectedVideo, HlsVariant } from '../types';
 import Browser from '@/components/Browser';
+import PopupBlockedBanner from '../components/PopupBlockedBanner';
 import CookieManager from '@react-native-cookies/cookies';
 
 // Injected into the browser WebView when the user taps Preview on a stream.
@@ -110,7 +111,7 @@ export default function BrowserScreen() {
   const tabs = useTabList();
   const { addTab, removeTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
-  const { pushHistory } = useSettings();
+  const { settings, pushHistory } = useSettings();
   const previousUrl = useRef('');
   const navigation = useNavigation();
 
@@ -145,6 +146,9 @@ export default function BrowserScreen() {
     { bytesReceived: number; totalBytes: number } | null
   >(null);
   const [blobPreviewError, setBlobPreviewError] = useState<string | null>(null);
+
+  // Popup blocker state
+  const [blockedPopupUrl, setBlockedPopupUrl] = useState<string | null>(null);
 
   // Set to true before any programmatic navigation (back/forward/address-bar) so
   // handleNavigationStateChange knows not to push the resulting URL to history again.
@@ -720,6 +724,13 @@ export default function BrowserScreen() {
           }
           break;
         }
+        case 'POPUP_BLOCKED': {
+          const popupUrl: string = message.payload?.url || '';
+          if (popupUrl) {
+            setBlockedPopupUrl(popupUrl);
+          }
+          break;
+        }
         case 'EXTRACTION_LINK_CLICK': {
           const { href } = message.payload;
           // console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
@@ -858,6 +869,8 @@ export default function BrowserScreen() {
           handleMessage={handleMessage}
           handleNavigationStateChange={handleNavigationStateChange}
           handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+          adBlockEnabled={settings.adBlockEnabled}
+          popupBlockEnabled={settings.popupBlockEnabled}
         />
 
         <VideoDetectedBanner
@@ -886,6 +899,18 @@ export default function BrowserScreen() {
           />
         )}
       </View>
+
+      {blockedPopupUrl && (
+        <PopupBlockedBanner
+          url={blockedPopupUrl}
+          onAllow={() => {
+            const url = blockedPopupUrl;
+            setBlockedPopupUrl(null);
+            addTab(url);
+          }}
+          onDismiss={() => setBlockedPopupUrl(null)}
+        />
+      )}
 
       <VideoPreviewModal
         visible={previewVideo !== null}
@@ -977,6 +1002,8 @@ interface WebViewListProps {
   handleMessage: (tabId: string) => (event: { nativeEvent: { data: string } }) => void;
   handleNavigationStateChange: (tabId: string) => (navState: WebViewNavigation) => void;
   handleShouldStartLoadWithRequest: (tabId: string) => (request: ShouldStartLoadRequest) => boolean;
+  adBlockEnabled: boolean;
+  popupBlockEnabled: boolean;
 }
 
 function WebViewListInner({
@@ -984,6 +1011,8 @@ function WebViewListInner({
   handleMessage,
   handleNavigationStateChange,
   handleShouldStartLoadWithRequest,
+  adBlockEnabled,
+  popupBlockEnabled,
 }: WebViewListProps) {
   const tabs = useTabList();
   const activeTabId = useActiveTabId();
@@ -1153,6 +1182,8 @@ function WebViewListInner({
               handleMessage={handleMessage(tab.id)}
               handleNavigationStateChange={handleNavigationStateChange(tab.id)}
               handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
+              adBlockEnabled={adBlockEnabled}
+              popupBlockEnabled={popupBlockEnabled}
             />
           </View>
         ))}

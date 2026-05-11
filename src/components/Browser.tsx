@@ -4,6 +4,8 @@ import { WebView, WebViewNavigation } from "react-native-webview";
 import { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 
 import { VIDEO_DETECTOR_JS } from "../services/videoDetector";
+import { AD_BLOCKER_JS } from "../services/adBlocker";
+import { POPUP_BLOCKER_JS } from "../services/popupBlocker";
 
 interface Props {
   webViewRef: React.RefObject<WebView> | ((ref: WebView | null) => void);
@@ -11,16 +13,21 @@ interface Props {
   handleMessage: (event: any) => void;
   handleNavigationStateChange: (navState: WebViewNavigation) => void;
   handleShouldStartLoadWithRequest?: (request: ShouldStartLoadRequest) => boolean;
+  adBlockEnabled?: boolean;
+  popupBlockEnabled?: boolean;
 }
 
-const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateChange, handleShouldStartLoadWithRequest }: Props) =>{
+const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateChange, handleShouldStartLoadWithRequest, adBlockEnabled, popupBlockEnabled }: Props) =>{
   console.log('Render Component Browser:', currentUrl);
+  let injectedJS = VIDEO_DETECTOR_JS;
+  if (adBlockEnabled) injectedJS = AD_BLOCKER_JS + injectedJS;
+  if (popupBlockEnabled) injectedJS = POPUP_BLOCKER_JS + injectedJS;
   return (
     <WebView
       ref={webViewRef as any}
       source={{ uri: currentUrl }}
       style={styles.webview}
-      injectedJavaScriptBeforeContentLoaded={VIDEO_DETECTOR_JS}
+      injectedJavaScriptBeforeContentLoaded={injectedJS}
       onMessage={handleMessage}
       onNavigationStateChange={handleNavigationStateChange}
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
