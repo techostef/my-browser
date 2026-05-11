@@ -28,6 +28,7 @@ import { translateSegments } from '../../lib/videoEditor/translate';
 import { loadSubtitles, saveSubtitles, clearSubtitles } from '../../lib/videoEditor/subtitleCache';
 import { getOpenAIKey } from '../../lib/openaiKey';
 import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/editSession';
+import { ENABLE_AI_CAPTIONS } from '../../config';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Trim'>;
 
@@ -243,6 +244,21 @@ function fmtCompact(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
 }
 
+// Accepts "M:SS", "M:SS.ms", or plain seconds
+function parseTimeSec(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const colonIdx = s.indexOf(':');
+  if (colonIdx !== -1) {
+    const minutes = parseInt(s.slice(0, colonIdx), 10);
+    const seconds = parseFloat(s.slice(colonIdx + 1));
+    if (isNaN(minutes) || isNaN(seconds)) return null;
+    return minutes * 60 + seconds;
+  }
+  const v = parseFloat(s);
+  return isNaN(v) ? null : v;
+}
+
 export default function TrimScreen({ navigation, route }: Props) {
   const { videoUri, duration: paramDuration } = route.params;
 
@@ -257,6 +273,10 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [editDraft, setEditDraft] = useState('');
   const [captionMenuOpen, setCaptionMenuOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
+  const [manualCaptionOpen, setManualCaptionOpen] = useState(false);
+  const [manualStart, setManualStart] = useState('');
+  const [manualEnd, setManualEnd] = useState('');
+  const [manualText, setManualText] = useState('');
 
   // Split-based editing state
   const [splitPoints, setSplitPoints] = useState<number[]>([]);
@@ -560,6 +580,38 @@ export default function TrimScreen({ navigation, route }: Props) {
     setEditDraft(text);
     setSubtitleSegments(prev => prev.map(s => (s.id === editingId ? { ...s, text } : s)));
   }, [editingId]);
+
+  const handleAddManualCaption = useCallback(() => {
+    const start = parseTimeSec(manualStart);
+    const end = parseTimeSec(manualEnd);
+    if (start === null || end === null) {
+      Alert.alert('Invalid time', 'Enter times as M:SS or seconds (e.g. 1:30 or 90).');
+      return;
+    }
+    if (end <= start) {
+      Alert.alert('Invalid range', 'End time must be after start time.');
+      return;
+    }
+    if (!manualText.trim()) {
+      Alert.alert('Empty caption', 'Please enter caption text.');
+      return;
+    }
+    const newSeg: SubtitleSegment = {
+      id: Date.now(),
+      start,
+      end,
+      text: manualText.trim(),
+    };
+    setSubtitleSegments(prev => {
+      const updated = [...prev, newSeg].sort((a, b) => a.start - b.start);
+      saveSubtitles(videoUri, updated);
+      return updated;
+    });
+    setManualStart('');
+    setManualEnd('');
+    setManualText('');
+    setManualCaptionOpen(false);
+  }, [manualStart, manualEnd, manualText, videoUri]);
 
   // ─── Export ──────────────────────────────────────────────────────────────────
 
@@ -868,19 +920,21 @@ export default function TrimScreen({ navigation, route }: Props) {
         <Pressable style={styles.menuBackdrop} onPress={() => setCaptionMenuOpen(false)}>
           <Pressable style={styles.menuCard} onPress={() => {}}>
             <Text style={styles.menuTitle}>Caption</Text>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setCaptionMenuOpen(false);
-                handleContinue('ai');
-              }}
-            >
-              <Text style={styles.menuItemIcon}>📝</Text>
-              <View style={styles.menuItemBody}>
-                <Text style={styles.menuItemLabel}>Generate caption (AI)</Text>
-                <Text style={styles.menuItemDetail}>Transcribe audio with Whisper AI</Text>
-              </View>
-            </TouchableOpacity>
+            {ENABLE_AI_CAPTIONS && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setCaptionMenuOpen(false);
+                  handleContinue('ai');
+                }}
+              >
+                <Text style={styles.menuItemIcon}>📝</Text>
+                <View style={styles.menuItemBody}>
+                  <Text style={styles.menuItemLabel}>Generate caption (AI)</Text>
+                  <Text style={styles.menuItemDetail}>Transcribe audio with Whisper AI</Text>
+                </View>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -892,6 +946,19 @@ export default function TrimScreen({ navigation, route }: Props) {
               <View style={styles.menuItemBody}>
                 <Text style={styles.menuItemLabel}>Generate caption (on-device)</Text>
                 <Text style={styles.menuItemDetail}>Transcribe using local Whisper model, no internet needed</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setCaptionMenuOpen(false);
+                setManualCaptionOpen(true);
+              }}
+            >
+              <Text style={styles.menuItemIcon}>✏️</Text>
+              <View style={styles.menuItemBody}>
+                <Text style={styles.menuItemLabel}>Add manual caption</Text>
+                <Text style={styles.menuItemDetail}>Type a caption with custom start and end time</Text>
               </View>
             </TouchableOpacity>
             {subtitleSegments.length > 0 && (
@@ -945,6 +1012,71 @@ export default function TrimScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Manual caption entry ── */}
+      <Modal
+        visible={manualCaptionOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManualCaptionOpen(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setManualCaptionOpen(false)}>
+          <Pressable style={styles.menuCard} onPress={() => {}}>
+            <Text style={styles.menuTitle}>Add Manual Caption</Text>
+            <View style={styles.manualRow}>
+              <View style={styles.manualTimeField}>
+                <Text style={styles.manualLabel}>Start</Text>
+                <TextInput
+                  style={styles.manualInput}
+                  value={manualStart}
+                  onChangeText={setManualStart}
+                  placeholder="0:00"
+                  placeholderTextColor="#bbb"
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="next"
+                />
+              </View>
+              <Text style={styles.manualArrow}>→</Text>
+              <View style={styles.manualTimeField}>
+                <Text style={styles.manualLabel}>End</Text>
+                <TextInput
+                  style={styles.manualInput}
+                  value={manualEnd}
+                  onChangeText={setManualEnd}
+                  placeholder="0:05"
+                  placeholderTextColor="#bbb"
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="next"
+                />
+              </View>
+            </View>
+            <Text style={styles.manualLabel}>Caption text</Text>
+            <TextInput
+              style={[styles.manualInput, styles.manualTextInput]}
+              value={manualText}
+              onChangeText={setManualText}
+              placeholder="Type caption here…"
+              placeholderTextColor="#bbb"
+              multiline
+              returnKeyType="done"
+            />
+            <View style={styles.manualBtnRow}>
+              <TouchableOpacity
+                style={styles.manualCancelBtn}
+                onPress={() => setManualCaptionOpen(false)}
+              >
+                <Text style={styles.manualCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.manualAddBtn}
+                onPress={handleAddManualCaption}
+              >
+                <Text style={styles.manualAddText}>Add</Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1282,6 +1414,72 @@ const styles = StyleSheet.create({
   editDoneText: {
     color: '#fff',
     fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Manual caption modal
+  manualRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  manualTimeField: {
+    flex: 1,
+  },
+  manualArrow: {
+    color: '#888',
+    fontSize: 16,
+    marginTop: 16,
+  },
+  manualLabel: {
+    color: '#555',
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  manualInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#222',
+    backgroundColor: '#f9f9f9',
+  },
+  manualTextInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  manualBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  manualCancelBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  manualCancelText: {
+    color: '#555',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  manualAddBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#6c63ff',
+    alignItems: 'center',
+  },
+  manualAddText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

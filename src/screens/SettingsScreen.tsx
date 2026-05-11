@@ -20,6 +20,7 @@ import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from "../lib/openaiKey";
 import { useActiveTabId, useTabActions } from "../store/tabStore";
 import { LOCAL_MODEL_PATH } from "../lib/videoEditor/whisper";
 import { clearAllSubtitles, getSubtitleCount } from "../lib/videoEditor/subtitleCache";
+import { ENABLE_AI_CAPTIONS } from "../config";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -501,7 +502,7 @@ export default function SettingsScreen() {
     {
       title: "AI",
       data: [
-        { kind: "nav", label: "🤖  AI Subtitles", onPress: () => setSub("aiSubtitles") },
+        ...(ENABLE_AI_CAPTIONS ? [{ kind: "nav" as const, label: "🤖  AI Subtitles", onPress: () => setSub("aiSubtitles") }] : []),
         { kind: "nav", label: "🎙️  Whisper Model", onPress: () => setSub("whisperModel") },
         ...(subtitleCount > 0 ? [{ kind: "nav" as const, label: "🗑️  Delete All Subtitles", value: `${subtitleCount} cached`, onPress: handleClearSubtitles }] : []),
       ],
