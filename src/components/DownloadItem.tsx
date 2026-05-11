@@ -8,6 +8,7 @@ import {
   Modal,
 } from "react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import { Ionicons } from "@expo/vector-icons";
 import { DownloadTask } from "../types";
 
 export type DownloadMediaType = "image" | "video" | "audio" | "other";
@@ -386,7 +387,8 @@ const DownloadItem = memo(function DownloadItem({
                   setInfoVisible(true);
                 }}
               >
-                <Text style={styles.actionBtnText}>ℹ Info</Text>
+                <Ionicons name="information-circle-outline" size={18} color={"#2196F3"} />
+                <Text style={styles.actionBtnText}>Info</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -620,8 +622,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 8,
-    alignItems: "flex-start",
-    justifyContent: "center",
   },
   actionBtnText: {
     fontSize: 12,
@@ -679,6 +679,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   infoBtn: {
+    display: "flex",
+    flexDirection: "row",
+    gap: 2,
     backgroundColor: "#E8F4FD",
   },
   infoTitle: {
