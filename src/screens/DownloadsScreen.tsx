@@ -754,7 +754,7 @@ export default function DownloadsScreen() {
     }
     if (labelFilter.length === 1) parts.push(`🏷 ${labelFilter[0]}`);
     else if (labelFilter.length > 1) parts.push(`🏷 ${labelFilter.length} labels`);
-    return parts.length > 0 ? parts.join(" · ") : "All";
+    return parts.length > 0 ? parts.join(" · ") : "Filter All";
   }, [filterType, labelFilter]);
   const isFilterActive = filterType !== "all" || labelFilter.length > 0;
 

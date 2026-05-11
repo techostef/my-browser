@@ -4,7 +4,7 @@ import { sharedStyles as s } from "./sharedStyles";
 import { FilterType } from "./types";
 
 const TYPE_OPTIONS: { value: FilterType; label: string; icon: string }[] = [
-  { value: "all", label: "All", icon: "🗂️" },
+  { value: "all", label: "Filter All", icon: "🗂️" },
   { value: "video", label: "Video", icon: "🎬" },
   { value: "audio", label: "Audio", icon: "🎵" },
   { value: "image", label: "Image", icon: "🖼️" },
