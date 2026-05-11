@@ -35,8 +35,8 @@ const DOUBLE_TAP_MS = 300;
 const SEEK_SECS = 10;
 
 // Stepped pseudo-gradients (top: dark→clear, bottom: clear→dark)
-const TOP_SCRIM    = [0.72, 0.48, 0.22, 0.06];
-const BOTTOM_SCRIM = [0.02, 0.12, 0.28, 0.48, 0.68, 0.86];
+const TOP_SCRIM    = [0.72];
+const BOTTOM_SCRIM = [0.02];
 
 export default function VideoPlayerController({
   currentTime,
@@ -299,6 +299,16 @@ export default function VideoPlayerController({
               <Text style={styles.timeSep}> / </Text>
               <Text style={styles.timeDuration}>{formatTime(duration)}</Text>
               <View style={styles.timeFlex} />
+              {onDownload && (
+                <TouchableOpacity
+                  style={styles.dlBtn}
+                  onPress={() => { onDownload(); showControls(); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.dlBtnIcon}>↓</Text>
+                  <Text style={styles.dlBtnLabel}>Save</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.muteBtn}
                 onPress={() => { onToggleMute(); showControls(); }}
@@ -447,6 +457,17 @@ const styles = StyleSheet.create({
   timeSep:      { color: 'rgba(255,255,255,0.4)', fontSize: 12 },
   timeDuration: { color: 'rgba(255,255,255,0.55)', fontSize: 13 },
   timeFlex:     { flex: 1 },
+  dlBtn: {
+    flexDirection: 'row',
+    height: 36, paddingHorizontal: 10,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,160,50,0.16)',
+    borderWidth: 1, borderColor: 'rgba(255,160,50,0.5)',
+    alignItems: 'center', justifyContent: 'center',
+    gap: 4, marginRight: 8,
+  },
+  dlBtnIcon:  { color: '#FFA032', fontSize: 15, fontWeight: '700', lineHeight: 17 },
+  dlBtnLabel: { color: '#FFA032', fontSize: 12, fontWeight: '700' },
   muteBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.1)',
