@@ -1009,6 +1009,15 @@ class DownloadManager {
     return this.activeTasks.has(id);
   }
 
+  getActiveFileUris(): Set<string> {
+    const uris = new Set<string>();
+    for (const task of this.activeTasks.values()) {
+      uris.add(task.fileUri);
+      uris.add(task.fileUri.replace(/^file:\/\//, ''));
+    }
+    return uris;
+  }
+
   async saveBlobData(
     id: string,
     pageTitle: string,

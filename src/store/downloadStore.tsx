@@ -351,7 +351,16 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       );
       const privateFolders = await downloadManager.listPrivateFolders();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
-      const merged = [...activeOrPending, ...privateFiles, ...scannedDeviceFiles].sort((a, b) => b.createdAt - a.createdAt);
+
+      // Exclude files that are currently being written by an active download.
+      // listPrivateDownloads() scans the filesystem and can pick up partial/in-progress
+      // files, which would produce a duplicate entry alongside the active dl_... task.
+      const activeUris = downloadManager.getActiveFileUris();
+      const filteredPrivateFiles = activeUris.size > 0
+        ? privateFiles.filter(f => !f.filePath || !activeUris.has(f.filePath))
+        : privateFiles;
+
+      const merged = [...activeOrPending, ...filteredPrivateFiles, ...scannedDeviceFiles].sort((a, b) => b.createdAt - a.createdAt);
       dispatchRef.current({ type: 'SET_DOWNLOADS', payload: { downloads: merged } });
       dispatchRef.current({ type: 'SET_FOLDERS', payload: { folders: privateFolders } });
       void persistPrivateCache(privateFiles, privateFolders);
@@ -363,7 +372,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const scanDeviceDownloadFolder = useCallback(async () => {
     dispatchRef.current({ type: 'SET_DEVICE_SCAN_RUNNING', payload: { isRunning: true } });
     try {
-      const privateFiles = await downloadManager.listPrivateDownloads();
+      // Use private files already in state — avoids re-running FFmpeg probes that
+      // refreshDownloads() already triggered concurrently on startup.
+      const privateFiles = downloadsRef.current.filter(
+        d => d.status === 'completed' && d.source === 'private',
+      );
       const privateFolders = await downloadManager.listPrivateFolders();
       const scannedDevice = await downloadManager.scanDeviceDownloadFolder();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
