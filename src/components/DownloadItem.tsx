@@ -229,26 +229,6 @@ const DownloadItem = memo(function DownloadItem({
         )}
       </TouchableOpacity>
 
-      {(task.status === "downloading" || task.status === "paused") && (
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBg}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${task.progress}%`,
-                  backgroundColor: statusColor,
-                },
-              ]}
-            />
-          </View>
-          <Text style={styles.progressText}>
-            {task.progress}% · {formatBytes(task.bytesDownloaded)}
-            {task.totalBytes > 0 ? ` / ${formatBytes(task.totalBytes)}` : ""}
-          </Text>
-        </View>
-      )}
-
       <View style={styles.bottomRow}>
         <View style={styles.infoSection}>
           <Text style={styles.fileName} numberOfLines={1}>

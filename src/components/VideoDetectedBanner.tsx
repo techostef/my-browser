@@ -28,7 +28,7 @@ interface Props {
   onSeekBackward?: (seconds: number) => void;
 }
 
-function isPlayingVideo(video: DetectedVideo, playingUrl: string): boolean {
+export function isPlayingVideo(video: DetectedVideo, playingUrl: string): boolean {
   const lastSegment = playingUrl.split("/").pop();
   if (lastSegment && video.hlsInfo?.isMaster) {
     if (video.hlsInfo.variants) {

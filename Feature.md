@@ -1,5 +1,9 @@
 - Ads block (Done)
 - Block popup (Done)
-- when a new tab prevent to go to other browser like browser download youtube to mp4 (unknown)
-- Rotate video, position black is wrong
-- when set the duration video, sometimes the duration set to 00:00
+- when a new tab prevent to go to other browser like browser download youtube to mp4 (Done)
+- Rotate video, position black is wrong (Done)
+- when set the duration video, sometimes the duration set to 00:00 (Pending)
+- Add a new icon and splash screen for the app (Pending)
+- Change layout preview video (Done)
+- Add a button to download the video (Done)
+- Fix download items because it has progress bar that caused layout shifting (Done)

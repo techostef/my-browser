@@ -753,6 +753,7 @@ export default function BrowserScreen() {
     [startDownload],
   );
 
+
   const handleDownload = useCallback(
     (video: DetectedVideo) => {
       if (video.type === 'blob') {
@@ -887,6 +888,9 @@ export default function BrowserScreen() {
           <VideoPlayerController
             headerTitle={navbarTitle}
             onMinimize={handleToggleFullscreen}
+            playingUrl={activePlayingVideoUrl}
+            videos={activeDetectedVideos}
+            onDownloadVariant={handleDownloadWithVariant}
             currentTime={liveCurrentTime}
             duration={liveDuration}
             isPaused={liveIsPaused}

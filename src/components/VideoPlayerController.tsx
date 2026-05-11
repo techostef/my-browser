@@ -7,13 +7,22 @@ import {
   StyleSheet,
   Animated,
   GestureResponderEvent,
+  Modal,
+  FlatList,
 } from 'react-native';
+import { DetectedVideo, HlsVariant } from '../types';
+import { isPlayingVideo } from './VideoDetectedBanner';
 
 function formatTime(secs: number): string {
   if (!isFinite(secs) || isNaN(secs) || secs < 0) return '0:00';
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatBandwidth(bps: number): string {
+  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + ' Mbps';
+  return (bps / 1_000).toFixed(0) + ' Kbps';
 }
 
 interface Props {
@@ -28,7 +37,9 @@ interface Props {
   onSkipForward: () => void;
   headerTitle?: string;
   onMinimize?: () => void;
-  onDownload?: () => void;
+  playingUrl?: string;
+  videos?: DetectedVideo[];
+  onDownloadVariant?: (video: DetectedVideo, variant?: HlsVariant) => void;
 }
 
 const DOUBLE_TAP_MS = 300;
@@ -50,9 +61,13 @@ export default function VideoPlayerController({
   onSkipForward,
   headerTitle,
   onMinimize,
-  onDownload,
+  playingUrl,
+  videos,
+  onDownloadVariant,
 }: Props) {
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [isVariantPickerVisible, setIsVariantPickerVisible] = useState(false);
+  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>([]);
   const opacity   = useRef(new Animated.Value(1)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seekBarWidth, setSeekBarWidth] = useState(0);
@@ -97,6 +112,12 @@ export default function VideoPlayerController({
       scheduleHide();
     }
   }, [isPaused]);
+
+  useEffect(() => {
+    if (!videos) return;
+    if (!playingUrl) return;
+    setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
+  }, [videos, playingUrl]);
 
   const flashSeekIndicator = (opacityAnim: Animated.Value, scaleAnim: Animated.Value) => {
     opacityAnim.stopAnimation();
@@ -164,7 +185,18 @@ export default function VideoPlayerController({
     showControls();
   };
 
-  const showTopBar = headerTitle !== undefined || onDownload !== undefined;
+  const hasDownload = (videos?.length ?? 0) > 0 && onDownloadVariant !== undefined;
+  const showTopBar = headerTitle !== undefined || hasDownload;
+
+  const handleDownloadPress = () => {
+    setIsVariantPickerVisible(true);
+    cancelHide();
+  };
+
+  const handlePickVariant = (video: DetectedVideo, variant?: HlsVariant) => {
+    setIsVariantPickerVisible(false);
+    onDownloadVariant?.(video, variant);
+  };
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -230,10 +262,10 @@ export default function VideoPlayerController({
                 {headerTitle ?? ''}
               </Text>
 
-              {onDownload ? (
+              {hasDownload ? (
                 <TouchableOpacity
                   style={styles.downloadBtn}
-                  onPress={() => { onDownload(); showControls(); }}
+                  onPress={handleDownloadPress}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Text style={styles.downloadIcon}>↓</Text>
@@ -299,10 +331,10 @@ export default function VideoPlayerController({
               <Text style={styles.timeSep}> / </Text>
               <Text style={styles.timeDuration}>{formatTime(duration)}</Text>
               <View style={styles.timeFlex} />
-              {onDownload && (
+              {hasDownload && (
                 <TouchableOpacity
                   style={styles.dlBtn}
-                  onPress={() => { onDownload(); showControls(); }}
+                  onPress={handleDownloadPress}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.dlBtnIcon}>↓</Text>
@@ -320,6 +352,92 @@ export default function VideoPlayerController({
           </View>
         </Animated.View>
       )}
+
+      {/* ── Variant picker modal ── */}
+      {/* ── Details modal ── */}
+      <Modal
+        visible={isVariantPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsVariantPickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detected Videos</Text>
+              <TouchableOpacity
+                onPress={() => setIsVariantPickerVisible(false)}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {filteredVideos.length > 0 ? (
+              <FlatList
+                data={filteredVideos}
+                keyExtractor={(item, index) => `${item.url}-${index}`}
+                style={styles.list}
+                renderItem={({ item }) => {
+                  const hasVariants =
+                    item.type === "hls" &&
+                    item.hlsInfo &&
+                    item.hlsInfo.variants.length > 0;
+                  return (
+                    <View
+                      style={[
+                        styles.videoCard,
+                        isPlayingVideo(item, playingUrl!) && styles.videoCardPlaying,
+                      ]}
+                    >
+                      <View style={styles.videoInfo}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.videoUrl} numberOfLines={1}>
+                            {item.type === "hls"
+                              ? item.pageTitle || "HLS Stream"
+                              : item.type === "dash"
+                              ? item.pageTitle || "DASH Stream"
+                              : item.videoWidth || item.pageTitle || "Video"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {hasVariants ? (
+                        <View style={styles.variantList}>
+                          {item.hlsInfo!.variants.map((variant, vi) => (
+                            <View key={vi} style={styles.variantRow}>
+                              <View style={styles.variantInfo}>
+                                <Text style={styles.variantResolution}>
+                                  {variant.resolution || "Unknown"}
+                                </Text>
+                                <Text style={styles.variantBandwidth}>
+                                  {formatBandwidth(variant.bandwidth)}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                style={styles.downloadVariantBtn}
+                                onPress={() => handlePickVariant(item, variant)}
+                              >
+                                <Text style={styles.downloadVariantBtnText}>↓ Download</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View />
+                      )}
+                    </View>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No downloadable videos found</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -474,4 +592,190 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   muteIcon: { fontSize: 18 },
+
+  /* ── Variant picker modal ── */
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: '#1A1A2E',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderTopWidth: 1,
+    borderColor: '#2A2A45',
+    maxHeight: '70%',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#2A2A45',
+  },
+  pickerTitle: { color: TEAL, fontSize: 15, fontWeight: '700' },
+  pickerClose: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pickerCloseText: { color: '#888', fontSize: 13 },
+  pickerList: { maxHeight: 420 },
+  pickerCard: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#2A2A45',
+  },
+  pickerVideoTitle: { color: '#BBBBBB', fontSize: 12, marginBottom: 6 },
+  pickerVariantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2A2A3E',
+  },
+  pickerVariantInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pickerResolution: { color: '#FFF', fontSize: 13, fontWeight: '600', minWidth: 80 },
+  pickerBandwidth:  { color: '#8AB4F8', fontSize: 12 },
+  pickerDlBtn: {
+    backgroundColor: TEAL,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 7,
+  },
+  pickerDlBtnText: { color: '#1A1A2E', fontWeight: '700', fontSize: 12 },
+
+
+  /* ── Details modal ── */
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeBtnText: {
+    color: "#888",
+    fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  modalContent: {
+    backgroundColor: "#1A1A2E",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#2A2A45",
+    overflow: "hidden",
+    maxHeight: "75%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2A2A45",
+  },
+  modalTitle: {
+    color: "#4ECDC4",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  list: {
+    maxHeight: 420,
+  },
+  videoCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#2A2A45",
+  },
+  videoCardPlaying: {
+    backgroundColor: "rgba(99,179,237,0.12)",
+    borderLeftWidth: 3,
+    borderLeftColor: "#63b3ed",
+  },
+  videoInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  videoUrl: {
+    flex: 1,
+    color: "#BBBBBB",
+    fontSize: 12,
+  },
+  variantList: {
+    marginTop: 2,
+  },
+  variantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#2A2A3E",
+  },
+  variantInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  variantResolution: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "600",
+    minWidth: 80,
+  },
+  variantBandwidth: {
+    color: "#8AB4F8",
+    fontSize: 11,
+  },
+  downloadVariantBtn: {
+    backgroundColor: "#4ECDC4",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  downloadVariantBtnText: {
+    color: "#1A1A2E",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  previewBtnRow: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#4ECDC4",
+  },
+  previewBtnRowText: {
+    color: "#4ECDC4",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  emptyState: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  emptyStateText: {
+    color: "#888",
+    fontSize: 13,
+  },
 });
