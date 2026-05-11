@@ -1,5 +1,5 @@
-- Ads block
-- Block popup
-- when a new tab prevent to go to other browser like browser download youtube to mp4 
+- Ads block (Done)
+- Block popup (Done)
+- when a new tab prevent to go to other browser like browser download youtube to mp4 (unknown)
 - Rotate video, position black is wrong
 - when set the duration video, sometimes the duration set to 00:00
