@@ -16,6 +16,9 @@ ios/build/
 # Metro
 .metro-health-check*
 
+# Whisper model files (too large for GitHub)
+assets/whisper_model/*.bin
+
 # IDE
 .idea/
 .vscode/
