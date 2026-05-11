@@ -9,10 +9,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   StatusBar,
-  Dimensions,
   LayoutChangeEvent,
   GestureResponderEvent,
+  BackHandler,
 } from "react-native";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import { DownloadTask } from "../../types";
@@ -72,14 +73,6 @@ export default function PreviewModal({
   const [showControls, setShowControls] = useState(true);
   const [seekHint, setSeekHint] = useState<"left" | "right" | null>(null);
   const [landscape, setLandscape] = useState(false);
-  const [screenSize, setScreenSize] = useState(() => Dimensions.get("window"));
-
-  useEffect(() => {
-    const sub = Dimensions.addEventListener("change", ({ window }) =>
-      setScreenSize(window),
-    );
-    return () => sub.remove();
-  }, []);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -94,6 +87,7 @@ export default function PreviewModal({
     setIsBuffering(true);
     setShowControls(true);
     setLandscape(false);
+    ScreenOrientation.unlockAsync();
   }, [task?.id]);
 
   useEffect(() => {
@@ -103,6 +97,30 @@ export default function PreviewModal({
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!task) return;
+    if (landscape) {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    } else {
+      ScreenOrientation.unlockAsync();
+    }
+  }, [task, landscape]);
+
+  useEffect(() => {
+    if (!task) return;
+    const onBack = () => {
+      if (landscape) {
+        setLandscape(false);
+        ScreenOrientation.unlockAsync();
+        return true;
+      }
+      onClose();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [task, landscape, onClose]);
 
   const armHideControls = () => {
     if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
@@ -237,33 +255,19 @@ export default function PreviewModal({
   const progressPct = duration > 0 ? (position / duration) * 100 : 0;
   const isMedia = mediaType === "video" || mediaType === "audio";
 
-  // Visually rotate the whole modal contents 90° so the user can hold the
-  // phone in landscape without changing system orientation. The container is
-  // sized to the swapped dimensions and offset so its post-rotation bounding
-  // box covers the screen exactly.
-  const W = screenSize.width;
-  const H = screenSize.height;
-  const rotatedRootStyle = landscape
-    ? {
-        width: H,
-        height: W,
-        position: "absolute" as const,
-        top: (H - W) / 2,
-        left: (W - H) / 2,
-        transform: [{ rotate: "90deg" }],
-      }
-    : null;
-
   return (
     <Modal
       visible={!!task}
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        ScreenOrientation.unlockAsync();
+        onClose();
+      }}
       statusBarTranslucent
       transparent={false}
     >
       <StatusBar hidden />
-      <View style={[styles.root, rotatedRootStyle]}>
+      <View style={styles.root}>
         {/* ── Image preview ── */}
         {task?.filePath && mediaType === "image" && (
           <>
@@ -292,7 +296,10 @@ export default function PreviewModal({
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.iconBtn}
-                  onPress={onClose}
+                  onPress={() => {
+                    ScreenOrientation.unlockAsync();
+                    onClose();
+                  }}
                   hitSlop={8}
                 >
                   <Text style={styles.iconBtnText}>✕</Text>
@@ -390,7 +397,10 @@ export default function PreviewModal({
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.iconBtn}
-                    onPress={onClose}
+                    onPress={() => {
+                      ScreenOrientation.unlockAsync();
+                      onClose();
+                    }}
                     hitSlop={8}
                   >
                     <Text style={styles.iconBtnText}>✕</Text>

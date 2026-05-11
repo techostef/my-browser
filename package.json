@@ -25,6 +25,7 @@
     "expo-document-picker": "~12.0.2",
     "expo-file-system": "~17.0.1",
     "expo-media-library": "~16.0.5",
+    "expo-screen-orientation": "~7.0.5",
     "expo-video-thumbnails": "~8.0.0",
     "mux.js": "^7.0.3",
     "openai": "^6.37.0",
