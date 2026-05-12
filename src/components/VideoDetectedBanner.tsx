@@ -29,13 +29,10 @@ interface Props {
 }
 
 export function isPlayingVideo(video: DetectedVideo, playingUrl: string): boolean {
-  const lastSegment = playingUrl.split("/").pop();
-  if (lastSegment && video.hlsInfo?.isMaster) {
-    if (video.hlsInfo.variants) {
-      return video.hlsInfo.variants.some((v) => v.uri.includes(lastSegment));
-    }
-  }
-  return false;
+  if (!playingUrl) return false;
+  // Strip query string for comparison — signed URLs and variant tokens must not break matching
+  const base = (u: string) => u.split('?')[0];
+  return base(video.url) === base(playingUrl);
 }
 
 const SEEK_SECONDS = 10;
@@ -63,6 +60,9 @@ export default function VideoDetectedBanner({
   const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
+    console.log("videos", videos.length)
+    console.log("filteredVideos", filteredVideos.length)
+    console.log("playingUrl", playingUrl)
     setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
   }, [videos, playingUrl]);
 
@@ -115,6 +115,7 @@ export default function VideoDetectedBanner({
     onDownload(video, variant);
   };
 
+  console.log("playingUrl.length", playingUrl.length)
 
   if (filteredVideos.length === 0) return null;
 

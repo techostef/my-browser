@@ -385,6 +385,13 @@ export const VIDEO_DETECTOR_JS = `
       log('[VIDEO_PLAYING] src=' + src.substring(0, 120) + ' lastM3u8Url=' + lastM3u8Url.substring(0, 120));
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src, m3u8Url: m3u8 } }));
     });
+    // If already playing when listener was attached (first-load race), report immediately
+    if (!vEl.paused && (vEl.currentSrc || vEl.src)) {
+      var src = vEl.currentSrc || vEl.src || '';
+      var m3u8 = src.startsWith('blob:') ? lastM3u8Url : '';
+      log('[VIDEO_PLAYING already] src=' + src.substring(0, 120) + ' lastM3u8Url=' + lastM3u8Url.substring(0, 120));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src, m3u8Url: m3u8 } }));
+    }
   }
 
   var scanCount = 0;
