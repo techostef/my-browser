@@ -458,12 +458,13 @@ export default function DownloadsScreen() {
   const handleCopyToFolder = useCallback(
     (folderName?: string | null) => {
       if (!copyTask) return;
-      const target = copyTask.source === "private" ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
-      moveDownloadToFolder(copyTask.id, target)
+      const task = copyTask;
+      setCopyTask(null);
+      const target = task.source === "private" ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
+      moveDownloadToFolder(task.id, target)
         .catch((err) => {
           Alert.alert("Copy error", err instanceof Error ? err.message : "Unable to move file");
-        })
-        .finally(() => setCopyTask(null));
+        });
     },
     [copyTask, moveDownloadToFolder],
   );

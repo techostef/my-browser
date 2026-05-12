@@ -601,10 +601,15 @@ class DownloadManager {
   async copyDeviceFileToPrivateFolder(
     filePath: string,
     folderPath?: string | null,
+    fileName?: string,
+    assetId?: string | null,
   ): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
-    const fileName = filePath.split('/').pop();
-    if (!fileName) {
+    // filePath may be a content:// URI (e.g. content://media/external/video/media/12345)
+    // whose last path segment is just the numeric asset ID, not the real filename.
+    // Callers should pass fileName explicitly when the path doesn't encode the name.
+    const resolvedFileName = fileName || filePath.split('/').pop();
+    if (!resolvedFileName) {
       throw new Error('Invalid file path');
     }
 
@@ -618,8 +623,24 @@ class DownloadManager {
       await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
     }
 
-    const targetPath = await this.getUniqueFilePath(`${targetDir}${fileName}`);
-    await FileSystem.copyAsync({ from: filePath, to: targetPath });
+    // Resolve the source path via MediaLibrary when we have an assetId.
+    // The original filePath (whether content:// or file://) may not be directly
+    // readable by FileSystem.copyAsync on all Android versions.
+    let sourcePath = filePath;
+    if (assetId) {
+      try {
+        const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+        const resolvedUri = assetInfo.localUri || (assetInfo as any).uri;
+        if (resolvedUri) {
+          sourcePath = resolvedUri;
+        }
+      } catch {
+        // If resolution fails, fall back to the original filePath.
+      }
+    }
+
+    const targetPath = await this.getUniqueFilePath(`${targetDir}${resolvedFileName}`);
+    await FileSystem.copyAsync({ from: sourcePath, to: targetPath });
     return targetPath;
   }
 

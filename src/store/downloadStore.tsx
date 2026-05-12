@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { DownloadTask, DownloadAction, DetectedVideo, HlsVariant, DEVICE_DOWNLOAD_MOVE_TARGET } from '../types';
 import { downloadManager } from '../services/downloadManager';
 
@@ -372,13 +373,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   const scanDeviceDownloadFolder = useCallback(async () => {
     dispatchRef.current({ type: 'SET_DEVICE_SCAN_RUNNING', payload: { isRunning: true } });
     try {
-      // Use private files already in state — avoids re-running FFmpeg probes that
-      // refreshDownloads() already triggered concurrently on startup.
+      const privateFolders = await downloadManager.listPrivateFolders();
+      const scannedDevice = await downloadManager.scanDeviceDownloadFolder();
+      // Read private files AFTER the async work completes so any concurrent
+      // refreshDownloads() (e.g. post-copy) has already updated state. Reading
+      // the snapshot before the awaits would overwrite newly-added private files.
       const privateFiles = downloadsRef.current.filter(
         d => d.status === 'completed' && d.source === 'private',
       );
-      const privateFolders = await downloadManager.listPrivateFolders();
-      const scannedDevice = await downloadManager.scanDeviceDownloadFolder();
       const activeOrPending = downloadsRef.current.filter(d => d.status !== 'completed');
 
       const merged = [
@@ -520,7 +522,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     const runOne = async (task: DownloadTask) => {
       try {
         if (task.source === 'device') {
-          await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName);
+          const assetId = task.id.startsWith('device_') ? task.id.slice(7) : null;
+          await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName, task.fileName || undefined, assetId);
         } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
           await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
         } else {
@@ -565,7 +568,8 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     try {
       let newId: string | null = null;
       if (task.source === 'device') {
-        await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName);
+        const assetId = task.id.startsWith('device_') ? task.id.slice(7) : null;
+        await downloadManager.copyDeviceFileToPrivateFolder(task.filePath, folderName, task.fileName || undefined, assetId);
       } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
         await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
       } else {
@@ -686,20 +690,38 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       try {
         const info = await FileSystem.getInfoAsync(filePath);
         const anyInfo = info as any;
-        if (info.exists && typeof anyInfo.size === 'number') {
-          return [id, anyInfo.size as number] as const;
+        if (info.exists && typeof anyInfo.size === 'number' && anyInfo.size > 0) {
+          return { id, size: anyInfo.size as number, resolvedPath: null as string | null };
+        }
+        // File not accessible at current URI (e.g. content:// on Android 10+).
+        // Resolve to a real file:// path via MediaLibrary using the embedded asset ID.
+        const assetId = id.startsWith('device_') ? id.slice(7) : null;
+        if (assetId) {
+          const assetInfo = await MediaLibrary.getAssetInfoAsync(assetId);
+          const localUri = assetInfo.localUri;
+          if (localUri) {
+            const localInfo = await FileSystem.getInfoAsync(localUri);
+            const localAnyInfo = localInfo as any;
+            const resolvedSize = localInfo.exists && typeof localAnyInfo.size === 'number' ? localAnyInfo.size : 0;
+            return { id, size: resolvedSize, resolvedPath: localUri };
+          }
         }
       } catch {
         // ignore
       }
-      return [id, 0] as const;
+      return { id, size: 0, resolvedPath: null as string | null };
     })).then(results => {
       const sizes: Record<string, number> = {};
-      for (const [id, size] of results) {
+      for (const { id, size } of results) {
         if (size > 0) { sizes[id] = size; }
       }
       if (Object.keys(sizes).length > 0) {
         dispatchRef.current({ type: 'SET_FILE_SIZES', payload: { sizes } });
+      }
+      for (const { id, resolvedPath } of results) {
+        if (resolvedPath) {
+          dispatchRef.current({ type: 'SET_FILE_PATH', payload: { id, filePath: resolvedPath } });
+        }
       }
     });
   }, []);
