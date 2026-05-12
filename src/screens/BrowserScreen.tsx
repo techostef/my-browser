@@ -117,6 +117,8 @@ export default function BrowserScreen() {
 
   // Per-tab WebView refs
   const webViewRefs = useRef<Record<string, WebView | null>>({});
+  const webViewCanGoBackRef = useRef<Record<string, boolean>>({});
+  const webViewCanGoForwardRef = useRef<Record<string, boolean>>({});
 
   // Used to hold a stream preview request while we wait for the current
   // playback time to come back from the browser WebView.
@@ -425,9 +427,13 @@ export default function BrowserScreen() {
     const prevUrl = tab.urlHistory[tab.historyIndex - 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, -1);
-    // Use injectNavigation instead of goBack() so restored tabs (which have no
-    // native WebView history) navigate correctly via window.location.href.
-    injectNavigation(tabId, prevUrl);
+    const webView = webViewRefs.current[tabId];
+    if (webView && webViewCanGoBackRef.current[tabId]) {
+      webView.goBack();
+    } else {
+      // Restored tabs have no native WebView history, fall back to href injection.
+      injectNavigation(tabId, prevUrl);
+    }
     return true;
   }, [navigateHistory, getTabsSnapshot, injectNavigation]);
 
@@ -475,11 +481,18 @@ export default function BrowserScreen() {
     const nextUrl = tab.urlHistory[tab.historyIndex + 1];
     isHistoryNavRef.current[tabId] = true;
     navigateHistory(tabId, 1);
-    injectNavigation(tabId, nextUrl);
+    const webView = webViewRefs.current[tabId];
+    if (webView && webViewCanGoForwardRef.current[tabId]) {
+      webView.goForward();
+    } else {
+      injectNavigation(tabId, nextUrl);
+    }
   }, [navigateHistory, getTabsSnapshot, injectNavigation]);
 
   const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
     if (!navState.url) return;
+    webViewCanGoBackRef.current[tabId] = navState.canGoBack ?? false;
+    webViewCanGoForwardRef.current[tabId] = navState.canGoForward ?? false;
 
     if (isHistoryNavRef.current[tabId]) {
       // Programmatic navigation (back/forward/address-bar) already updated the
@@ -576,7 +589,7 @@ export default function BrowserScreen() {
           break;
         }
         case 'DETECTOR_LOG':
-          const filterLogs = ['[M3U8]'];
+          const filterLogs = ['[VIDEO_PLAYING]'];
           const log = message.payload;
           if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
             // console.log('[Detector]', log);
@@ -829,6 +842,8 @@ export default function BrowserScreen() {
       if (!tabIds.has(id)) {
         delete webViewRefs.current[id];
         delete isHistoryNavRef.current[id];
+        delete webViewCanGoBackRef.current[id];
+        delete webViewCanGoForwardRef.current[id];
         setDetectedVideosMap(prev => { const next = { ...prev }; delete next[id]; return next; });
         setBannerDismissedMap(prev => { const next = { ...prev }; delete next[id]; return next; });
       }

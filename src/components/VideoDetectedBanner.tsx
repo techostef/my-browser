@@ -60,9 +60,6 @@ export default function VideoDetectedBanner({
   const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
-    console.log("videos", videos.length)
-    console.log("filteredVideos", filteredVideos.length)
-    console.log("playingUrl", playingUrl)
     setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
   }, [videos, playingUrl]);
 
@@ -114,8 +111,6 @@ export default function VideoDetectedBanner({
     setIsDetailVisible(false);
     onDownload(video, variant);
   };
-
-  console.log("playingUrl.length", playingUrl.length)
 
   if (filteredVideos.length === 0) return null;
 
