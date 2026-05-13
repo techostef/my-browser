@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MyBrowser",
+    "name": "OBrowser - Video Download",
     "slug": "my-browser",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -23,8 +23,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow MyBrowser to access your videos.",
-          "savePhotosPermission": "Allow MyBrowser to save downloaded videos.",
+          "photosPermission": "Allow OBrowser to access your videos.",
+          "savePhotosPermission": "Allow OBrowser to save downloaded videos.",
           "isAccessMediaLocationEnabled": true,
           "granularPermissions": ["audio", "photo"]
         }
