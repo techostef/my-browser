@@ -29,10 +29,13 @@ interface Props {
 }
 
 export function isPlayingVideo(video: DetectedVideo, playingUrl: string): boolean {
-  if (!playingUrl) return false;
-  // Strip query string for comparison — signed URLs and variant tokens must not break matching
-  const base = (u: string) => u.split('?')[0];
-  return base(video.url) === base(playingUrl);
+  const lastSegment = playingUrl.split("/").pop();
+  if (lastSegment && video.hlsInfo?.isMaster) {
+    if (video.hlsInfo.variants) {
+      return video.hlsInfo.variants.some((v) => v.uri.includes(lastSegment));
+    }
+  }
+  return false;
 }
 
 const SEEK_SECONDS = 10;
@@ -60,6 +63,8 @@ export default function VideoDetectedBanner({
   const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
+    console.log("playingUrl", playingUrl)
+    console.log("videos", videos.length)
     setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
   }, [videos, playingUrl]);
 
