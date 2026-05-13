@@ -728,7 +728,8 @@ class DownloadManager {
     hlsInfo?: HlsMasterInfo,
     selectedVariant?: HlsVariant,
   ): Promise<string> {
-    if (this.isHlsUrl(url) || (hlsInfo?.variants && hlsInfo.variants.length > 0)) {
+    // Use HLS download if URL is m3u8 OR if hlsInfo exists (even with empty variants)
+    if (this.isHlsUrl(url) || hlsInfo) {
       return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant);
     }
 

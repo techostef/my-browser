@@ -28,7 +28,10 @@ interface Props {
   onSeekBackward?: (seconds: number) => void;
 }
 
-export function isPlayingVideo(video: DetectedVideo, playingUrl: string): boolean {
+export function isPlayingVideo(
+  video: DetectedVideo,
+  playingUrl: string,
+): boolean {
   const lastSegment = playingUrl.split("/").pop();
   if (lastSegment && video.hlsInfo?.isMaster) {
     if (video.hlsInfo.variants) {
@@ -53,7 +56,9 @@ export default function VideoDetectedBanner({
   onSeekBackward,
 }: Props) {
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
-  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>([]);
+  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
+    [],
+  );
 
   const lastLeftTap = useRef(0);
   const lastRightTap = useRef(0);
@@ -63,9 +68,12 @@ export default function VideoDetectedBanner({
   const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
-    console.log("playingUrl", playingUrl)
-    console.log("videos", videos.length)
-    setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
+    const hslCount = videos.filter((v) => v.type === "hls").length;
+    if (hslCount === 1) {
+      setFilteredVideos(videos.filter((v) => v.type === "hls"));
+    } else {
+      setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
+    }
   }, [videos, playingUrl]);
 
   const flashIndicator = (opacity: Animated.Value, scale: Animated.Value) => {
@@ -73,14 +81,31 @@ export default function VideoDetectedBanner({
     scale.stopAnimation();
     Animated.parallel([
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
         Animated.delay(650),
-        Animated.timing(opacity, { toValue: 0, duration: 280, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 280,
+          useNativeDriver: true,
+        }),
       ]),
       Animated.sequence([
-        Animated.spring(scale, { toValue: 1, speed: 24, bounciness: 6, useNativeDriver: true }),
+        Animated.spring(scale, {
+          toValue: 1,
+          speed: 24,
+          bounciness: 6,
+          useNativeDriver: true,
+        }),
         Animated.delay(750),
-        Animated.timing(scale, { toValue: 0.75, duration: 200, useNativeDriver: true }),
+        Animated.timing(scale, {
+          toValue: 0.75,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]),
     ]).start();
   };
@@ -112,7 +137,10 @@ export default function VideoDetectedBanner({
     onPreview(video);
   };
 
-  const handleDownloadVariant = (video: DetectedVideo, variant?: HlsVariant) => {
+  const handleDownloadVariant = (
+    video: DetectedVideo,
+    variant?: HlsVariant,
+  ) => {
     setIsDetailVisible(false);
     onDownload(video, variant);
   };
@@ -130,7 +158,8 @@ export default function VideoDetectedBanner({
           <View style={styles.titleRow}>
             <View style={styles.liveDot} />
             <Text style={styles.title}>
-              {filteredVideos.length} video{filteredVideos.length > 1 ? "s" : ""} detected
+              {filteredVideos.length} video
+              {filteredVideos.length > 1 ? "s" : ""} detected
             </Text>
           </View>
 
@@ -148,7 +177,9 @@ export default function VideoDetectedBanner({
               onPress={() => setIsDetailVisible(true)}
               style={[styles.actionBtn, styles.actionBtnGhost]}
             >
-              <Text style={[styles.actionBtnText, styles.actionBtnTextMuted]}>☰</Text>
+              <Text style={[styles.actionBtnText, styles.actionBtnTextMuted]}>
+                ☰
+              </Text>
             </TouchableOpacity>
 
             {/* Dismiss */}
@@ -224,7 +255,8 @@ export default function VideoDetectedBanner({
                     <View
                       style={[
                         styles.videoCard,
-                        isPlayingVideo(item, playingUrl) && styles.videoCardPlaying,
+                        isPlayingVideo(item, playingUrl) &&
+                          styles.videoCardPlaying,
                       ]}
                     >
                       <View style={styles.videoInfo}>
@@ -233,8 +265,8 @@ export default function VideoDetectedBanner({
                             {item.type === "hls"
                               ? item.pageTitle || "HLS Stream"
                               : item.type === "dash"
-                              ? item.pageTitle || "DASH Stream"
-                              : item.videoWidth || item.pageTitle || "Video"}
+                                ? item.pageTitle || "DASH Stream"
+                                : item.videoWidth || item.pageTitle || "Video"}
                           </Text>
                         </View>
                       </View>
@@ -247,15 +279,16 @@ export default function VideoDetectedBanner({
                                 <Text style={styles.variantResolution}>
                                   {variant.resolution || "Unknown"}
                                 </Text>
-                                <Text style={styles.variantBandwidth}>
-                                  {formatBandwidth(variant.bandwidth)}
-                                </Text>
                               </View>
                               <TouchableOpacity
                                 style={styles.downloadVariantBtn}
-                                onPress={() => handleDownloadVariant(item, variant)}
+                                onPress={() =>
+                                  handleDownloadVariant(item, variant)
+                                }
                               >
-                                <Text style={styles.downloadVariantBtnText}>↓ Download</Text>
+                                <Text style={styles.downloadVariantBtnText}>
+                                  ↓ Download
+                                </Text>
                               </TouchableOpacity>
                             </View>
                           ))}
@@ -263,11 +296,22 @@ export default function VideoDetectedBanner({
                             style={styles.previewBtnRow}
                             onPress={() => handlePreviewFromDetail(item)}
                           >
-                            <Text style={styles.previewBtnRowText}>▶ Preview</Text>
+                            <Text style={styles.previewBtnRowText}>
+                              ▶ Preview
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
-                        <View />
+                        <View>
+                          <TouchableOpacity
+                            style={styles.downloadVariantBtn}
+                            onPress={() => handleDownloadVariant(item)}
+                          >
+                            <Text style={styles.downloadVariantBtnText}>
+                              ↓ Download
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                   );
@@ -275,7 +319,9 @@ export default function VideoDetectedBanner({
               />
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No downloadable videos found</Text>
+                <Text style={styles.emptyStateText}>
+                  No downloadable videos found
+                </Text>
               </View>
             )}
           </View>
