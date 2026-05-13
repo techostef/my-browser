@@ -112,6 +112,8 @@ const DEFAULT_SHORTCUTS: Shortcut[] = [
 
 // ─── Settings state ───────────────────────────────────────────────────────────
 
+export type VideoBannerPosition = 'top' | 'left' | 'right' | 'bottom';
+
 export interface SettingsState {
   searchEngine: string;
   language: string;
@@ -120,6 +122,7 @@ export interface SettingsState {
   adBlockEnabled: boolean;
   popupBlockEnabled: boolean;
   shortcuts: Shortcut[];
+  videoBannerPosition: VideoBannerPosition;
 }
 
 const DEFAULT_SETTINGS: SettingsState = {
@@ -130,6 +133,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   adBlockEnabled: true,
   popupBlockEnabled: true,
   shortcuts: DEFAULT_SHORTCUTS,
+  videoBannerPosition: 'top',
 };
 
 type SettingsAction = { type: "SET"; payload: Partial<SettingsState> } | { type: "RESTORE"; payload: SettingsState };

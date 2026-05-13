@@ -8,8 +8,12 @@ import {
   FlatList,
   Animated,
   Pressable,
+  Dimensions,
 } from "react-native";
 import { DetectedVideo, HlsVariant } from "../types";
+import type { VideoBannerPosition } from "../store/settingsStore";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 function formatBandwidth(bps: number): string {
   if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + " Mbps";
@@ -20,12 +24,14 @@ interface Props {
   videos: DetectedVideo[];
   visible?: boolean;
   playingUrl?: string;
+  position?: VideoBannerPosition;
   onPreview: (video: DetectedVideo) => void;
   onDownload: (video: DetectedVideo, variant?: HlsVariant) => void;
   onDismiss: () => void;
   onToggleFullscreen?: () => void;
   onSeekForward?: (seconds: number) => void;
   onSeekBackward?: (seconds: number) => void;
+  onChangePosition?: (position: VideoBannerPosition) => void;
 }
 
 export function isPlayingVideo(
@@ -48,12 +54,14 @@ export default function VideoDetectedBanner({
   videos,
   visible = true,
   playingUrl = "",
+  position = 'top',
   onPreview,
   onDownload,
   onDismiss,
   onToggleFullscreen,
   onSeekForward,
   onSeekBackward,
+  onChangePosition,
 }: Props) {
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
   const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
@@ -145,15 +153,44 @@ export default function VideoDetectedBanner({
     onDownload(video, variant);
   };
 
+  const cyclePosition = () => {
+    if (!onChangePosition) return;
+    const positions: VideoBannerPosition[] = ['top', 'left', 'right'];
+    const currentIndex = positions.indexOf(position);
+    const nextIndex = (currentIndex + 1) % positions.length;
+    onChangePosition(positions[nextIndex]);
+  };
+
+  const getPositionIcon = () => {
+    switch (position) {
+      case 'top': return '⬆️';
+      case 'left': return '⬅️';
+      case 'right': return '➡️';
+    }
+  };
+
+  const containerStyle = [
+    styles.overlay,
+    position === 'top' && { justifyContent: 'flex-start' as const },
+    position === 'left' && { alignItems: 'flex-start' as const },
+    position === 'right' && { alignItems: 'flex-end' as const },
+  ];
+  const bannerStyle = [
+    styles.banner,
+    position === 'top' && styles.bannerTop,
+    position === 'left' && styles.bannerLeft,
+    position === 'right' && styles.bannerRight,
+  ];
+
   if (filteredVideos.length === 0) return null;
 
   return (
     <View
-      style={[styles.overlay, !visible && { display: "none" }]}
+      style={[...containerStyle, !visible && { display: "none" }]}
       pointerEvents="box-none"
     >
       {/* ── Banner header ── */}
-      <View style={styles.banner}>
+      <View style={bannerStyle}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <View style={styles.liveDot} />
@@ -172,7 +209,7 @@ export default function VideoDetectedBanner({
               <Text style={styles.actionBtnText}>▶</Text>
             </TouchableOpacity>
 
-            {/* Details list */}
+            {/* Details */}
             <TouchableOpacity
               onPress={() => setIsDetailVisible(true)}
               style={[styles.actionBtn, styles.actionBtnGhost]}
@@ -181,6 +218,16 @@ export default function VideoDetectedBanner({
                 ☰
               </Text>
             </TouchableOpacity>
+
+            {/* Position toggle */}
+            {onChangePosition && (
+              <TouchableOpacity
+                onPress={cyclePosition}
+                style={[styles.actionBtn, styles.actionBtnGhost]}
+              >
+                <Text style={styles.positionIcon}>{getPositionIcon()}</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Dismiss */}
             <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
@@ -345,13 +392,34 @@ const styles = StyleSheet.create({
   /* ── Banner ── */
   banner: {
     backgroundColor: "#1A1A2E",
-    borderBottomWidth: 1,
-    borderBottomColor: "#2A2A45",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.55,
     shadowRadius: 8,
     elevation: 12,
+  },
+  bannerTop: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#2A2A45",
+  },
+  bannerLeft: {
+    borderRightWidth: 1,
+    borderRightColor: "#2A2A45",
+    width: SCREEN_HEIGHT - 100,
+    position: 'absolute',
+    top: -46,
+    transformOrigin: 'bottom left',
+    transform: [{ rotate: '90deg' }],
+  },
+  bannerRight: {
+    borderLeftWidth: 1,
+    borderLeftColor: "#2A2A45",
+    width: SCREEN_HEIGHT - 100,
+    position: 'absolute',
+    left: -365,
+    top: -146,
+    transformOrigin: 'bottom right',
+    transform: [{ rotate: '-270deg' }, { translateX: SCREEN_HEIGHT }],
   },
   header: {
     flexDirection: "row",
@@ -425,6 +493,9 @@ const styles = StyleSheet.create({
   closeBtnText: {
     color: "#888",
     fontSize: 13,
+  },
+  positionIcon: {
+    fontSize: 14,
   },
 
   /* ── Seek zones ── */

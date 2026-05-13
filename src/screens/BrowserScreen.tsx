@@ -111,7 +111,7 @@ export default function BrowserScreen() {
   const tabs = useTabList();
   const { addTab, removeTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
-  const { settings, pushHistory } = useSettings();
+  const { settings, pushHistory, setSetting } = useSettings();
   const previousUrl = useRef('');
   const navigation = useNavigation();
 
@@ -893,10 +893,12 @@ export default function BrowserScreen() {
           visible={!isVideoPlaying && !activeBannerDismissed}
           videos={activeDetectedVideos}
           playingUrl={activePlayingVideoUrl}
+          position={settings.videoBannerPosition}
           onPreview={handlePreviewVideo}
           onDownload={handleDownloadWithVariant}
           onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
           onToggleFullscreen={handleToggleFullscreen}
+          onChangePosition={(position) => setSetting('videoBannerPosition', position)}
         />
 
         {isVideoPlaying && (
