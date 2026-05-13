@@ -104,6 +104,13 @@ function formatTime(ts: number): string {
 function HistoryScreen({ onBack }: { onBack: () => void }) {
   const { history, clearHistory } = useSettings();
   const c = useThemeColors();
+  const navigation = useNavigation();
+  const { addTab } = useTabActions();
+
+  const handleOpen = (url: string) => {
+    addTab(url);
+    navigation.navigate("Browser" as never);
+  };
 
   const confirmClear = () =>
     Alert.alert("Clear History", "Are you sure you want to clear all browsing history?", [
@@ -119,7 +126,11 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
           <Text style={[s.emptyText, { color: c.textSecondary }]}>No history yet.</Text>
         ) : (
           history.map((item: HistoryEntry) => (
-            <View key={item.id} style={[s.historyRow, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+            <TouchableOpacity
+              key={item.id}
+              style={[s.historyRow, { backgroundColor: c.surface, borderBottomColor: c.border }]}
+              onPress={() => handleOpen(item.url)}
+            >
               <View style={[s.historyIcon, { backgroundColor: c.surfaceSecondary }]}>
                 <Text style={s.historyIconText}>🌐</Text>
               </View>
@@ -128,7 +139,7 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
                 <Text style={[s.historyUrl, { color: c.textSecondary }]} numberOfLines={1}>{item.url}</Text>
               </View>
               <Text style={[s.historyTime, { color: c.textSecondary }]}>{formatTime(item.timestamp)}</Text>
-            </View>
+            </TouchableOpacity>
           ))
         )}
         {history.length > 0 && (
