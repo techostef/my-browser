@@ -103,21 +103,16 @@ export default function DownloadsScreen() {
 
   // Track download completions to trigger interstitial ad every 4 downloads
   const prevStatusRef = useRef<Record<string, string>>({});
-  const adTrackerInitRef = useRef(false);
 
   useEffect(() => {
-    if (!adTrackerInitRef.current) {
-      // Seed with current statuses on mount so pre-existing completed files
-      // (from cache/device scan) don't count as new completions.
-      downloads.forEach(d => {
-        prevStatusRef.current[d.id] = d.status;
-      });
-      adTrackerInitRef.current = true;
-      return;
-    }
-
     downloads.forEach(d => {
       const prev = prevStatusRef.current[d.id];
+      if (prev === undefined) {
+        // First time seeing this download — seed without counting so existing
+        // completed files (including those loaded async after mount) are ignored.
+        prevStatusRef.current[d.id] = d.status;
+        return;
+      }
       // Only count when source is 'private' — active downloads complete with source undefined
       // first, then refresh replaces them with source:'private' tasks. This prevents double-counting.
       if (prev !== 'completed' && d.status === 'completed' && d.source === 'private') {
