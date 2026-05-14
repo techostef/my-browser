@@ -1,13 +1,11 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import { DownloadTask, HlsMasterInfo, HlsVariant } from '../types';
 
 const MEDIA_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac']);
-// Video files are probed with FFmpegKit (reads file headers, safe for all containers).
-// Audio files use Audio.Sound (faster for simple audio-only formats).
+// All media files are probed with FFmpegKit (reads container headers, safe for all formats).
 const VIDEO_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp']);
 
 const DURATION_CACHE_KEY = '@media_duration_cache_v1';
@@ -68,8 +66,7 @@ async function concurrentMap<T, R>(items: T[], fn: (item: T) => Promise<R>, conc
   return results;
 }
 
-// Cap concurrent media-decoder loads. Each Audio.Sound allocates a native decoder;
-// running 100s in parallel exhausts memory and crashes the app on Android.
+// Cap concurrent FFmpeg probe sessions to avoid exhausting native resources.
 const PROBE_CONCURRENCY = 2;
 // Cap concurrent file-stat calls. Each FileSystem.getInfoAsync registers a native bridge
 // callback; firing hundreds at once triggers the "Excessive pending callbacks" warning.
@@ -134,20 +131,10 @@ async function probeMediaDuration(filePath: string, size: number, mtime: number)
   try {
     if (VIDEO_EXTS.has(ext)) {
       // FFmpegKit reads only the container header — safe for all formats including
-      // MP4s with subtitle tracks that crash Android's MediaPlayer via Audio.Sound.
+      // FFmpegKit reads only the container header — safe for all formats.
       durationMs = await probeVideoWithFFmpeg(filePath);
     } else {
-      const sound = new Audio.Sound();
-      try {
-        await sound.loadAsync({ uri: filePath }, {}, false);
-        const status = await sound.getStatusAsync();
-        await sound.unloadAsync();
-        if (status.isLoaded && status.durationMillis != null) {
-          durationMs = status.durationMillis;
-        }
-      } catch {
-        try { await sound.unloadAsync(); } catch { /* ignore */ }
-      }
+      durationMs = await probeVideoWithFFmpeg(filePath);
     }
   } finally {
     releaseProbeSlot();

@@ -13,7 +13,7 @@ import {
 import { DetectedVideo, HlsVariant } from "../types";
 import type { VideoBannerPosition } from "../store/settingsStore";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function formatBandwidth(bps: number): string {
   if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + " Mbps";
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   bannerLeft: {
     borderRightWidth: 1,
     borderRightColor: "#2A2A45",
-    width: SCREEN_HEIGHT - 100,
+    width: (SCREEN_HEIGHT*0.82),
     position: 'absolute',
     top: -46,
     transformOrigin: 'bottom left',
@@ -414,12 +414,12 @@ const styles = StyleSheet.create({
   bannerRight: {
     borderLeftWidth: 1,
     borderLeftColor: "#2A2A45",
-    width: SCREEN_HEIGHT - 100,
+    width: (SCREEN_HEIGHT*0.75) + (SCREEN_WIDTH * 0.17),
     position: 'absolute',
-    left: -365,
-    top: -146,
+    top: (SCREEN_HEIGHT*0.75),
+    left: -SCREEN_WIDTH+(SCREEN_WIDTH*0.06),
     transformOrigin: 'bottom right',
-    transform: [{ rotate: '-270deg' }, { translateX: SCREEN_HEIGHT }],
+    transform: [{ rotate: '90deg' }, { translateX: 20 }],
   },
   header: {
     flexDirection: "row",

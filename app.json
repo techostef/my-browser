@@ -5,7 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.mybrowser.app",
       "permissions": [
@@ -26,9 +28,15 @@
           "photosPermission": "Allow OBrowser to access your videos.",
           "savePhotosPermission": "Allow OBrowser to save downloaded videos.",
           "isAccessMediaLocationEnabled": true,
-          "granularPermissions": ["audio", "photo"]
+          "granularPermissions": [
+            "audio",
+            "photo"
+          ]
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-font",
+      "expo-video"
     ]
   }
 }

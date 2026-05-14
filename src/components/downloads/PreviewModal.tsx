@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { DownloadTask } from "../../types";
 import { DownloadMediaType } from "../DownloadItem";
 
@@ -55,7 +55,9 @@ export default function PreviewModal({
   hasPrev,
   hasNext,
 }: Props) {
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer(
+    task?.filePath ? { uri: task.filePath } : null,
+  );
 
   const lastTapRef = useRef<{ time: number; side: "left" | "right" } | null>(null);
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -88,7 +90,34 @@ export default function PreviewModal({
     setShowControls(true);
     setLandscape(false);
     ScreenOrientation.unlockAsync();
+    if (task?.filePath) {
+      player.replace({ uri: task.filePath });
+      player.play();
+    }
   }, [task?.id]);
+
+  useEffect(() => {
+    const statusSub = player.addListener('statusChange', ({ status }) => {
+      setIsBuffering(status === 'loading');
+      if (status === 'readyToPlay') {
+        setDuration(player.duration * 1000);
+      }
+    });
+    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+      setIsPlaying(isPlaying);
+      if (!isPlaying) setShowControls(true);
+    });
+    const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (!seekingRef.current) {
+        setPosition(currentTime * 1000);
+      }
+    });
+    return () => {
+      statusSub.remove();
+      playingSub.remove();
+      timeSub.remove();
+    };
+  }, [player]);
 
   useEffect(() => {
     return () => {
@@ -137,56 +166,25 @@ export default function PreviewModal({
     }
   }, [showControls, isPlaying]);
 
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      setIsBuffering(true);
-      return;
-    }
-    if (!seekingRef.current) {
-      setPosition(status.positionMillis ?? 0);
-    }
-    setDuration(status.durationMillis ?? 0);
-    setIsBuffering(status.isBuffering ?? false);
-    setIsPlaying(status.isPlaying ?? false);
-    if (status.didJustFinish) {
-      setIsPlaying(false);
-      setShowControls(true);
-    }
-  };
-
-  const togglePlay = async () => {
-    if (!videoRef.current) return;
-    try {
-      const status = await videoRef.current.getStatusAsync();
-      if (!status.isLoaded) return;
-      if (status.isPlaying) {
-        await videoRef.current.pauseAsync();
-      } else {
-        const dur = status.durationMillis ?? 0;
-        const cur = status.positionMillis ?? 0;
-        if (status.didJustFinish || (dur > 0 && cur >= dur - 50)) {
-          await videoRef.current.setPositionAsync(0);
-        }
-        await videoRef.current.playAsync();
+  const togglePlay = () => {
+    if (player.playing) {
+      player.pause();
+    } else {
+      const dur = player.duration;
+      const cur = player.currentTime;
+      if (dur > 0 && cur >= dur - 0.05) {
+        player.currentTime = 0;
       }
-    } catch {
-      // ignore
+      player.play();
     }
   };
 
-  const seekBy = async (deltaSec: number) => {
-    if (!videoRef.current) return;
-    try {
-      const status = await videoRef.current.getStatusAsync();
-      if (!status.isLoaded) return;
-      const dur = status.durationMillis ?? 0;
-      const cur = status.positionMillis ?? 0;
-      const newPos = Math.max(0, Math.min(dur, cur + deltaSec * 1000));
-      await videoRef.current.setPositionAsync(newPos);
-      setPosition(newPos);
-    } catch {
-      // ignore
-    }
+  const seekBy = (deltaSec: number) => {
+    const dur = player.duration;
+    const cur = player.currentTime;
+    const newPosSec = Math.max(0, Math.min(dur, cur + deltaSec));
+    player.currentTime = newPosSec;
+    setPosition(newPosSec * 1000);
   };
 
   const flashHint = (side: "left" | "right") => {
@@ -225,18 +223,14 @@ export default function PreviewModal({
     seekBarWRef.current = e.nativeEvent.layout.width;
   };
 
-  const seekToX = async (x: number) => {
+  const seekToX = (x: number) => {
     const w = seekBarWRef.current;
     const dur = durationRef.current;
     if (w <= 0 || dur <= 0) return;
     const ratio = Math.max(0, Math.min(1, x / w));
-    const newPos = ratio * dur;
-    setPosition(newPos);
-    try {
-      await videoRef.current?.setPositionAsync(newPos);
-    } catch {
-      // ignore
-    }
+    const newPosSec = (ratio * dur) / 1000;
+    setPosition(newPosSec * 1000);
+    player.currentTime = newPosSec;
   };
 
   const onSeekGrant = (e: GestureResponderEvent) => {
@@ -312,14 +306,10 @@ export default function PreviewModal({
         {/* ── Video / audio preview ── */}
         {task?.filePath && isMedia && (
           <>
-            <Video
-              ref={videoRef}
-              source={{ uri: task.filePath }}
+            <VideoView
+              player={player}
               style={StyleSheet.absoluteFill}
-              shouldPlay
-              resizeMode={ResizeMode.CONTAIN}
-              onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-              progressUpdateIntervalMillis={250}
+              contentFit="contain"
             />
 
             {mediaType === "audio" && (

@@ -14,7 +14,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../types/videoEditor';
 import VideoTimeline from '../../components/videoEditor/VideoTimeline';
@@ -173,34 +173,25 @@ const chipRowStyles = StyleSheet.create({
 });
 
 interface VideoWithSubtitleProps {
-  videoUri: string;
+  player: VideoPlayer;
   subtitleText: string | null;
-  onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
 }
 
-const VideoWithSubtitle = React.memo(
-  React.forwardRef<Video, VideoWithSubtitleProps>(
-    ({ videoUri, subtitleText, onPlaybackStatusUpdate }, ref) => (
-      <View style={videoStyles.container}>
-        <Video
-          ref={ref}
-          source={{ uri: videoUri }}
-          style={videoStyles.video}
-          resizeMode={ResizeMode.CONTAIN}
-          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          shouldPlay={false}
-          isLooping={false}
-          useNativeControls={false}
-        />
-        {subtitleText ? (
-          <View style={videoStyles.subtitleOverlay} pointerEvents="none">
-            <Text style={videoStyles.subtitleText}>{subtitleText}</Text>
-          </View>
-        ) : null}
+const VideoWithSubtitle = React.memo(({ player, subtitleText }: VideoWithSubtitleProps) => (
+  <View style={videoStyles.container}>
+    <VideoView
+      player={player}
+      style={videoStyles.video}
+      contentFit="contain"
+      nativeControls={false}
+    />
+    {subtitleText ? (
+      <View style={videoStyles.subtitleOverlay} pointerEvents="none">
+        <Text style={videoStyles.subtitleText}>{subtitleText}</Text>
       </View>
-    ),
-  ),
-);
+    ) : null}
+  </View>
+));
 
 const videoStyles = StyleSheet.create({
   container: {
@@ -262,7 +253,7 @@ function parseTimeSec(raw: string): number | null {
 export default function TrimScreen({ navigation, route }: Props) {
   const { videoUri, duration: paramDuration } = route.params;
 
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer({ uri: videoUri }, p => { p.loop = false; });
   const [duration, setDuration] = useState(paramDuration > 0 ? paramDuration : 0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -369,100 +360,84 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   // ─── Playback ───────────────────────────────────────────────────────────────
 
-  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-
-    if (status.durationMillis && status.durationMillis > 0) {
-      const realDur = status.durationMillis / 1000;
-      if (Math.abs(realDur - durationRef.current) > 0.5) {
-        setDuration(realDur);
+  useEffect(() => {
+    const statusSub = player.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay' && player.duration > 0) {
+        const realDur = player.duration;
+        if (Math.abs(realDur - durationRef.current) > 0.5) {
+          setDuration(realDur);
+        }
       }
-    }
+    });
+    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+      setIsPlaying(isPlaying);
+    });
+    const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (!player.playing) return;
+      setCurrentTime(currentTime);
 
-    const posSecs = (status.positionMillis ?? 0) / 1000;
-    if (status.isPlaying) {
-      setCurrentTime(posSecs);
-    }
-    setIsPlaying(status.isPlaying ?? false);
-
-    // During playback: skip deleted segments, stop at end of last kept segment
-    if (status.isPlaying && durationRef.current > 0) {
-      const frac = posSecs / durationRef.current;
+      if (durationRef.current <= 0) return;
+      const frac = currentTime / durationRef.current;
       const segs = segmentsRef.current;
 
-      // Find current segment
-      const curSeg = segs.find(
-        (s) => frac >= s.startFrac && frac < s.endFrac,
-      );
-
+      const curSeg = segs.find(s => frac >= s.startFrac && frac < s.endFrac);
       if (curSeg && !curSeg.kept) {
-        // In a deleted segment — jump to next kept one
         const curIdx = segs.indexOf(curSeg);
-        const nextKept = segs.slice(curIdx + 1).find((s) => s.kept);
+        const nextKept = segs.slice(curIdx + 1).find(s => s.kept);
         if (nextKept) {
-          videoRef.current?.setPositionAsync(
-            nextKept.startFrac * durationRef.current * 1000,
-          );
+          player.currentTime = nextKept.startFrac * durationRef.current;
         } else {
-          // No more kept segments — stop
-          videoRef.current?.pauseAsync();
-          const firstKept = segs.find((s) => s.kept);
+          player.pause();
+          const firstKept = segs.find(s => s.kept);
           if (firstKept) {
-            videoRef.current?.setPositionAsync(
-              firstKept.startFrac * durationRef.current * 1000,
-            );
+            player.currentTime = firstKept.startFrac * durationRef.current;
           }
         }
         return;
       }
 
-      // Stop at end of the last kept segment
-      const lastKept = [...segs].reverse().find((s) => s.kept);
+      const lastKept = [...segs].reverse().find(s => s.kept);
       if (lastKept && frac >= lastKept.endFrac - 0.005) {
-        videoRef.current?.pauseAsync();
-        const firstKept = segs.find((s) => s.kept);
+        player.pause();
+        const firstKept = segs.find(s => s.kept);
         if (firstKept) {
-          videoRef.current?.setPositionAsync(
-            firstKept.startFrac * durationRef.current * 1000,
-          );
+          player.currentTime = firstKept.startFrac * durationRef.current;
         }
       }
-    }
-  }, []);
+    });
+    return () => {
+      statusSub.remove();
+      playingSub.remove();
+      timeSub.remove();
+    };
+  }, [player]);
 
-  const togglePlay = async () => {
-    if (isPlaying) {
-      await videoRef.current?.pauseAsync();
+  const togglePlay = () => {
+    if (player.playing) {
+      player.pause();
     } else {
-      // Start from the first kept segment if current position is in a deleted one
       const dur = durationRef.current;
       const frac = currentTime / dur;
       const segs = segmentsRef.current;
-      const curSeg = segs.find(
-        (s) => frac >= s.startFrac && frac < s.endFrac,
-      );
+      const curSeg = segs.find(s => frac >= s.startFrac && frac < s.endFrac);
       if (curSeg && !curSeg.kept) {
-        const nextKept = segs.find(
-          (s) => s.startFrac >= curSeg.startFrac && s.kept,
-        );
+        const nextKept = segs.find(s => s.startFrac >= curSeg.startFrac && s.kept);
         if (nextKept) {
-          await videoRef.current?.setPositionAsync(
-            nextKept.startFrac * dur * 1000,
-          );
+          player.currentTime = nextKept.startFrac * dur;
         }
       }
-      await videoRef.current?.playAsync();
+      player.play();
     }
   };
 
   // ─── Seek from timeline ─────────────────────────────────────────────────────
 
-  const handleSeek = useCallback(async (seconds: number) => {
+  const handleSeek = useCallback((seconds: number) => {
     setCurrentTime(seconds);
     chipRowRef.current?.scrollTo(seconds * PX_PER_SEC, false);
     lastScrolledTime.current = seconds;
-    await videoRef.current?.setPositionAsync(seconds * 1000);
-  }, []);
+    player.currentTime = seconds;
+  }, [player]);
 
   // ─── Split at playhead ──────────────────────────────────────────────────────
 
@@ -535,13 +510,13 @@ export default function TrimScreen({ navigation, route }: Props) {
     chipRowRef.current?.scrollTo(currentTime * PX_PER_SEC, false);
   }, [currentTime, subtitleSegments.length]);
 
-  const handleChipPress = useCallback(async (seg: SubtitleSegment) => {
+  const handleChipPress = useCallback((seg: SubtitleSegment) => {
     setEditingId(seg.id);
     setEditDraft(seg.text);
-    await videoRef.current?.pauseAsync();
-    await videoRef.current?.setPositionAsync(seg.start * 1000);
+    player.pause();
+    player.currentTime = seg.start;
     chipRowRef.current?.scrollTo(seg.start * PX_PER_SEC, true);
-  }, []);
+  }, [player]);
 
   const handleChipDelete = useCallback((seg: SubtitleSegment) => {
     Alert.alert('Delete subtitle', `Remove "${seg.text}"?`, [
@@ -737,10 +712,8 @@ export default function TrimScreen({ navigation, route }: Props) {
 
       {/* ── Video + subtitle overlay ── */}
       <VideoWithSubtitle
-        ref={videoRef}
-        videoUri={videoUri}
+        player={player}
         subtitleText={currentSubtitle?.text ?? null}
-        onPlaybackStatusUpdate={onPlaybackStatusUpdate}
       />
 
       {/* ── Controls bar ── */}

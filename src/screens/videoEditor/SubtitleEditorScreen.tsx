@@ -10,7 +10,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList, Segment } from '../../types/videoEditor';
@@ -42,7 +42,7 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
 
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer({ uri: videoUri }, p => { p.loop = false; });
   const subtitleScrollRef = useRef<ScrollView>(null);
   const sessionReady = useRef(false);
   const lastScrolledTime = useRef(-1);
@@ -95,35 +95,41 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
 
   // ─── Playback ──────────────────────────────────────────────────────────────
 
-  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    setCurrentTime((status.positionMillis ?? 0) / 1000);
-    setIsPlaying(status.isPlaying ?? false);
-  }, []);
+  useEffect(() => {
+    const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
+      setCurrentTime(currentTime);
+    });
+    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+      setIsPlaying(isPlaying);
+    });
+    return () => {
+      timeSub.remove();
+      playingSub.remove();
+    };
+  }, [player]);
 
-  const togglePlay = async () => {
-    if (isPlaying) {
-      await videoRef.current?.pauseAsync();
+  const togglePlay = useCallback(() => {
+    if (player.playing) {
+      player.pause();
     } else {
-      await videoRef.current?.playAsync();
+      player.play();
     }
-  };
+  }, [player]);
 
-  const handleSeek = useCallback(async (seconds: number) => {
-    await videoRef.current?.setPositionAsync(seconds * 1000);
-  }, []);
+  const handleSeek = useCallback((seconds: number) => {
+    player.currentTime = seconds;
+  }, [player]);
 
   // ─── Chip press ────────────────────────────────────────────────────────────
 
-  const handleChipPress = useCallback(async (seg: Segment) => {
+  const handleChipPress = useCallback((seg: Segment) => {
     setEditingId(seg.id);
     setEditDraft(seg.text);
-    await videoRef.current?.pauseAsync();
-    await videoRef.current?.setPositionAsync(seg.start * 1000);
-    // Scroll the subtitle row so the chip is visible
+    player.pause();
+    player.currentTime = seg.start;
     const targetX = Math.max(0, seg.start * PX_PER_SEC - SCREEN_W / 3);
     subtitleScrollRef.current?.scrollTo({ x: targetX, animated: true });
-  }, []);
+  }, [player]);
 
   const handleEditDone = useCallback(() => {
     setEditingId(null);
@@ -165,15 +171,11 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
       >
         {/* ── Video + subtitle overlay ── */}
         <View style={styles.videoContainer}>
-          <Video
-            ref={videoRef}
-            source={{ uri: videoUri }}
+          <VideoView
+            player={player}
             style={styles.video}
-            resizeMode={ResizeMode.CONTAIN}
-            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-            shouldPlay={false}
-            isLooping={false}
-            useNativeControls={false}
+            contentFit="contain"
+            nativeControls={false}
           />
           {currentSubtitle ? (
             <View style={styles.subtitleOverlay} pointerEvents="none">
