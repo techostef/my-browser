@@ -7,7 +7,10 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  Dimensions,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
 } from "react-native";
 import { useSettings, useThemeColors, Shortcut } from "../store/settingsStore";
 
@@ -33,6 +36,8 @@ export default function HomePage({ onNavigate }: Props) {
   const { settings, history, searchUrl, addShortcut, removeShortcut } = useSettings();
   const c = useThemeColors();
   const [query, setQuery] = useState("");
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [addUrl, setAddUrl] = useState("");
 
   const handleSearch = () => {
     const q = query.trim();
@@ -50,24 +55,19 @@ export default function HomePage({ onNavigate }: Props) {
   };
 
   const handleAddShortcut = () => {
-    Alert.prompt(
-      "Add Shortcut",
-      "Enter a URL",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Add",
-          onPress: (url?: string) => {
-            if (!url?.trim()) return;
-            let finalUrl = url.trim();
-            if (!/^https?:\/\//i.test(finalUrl)) finalUrl = "https://" + finalUrl;
-            const title = finalUrl.replace(/^https?:\/\//, "").split("/")[0];
-            addShortcut({ title, url: finalUrl });
-          },
-        },
-      ],
-      "plain-text",
-    );
+    setAddUrl("");
+    setAddModalVisible(true);
+  };
+
+  const handleConfirmShortcut = () => {
+    const trimmed = addUrl.trim();
+    if (!trimmed) return;
+    let finalUrl = trimmed;
+    if (!/^https?:\/\//i.test(finalUrl)) finalUrl = "https://" + finalUrl;
+    const title = finalUrl.replace(/^https?:\/\//, "").split("/")[0];
+    addShortcut({ title, url: finalUrl });
+    setAddModalVisible(false);
+    setAddUrl("");
   };
 
   const handleLongPressShortcut = (shortcut: Shortcut) => {
@@ -82,6 +82,7 @@ export default function HomePage({ onNavigate }: Props) {
   const recentHistory = history.slice(0, 8);
 
   return (
+    <>
     <ScrollView
       style={[styles.root, { backgroundColor: c.background }]}
       contentContainerStyle={styles.content}
@@ -163,6 +164,47 @@ export default function HomePage({ onNavigate }: Props) {
         </View>
       )}
     </ScrollView>
+
+    {/* Add Shortcut Modal */}
+    <Modal
+      visible={addModalVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setAddModalVisible(false)}
+    >
+      <KeyboardAvoidingView
+        style={styles.modalKAV}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setAddModalVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Add Shortcut</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="https://example.com"
+              placeholderTextColor="#9CA3AF"
+              value={addUrl}
+              onChangeText={setAddUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              returnKeyType="done"
+              onSubmitEditing={handleConfirmShortcut}
+              autoFocus
+            />
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setAddModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalAddBtn} onPress={handleConfirmShortcut}>
+                <Text style={styles.modalAddText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+    </>
   );
 }
 
@@ -300,5 +342,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9CA3AF",
     marginTop: 1,
+  },
+  modalKAV: {
+    flex: 1,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: "#FFF",
+    borderRadius: 14,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: "#111827",
+    backgroundColor: "#F9FAFB",
+    marginBottom: 16,
+  },
+  modalBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  modalAddBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: "#1A73E8",
+    alignItems: "center",
+  },
+  modalAddText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFF",
   },
 });
