@@ -29,6 +29,12 @@ import { loadSubtitles, saveSubtitles, clearSubtitles } from '../../lib/videoEdi
 import { getOpenAIKey } from '../../lib/openaiKey';
 import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/editSession';
 import { ENABLE_AI_CAPTIONS } from '../../config';
+import {
+  RewardedInterstitialAd,
+  RewardedAdEventType,
+  AdEventType,
+} from 'react-native-google-mobile-ads';
+import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from '../../config/admob';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Trim'>;
 
@@ -601,6 +607,20 @@ export default function TrimScreen({ navigation, route }: Props) {
     });
   };
 
+  const handleExportWithAd = useCallback(() => {
+    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
+    const unsubs: Array<() => void> = [];
+    let rewardEarned = false;
+    const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
+
+    unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
+    unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
+    unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => { cleanup(); if (rewardEarned) handleExport(); }));
+    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); }));
+
+    ad.load();
+  }, [handleExport]);
+
   // ─── Process locally & continue ─────────────────────────────────────────────
 
   const handleTranslate = async (targetLanguage: string) => {
@@ -874,7 +894,7 @@ export default function TrimScreen({ navigation, route }: Props) {
           {/* Export → ExportScreen (no subtitles) */}
           <TouchableOpacity
             style={[styles.toolbarItem, loading && styles.disabled]}
-            onPress={handleExport}
+            onPress={handleExportWithAd}
             disabled={loading}
           >
             <Text style={styles.toolbarIcon}>⬇️</Text>

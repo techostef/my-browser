@@ -10,6 +10,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import {
+  RewardedInterstitialAd,
+  RewardedAdEventType,
+  AdEventType,
+} from 'react-native-google-mobile-ads';
+import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from '../config/admob';
 import { useProjects, type Project } from '../store/projectStore';
 import { loadSession } from '../lib/videoEditor/editSession';
 import { useThemeColors } from '../store/settingsStore';
@@ -102,10 +108,25 @@ export default function ProjectsScreen() {
   }, [projects]);
 
   const handleOpen = useCallback((project: Project) => {
-    (navigation as any).navigate('Trim', {
-      videoUri: project.videoUri,
-      duration: project.duration,
-    });
+    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
+    const unsubs: Array<() => void> = [];
+    let rewardEarned = false;
+    const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
+
+    unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
+    unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
+    unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => {
+      cleanup();
+      if (rewardEarned) {
+        (navigation as any).navigate('Trim', {
+          videoUri: project.videoUri,
+          duration: project.duration,
+        });
+      }
+    }));
+    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); }));
+
+    ad.load();
   }, [navigation]);
 
   const handleDelete = useCallback((project: Project) => {

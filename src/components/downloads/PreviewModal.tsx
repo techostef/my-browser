@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Modal,
   View,
@@ -16,6 +16,12 @@ import {
 import * as ScreenOrientation from "expo-screen-orientation";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VideoView, useVideoPlayer } from "expo-video";
+import {
+  RewardedInterstitialAd,
+  RewardedAdEventType,
+  AdEventType,
+} from "react-native-google-mobile-ads";
+import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../../config/admob";
 import { DownloadTask } from "../../types";
 import { DownloadMediaType } from "../DownloadItem";
 
@@ -165,6 +171,20 @@ export default function PreviewModal({
       clearTimeout(hideControlsTimer.current);
     }
   }, [showControls, isPlaying]);
+
+  const handleEditPress = useCallback(() => {
+    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
+    const unsubs: Array<() => void> = [];
+    let rewardEarned = false;
+    const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
+
+    unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
+    unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
+    unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => { cleanup(); if (rewardEarned) onEditVideo?.(); }));
+    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); }));
+
+    ad.load();
+  }, [onEditVideo]);
 
   const togglePlay = () => {
     if (player.playing) {
@@ -371,7 +391,7 @@ export default function PreviewModal({
                   {mediaType === "video" && onEditVideo && (
                     <TouchableOpacity
                       style={[styles.iconBtn, styles.editBtn]}
-                      onPress={onEditVideo}
+                      onPress={handleEditPress}
                     >
                       <Text style={styles.editBtnText}>✂️ Edit</Text>
                     </TouchableOpacity>
