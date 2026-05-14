@@ -1,6 +1,6 @@
 import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
-import * as FileSystem from 'expo-file-system';
-import { EncodingType } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { EncodingType } from 'expo-file-system/legacy';
 
 function toPath(uri: string): string {
   return uri.startsWith('file://') ? uri.slice(7) : uri;

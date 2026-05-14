@@ -7,7 +7,7 @@ import {
   Animated,
 } from 'react-native';
 import WebView from 'react-native-webview';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList, Segment } from '../../types/videoEditor';
 import { trimAndConcat, probeVideoSize, burnSubtitlesWithOverlay, transcodeVideo } from '../../lib/videoEditor/ffmpeg';

@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
 import { extractAudioChunk, extractAudioChunkWav, probeVideoInfo } from './ffmpeg';
