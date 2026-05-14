@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, BackHandler } from "react-native";
 
 const DEVICE_ROOT_PATH = "__device_download__";
 
@@ -36,6 +36,15 @@ export default function DownloadsHeader({
   onBack,
   onActionsMenu,
 }: Props) {
+  useEffect(() => {
+    if (!isSelectionMode) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      onCancelSelection();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isSelectionMode, onCancelSelection]);
+
   if (isSelectionMode) {
     return (
       <View style={styles.header}>
