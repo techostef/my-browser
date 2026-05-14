@@ -969,6 +969,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  progressBarTrack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(0, 122, 255, 0.15)',
+    zIndex: 999,
+  },
+  progressBarFill: {
+    height: 3,
+    backgroundColor: '#007AFF',
+  },
 });
 
 // ----------------------------------------------------------------------------
@@ -1039,6 +1052,51 @@ function WebViewListInner({
   const activeTabId = useActiveTabId();
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+
+  // Track current activeTabId in a ref so frozen memo callbacks can read it.
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+
+  // Per-tab loading state stored in a mutable ref — no re-render for background tabs.
+  type TabLoadState = { loading: boolean; progress: number; error: string | null };
+  const loadingStateRef = useRef<Record<string, TabLoadState>>({});
+
+  // React state only for the active tab, drives the progress bar and error page.
+  const [activeTabState, setActiveTabState] = useState<TabLoadState>({
+    loading: false, progress: 0, error: null,
+  });
+
+  // Sync active tab's loading state when the user switches tabs.
+  useEffect(() => {
+    const s = loadingStateRef.current[activeTabId];
+    setActiveTabState(s ?? { loading: false, progress: 0, error: null });
+  }, [activeTabId]);
+
+  // Clean up stale entries when tabs are removed.
+  useEffect(() => {
+    const tabIds = new Set(tabs.map(t => t.id));
+    for (const id of Object.keys(loadingStateRef.current)) {
+      if (!tabIds.has(id)) delete loadingStateRef.current[id];
+    }
+  }, [tabs]);
+
+  const handleLoadStart = useCallback((tabId: string) => () => {
+    const s: TabLoadState = { loading: true, progress: 0, error: null };
+    loadingStateRef.current[tabId] = s;
+    if (tabId === activeTabIdRef.current) setActiveTabState(s);
+  }, []);
+
+  const handleLoadProgress = useCallback((tabId: string) => (progress: number) => {
+    const s: TabLoadState = { ...(loadingStateRef.current[tabId] ?? { loading: true, progress: 0, error: null }), progress };
+    loadingStateRef.current[tabId] = s;
+    if (tabId === activeTabIdRef.current) setActiveTabState(s);
+  }, []);
+
+  const handleLoadEnd = useCallback((tabId: string) => () => {
+    const s: TabLoadState = { ...(loadingStateRef.current[tabId] ?? { loading: false, progress: 1, error: null }), loading: false, progress: 1 };
+    loadingStateRef.current[tabId] = s;
+    if (tabId === activeTabIdRef.current) setActiveTabState(s);
+  }, []);
 
   // Tabs whose WebView has been mounted at least once. Starts with just the
   // active tab so background tabs are not loaded on startup.
@@ -1177,6 +1235,12 @@ function WebViewListInner({
 
   return (
     <View style={styles.webviewContainer}>
+      {activeTabState.loading && (
+        <View style={styles.progressBarTrack} pointerEvents="none">
+          <View style={[styles.progressBarFill, { width: `${activeTabState.progress * 100}%` }]} />
+        </View>
+      )}
+
       {tabs
         .filter(tab => {
           if (tab.url === 'about:home') return false;
@@ -1205,6 +1269,9 @@ function WebViewListInner({
               handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
               adBlockEnabled={adBlockEnabled}
               popupBlockEnabled={popupBlockEnabled}
+              onLoadStart={handleLoadStart(tab.id)}
+              onLoadProgress={handleLoadProgress(tab.id)}
+              onLoadEnd={handleLoadEnd(tab.id)}
             />
           </View>
         ))}
