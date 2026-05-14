@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import { useSettings, useThemeColors, HistoryEntry } from "../store/settingsStore";
 import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from "../lib/openaiKey";
@@ -310,7 +310,7 @@ function WhisperModelScreen({ onBack }: { onBack: () => void }) {
   const [importing, setImporting] = useState(false);
 
   const refresh = useCallback(async () => {
-    const info = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH, { size: true });
+    const info = await FileSystem.getInfoAsync(LOCAL_MODEL_PATH);
     setModelSize(info.exists && 'size' in info ? (info as any).size : null);
   }, []);
 
