@@ -15,11 +15,6 @@ import type { VideoBannerPosition } from "../store/settingsStore";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function formatBandwidth(bps: number): string {
-  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + " Mbps";
-  return (bps / 1_000).toFixed(0) + " Kbps";
-}
-
 interface Props {
   videos: DetectedVideo[];
   visible?: boolean;
@@ -38,7 +33,7 @@ export function isPlayingVideo(
   video: DetectedVideo,
   playingUrl: string,
 ): boolean {
-  const lastSegment = playingUrl.split("/").pop();
+  const lastSegment = playingUrl.split("/").pop()?.split("?")[0];
   if (lastSegment && video.hlsInfo?.isMaster) {
     if (video.hlsInfo.variants) {
       return video.hlsInfo.variants.some((v) => v.uri.includes(lastSegment));

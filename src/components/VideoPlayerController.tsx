@@ -46,7 +46,7 @@ const DOUBLE_TAP_MS = 300;
 const SEEK_SECS = 10;
 
 // Stepped pseudo-gradients (top: dark→clear, bottom: clear→dark)
-const TOP_SCRIM    = [0.72];
+const TOP_SCRIM    = [0.02];
 const BOTTOM_SCRIM = [0.02];
 
 export default function VideoPlayerController({
@@ -409,9 +409,6 @@ export default function VideoPlayerController({
                               <View style={styles.variantInfo}>
                                 <Text style={styles.variantResolution}>
                                   {variant.resolution || "Unknown"}
-                                </Text>
-                                <Text style={styles.variantBandwidth}>
-                                  {formatBandwidth(variant.bandwidth)}
                                 </Text>
                               </View>
                               <TouchableOpacity
