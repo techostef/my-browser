@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Image,
   StyleSheet,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -45,13 +46,24 @@ function fmtDuration(secs: number): string {
 type CardProps = {
   project: Project;
   hasSession: boolean;
+  isSelectionMode: boolean;
+  isSelected: boolean;
   onOpen: () => void;
   onDelete: () => void;
+  onLongPress: () => void;
+  onToggleSelect: () => void;
 };
 
-function ProjectCard({ project, hasSession, onOpen, onDelete }: CardProps) {
+function ProjectCard({ project, hasSession, isSelectionMode, isSelected, onOpen, onDelete, onLongPress, onToggleSelect }: CardProps) {
+  const handlePress = isSelectionMode ? onToggleSelect : onOpen;
+
   return (
-    <TouchableOpacity style={styles.card} onPress={onOpen} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[styles.card, isSelected && styles.cardSelected]}
+      onPress={handlePress}
+      onLongPress={onLongPress}
+      activeOpacity={0.8}
+    >
       {/* Thumbnail */}
       <View style={styles.thumb}>
         {project.thumbnailUri ? (
@@ -81,10 +93,16 @@ function ProjectCard({ project, hasSession, onOpen, onDelete }: CardProps) {
         </View>
       </View>
 
-      {/* Delete */}
-      <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.deleteIcon}>✕</Text>
-      </TouchableOpacity>
+      {/* Right side: checkbox in selection mode, delete button otherwise */}
+      {isSelectionMode ? (
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.deleteIcon}>✕</Text>
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 }
@@ -96,6 +114,10 @@ export default function ProjectsScreen() {
   const navigation = useNavigation();
   const c = useThemeColors();
   const [sessionMap, setSessionMap] = useState<Record<string, boolean>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const isSelectionMode = selectedIds.size > 0;
+  const isSelectionModeRef = useRef(isSelectionMode);
+  isSelectionModeRef.current = isSelectionMode;
 
   // Check which projects have active sessions
   useEffect(() => {
@@ -106,6 +128,50 @@ export default function ProjectsScreen() {
       }),
     ).then(entries => setSessionMap(Object.fromEntries(entries)));
   }, [projects]);
+
+  // Hardware back exits selection mode
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (isSelectionModeRef.current) {
+        setSelectedIds(new Set());
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, []);
+
+  const handleLongPress = useCallback((project: Project) => {
+    setSelectedIds(prev => new Set([...prev, project.id]));
+  }, []);
+
+  const handleToggleSelect = useCallback((project: Project) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(project.id)) next.delete(project.id);
+      else next.add(project.id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    Alert.alert(
+      'Delete Projects',
+      `Delete ${count} project${count !== 1 ? 's' : ''}? Edit progress will be lost.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            selectedIds.forEach(id => removeProject(id));
+            setSelectedIds(new Set());
+          },
+        },
+      ],
+    );
+  }, [selectedIds, removeProject]);
 
   const handleOpen = useCallback((project: Project) => {
     const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
@@ -148,22 +214,38 @@ export default function ProjectsScreen() {
     <ProjectCard
       project={item}
       hasSession={sessionMap[item.id] ?? false}
+      isSelectionMode={isSelectionMode}
+      isSelected={selectedIds.has(item.id)}
       onOpen={() => handleOpen(item)}
       onDelete={() => handleDelete(item)}
+      onLongPress={() => handleLongPress(item)}
+      onToggleSelect={() => handleToggleSelect(item)}
     />
-  ), [sessionMap, handleOpen, handleDelete]);
+  ), [sessionMap, isSelectionMode, selectedIds, handleOpen, handleDelete, handleLongPress, handleToggleSelect]);
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: c.background }]} edges={['top']}>
-      <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <Text style={[styles.title, { color: c.text }]}>Projects</Text>
-        <TouchableOpacity
-          style={styles.newBtn}
-          onPress={() => (navigation as any).navigate('Downloads')}
-        >
-          <Text style={styles.newBtnText}>+ New</Text>
-        </TouchableOpacity>
-      </View>
+      {isSelectionMode ? (
+        <View style={[styles.header, { borderBottomColor: c.border }]}>
+          <TouchableOpacity style={styles.cancelSelBtn} onPress={() => setSelectedIds(new Set())}>
+            <Text style={styles.cancelSelText}>✕</Text>
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: c.text }]}>{selectedIds.size} selected</Text>
+          <TouchableOpacity style={styles.deleteSelBtn} onPress={handleBulkDelete}>
+            <Text style={styles.deleteSelText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={[styles.header, { borderBottomColor: c.border }]}>
+          <Text style={[styles.title, { color: c.text }]}>Projects</Text>
+          <TouchableOpacity
+            style={styles.newBtn}
+            onPress={() => (navigation as any).navigate('Downloads')}
+          >
+            <Text style={styles.newBtnText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {projects.length === 0 ? (
         <View style={styles.empty}>
@@ -273,4 +355,28 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 56, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
   emptyHint: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
+
+  // Selection mode
+  cardSelected: { borderWidth: 2, borderColor: '#6c63ff' },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#555',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  checkboxSelected: { backgroundColor: '#6c63ff', borderColor: '#6c63ff' },
+  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  cancelSelBtn: { padding: 6 },
+  cancelSelText: { color: '#aaa', fontSize: 16, fontWeight: '700' },
+  deleteSelBtn: {
+    backgroundColor: '#ff3b30',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  deleteSelText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
