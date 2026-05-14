@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useProjects, type Project } from '../store/projectStore';
 import { loadSession } from '../lib/videoEditor/editSession';
 import { useThemeColors } from '../store/settingsStore';
+import { AdBanner } from '../components/AdBanner';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -160,6 +161,7 @@ export default function ProjectsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <AdBanner />
     </SafeAreaView>
   );
 }
@@ -188,7 +190,7 @@ const styles = StyleSheet.create({
   },
   newBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
-  list: { padding: 12, gap: 10 },
+  list: { padding: 12, gap: 10, paddingBottom: 60 },
 
   // Card
   card: {

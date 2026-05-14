@@ -1,0 +1,2038 @@
+﻿> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:jar UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors
+> Task :gradle-plugin:react-native-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:jar UP-TO-DATE
+
+> Configure project :expo
+
+Using expo modules
+  - [32mexpo-asset[0m (10.0.10)
+  - [32mexpo-av[0m (14.0.7)
+  - [32mexpo-constants[0m (16.0.2)
+  - [32mexpo-document-picker[0m (12.0.2)
+  - [32mexpo-file-system[0m (17.0.1)
+  - [32mexpo-font[0m (12.0.10)
+  - [32mexpo-keep-awake[0m (13.0.2)
+  - [32mexpo-media-library[0m (16.0.5)
+  - [32mexpo-modules-core[0m (1.12.26)
+  - [32mexpo-screen-orientation[0m (7.0.5)
+  - [32mexpo-video-thumbnails[0m (8.0.0)
+
+
+> Configure project :react-native-google-mobile-ads
+:react-native-google-mobile-ads package.json found at C:\react-native\my-browser\node_modules\react-native-google-mobile-ads\package.json
+
+
+
+
+**************************************************************************************************************
+
+
+
+
+WARNING: react-native-google-mobile-ads requires an 'android_app_id' property inside a 'react-native-google-mobile-ads' key in your app.json.
+         No android_app_id property was found in this location. The native Google Mobile Ads SDK will crash on startup without it.
+         You can safely ignore this warning if you are using our Expo config plugin.
+
+
+
+
+**************************************************************************************************************
+
+
+
+
+:react-native-google-mobile-ads package.json found at C:\react-native\my-browser\node_modules\react-native-google-mobile-ads\package.json
+:react-native-google-mobile-ads:version set from package.json: 16.3.3 (16,3,3 - 16003003)
+:react-native-google-mobile-ads:android.compileSdk using custom value: 34
+:react-native-google-mobile-ads:android.targetSdk using custom value: 34
+:react-native-google-mobile-ads:android.minSdk using custom value: 24
+:react-native-google-mobile-ads:reactNativeAndroidDir C:\react-native\my-browser\node_modules\react-native\android
+
+> Configure project :react-native-reanimated
+Android gradle plugin: 8.2.1
+Gradle: 8.8
+
+> Configure project :wokcito_ffmpeg-kit-react-native
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Task :app:generateCodegenSchemaFromJavaScript SKIPPED
+> Task :app:generateCodegenArtifactsFromSchema SKIPPED
+> Task :app:generatePackageList
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :expo:generateExpoModulesPackageListTask UP-TO-DATE
+> Task :expo:preBuild UP-TO-DATE
+> Task :expo:preDebugBuild UP-TO-DATE
+> Task :expo:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-asset:preBuild UP-TO-DATE
+> Task :expo-asset:preDebugBuild UP-TO-DATE
+> Task :expo-asset:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-av:preBuild UP-TO-DATE
+> Task :expo-av:preDebugBuild UP-TO-DATE
+> Task :expo-av:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-constants:createExpoConfig UP-TO-DATE
+> Task :expo-constants:preBuild UP-TO-DATE
+> Task :expo-constants:preDebugBuild UP-TO-DATE
+> Task :expo-constants:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-document-picker:preBuild UP-TO-DATE
+> Task :expo-document-picker:preDebugBuild UP-TO-DATE
+> Task :expo-document-picker:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-file-system:preBuild UP-TO-DATE
+> Task :expo-file-system:preDebugBuild UP-TO-DATE
+> Task :expo-file-system:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-font:preBuild UP-TO-DATE
+> Task :expo-font:preDebugBuild UP-TO-DATE
+> Task :expo-font:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-keep-awake:preBuild UP-TO-DATE
+> Task :expo-keep-awake:preDebugBuild UP-TO-DATE
+> Task :expo-keep-awake:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-media-library:preBuild UP-TO-DATE
+> Task :expo-media-library:preDebugBuild UP-TO-DATE
+> Task :expo-media-library:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-modules-core:preBuild UP-TO-DATE
+> Task :expo-modules-core:preDebugBuild UP-TO-DATE
+> Task :expo-modules-core:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-screen-orientation:preBuild UP-TO-DATE
+> Task :expo-screen-orientation:preDebugBuild UP-TO-DATE
+> Task :expo-screen-orientation:writeDebugAarMetadata UP-TO-DATE
+> Task :expo-video-thumbnails:preBuild UP-TO-DATE
+> Task :expo-video-thumbnails:preDebugBuild UP-TO-DATE
+> Task :expo-video-thumbnails:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-async-storage_async-storage:preBuild UP-TO-DATE
+> Task :react-native-async-storage_async-storage:preDebugBuild UP-TO-DATE
+> Task :react-native-async-storage_async-storage:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-cookies_cookies:preBuild UP-TO-DATE
+> Task :react-native-cookies_cookies:preDebugBuild UP-TO-DATE
+> Task :react-native-cookies_cookies:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-gesture-handler:preBuild UP-TO-DATE
+> Task :react-native-gesture-handler:preDebugBuild UP-TO-DATE
+> Task :react-native-gesture-handler:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-google-mobile-ads:preBuild UP-TO-DATE
+> Task :react-native-google-mobile-ads:preDebugBuild UP-TO-DATE
+> Task :react-native-google-mobile-ads:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-reanimated:assertLatestReactNativeWithNewArchitectureTask SKIPPED
+> Task :react-native-reanimated:assertMinimalReactNativeVersionTask SKIPPED
+> Task :react-native-reanimated:prepareHeadersForPrefab UP-TO-DATE
+> Task :react-native-reanimated:preBuild UP-TO-DATE
+> Task :react-native-reanimated:preDebugBuild UP-TO-DATE
+> Task :react-native-reanimated:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-safe-area-context:preBuild UP-TO-DATE
+> Task :react-native-safe-area-context:preDebugBuild UP-TO-DATE
+> Task :react-native-safe-area-context:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-screens:preBuild UP-TO-DATE
+> Task :react-native-screens:preDebugBuild UP-TO-DATE
+> Task :react-native-screens:writeDebugAarMetadata UP-TO-DATE
+> Task :react-native-webview:preBuild UP-TO-DATE
+> Task :react-native-webview:preDebugBuild UP-TO-DATE
+> Task :react-native-webview:writeDebugAarMetadata UP-TO-DATE
+> Task :whisper.rn:preBuild UP-TO-DATE
+> Task :whisper.rn:preDebugBuild UP-TO-DATE
+> Task :whisper.rn:writeDebugAarMetadata UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:preBuild UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:preDebugBuild UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :expo:generateDebugResValues UP-TO-DATE
+> Task :expo:generateDebugResources UP-TO-DATE
+> Task :expo:packageDebugResources UP-TO-DATE
+> Task :expo-asset:generateDebugResValues UP-TO-DATE
+> Task :expo-asset:generateDebugResources UP-TO-DATE
+> Task :expo-asset:packageDebugResources UP-TO-DATE
+> Task :expo-av:generateDebugResValues UP-TO-DATE
+> Task :expo-av:generateDebugResources UP-TO-DATE
+> Task :expo-av:packageDebugResources UP-TO-DATE
+> Task :expo-constants:generateDebugResValues UP-TO-DATE
+> Task :expo-constants:generateDebugResources UP-TO-DATE
+> Task :expo-constants:packageDebugResources UP-TO-DATE
+> Task :expo-document-picker:generateDebugResValues UP-TO-DATE
+> Task :expo-document-picker:generateDebugResources UP-TO-DATE
+> Task :expo-document-picker:packageDebugResources UP-TO-DATE
+> Task :expo-file-system:generateDebugResValues UP-TO-DATE
+> Task :expo-file-system:generateDebugResources UP-TO-DATE
+> Task :expo-file-system:packageDebugResources UP-TO-DATE
+> Task :expo-font:generateDebugResValues UP-TO-DATE
+> Task :expo-font:generateDebugResources UP-TO-DATE
+> Task :expo-font:packageDebugResources UP-TO-DATE
+> Task :expo-keep-awake:generateDebugResValues UP-TO-DATE
+> Task :expo-keep-awake:generateDebugResources UP-TO-DATE
+> Task :expo-keep-awake:packageDebugResources UP-TO-DATE
+> Task :expo-media-library:generateDebugResValues UP-TO-DATE
+> Task :expo-media-library:generateDebugResources UP-TO-DATE
+> Task :expo-media-library:packageDebugResources UP-TO-DATE
+> Task :expo-modules-core:generateDebugResValues UP-TO-DATE
+> Task :expo-modules-core:generateDebugResources UP-TO-DATE
+> Task :expo-modules-core:packageDebugResources UP-TO-DATE
+> Task :expo-screen-orientation:generateDebugResValues UP-TO-DATE
+> Task :expo-screen-orientation:generateDebugResources UP-TO-DATE
+> Task :expo-screen-orientation:packageDebugResources UP-TO-DATE
+> Task :expo-video-thumbnails:generateDebugResValues UP-TO-DATE
+> Task :expo-video-thumbnails:generateDebugResources UP-TO-DATE
+> Task :expo-video-thumbnails:packageDebugResources UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateDebugResValues UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateDebugResources UP-TO-DATE
+> Task :react-native-async-storage_async-storage:packageDebugResources UP-TO-DATE
+> Task :react-native-cookies_cookies:generateDebugResValues UP-TO-DATE
+> Task :react-native-cookies_cookies:generateDebugResources UP-TO-DATE
+> Task :react-native-cookies_cookies:packageDebugResources UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugResValues UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugResources UP-TO-DATE
+> Task :react-native-gesture-handler:packageDebugResources UP-TO-DATE
+> Task :react-native-google-mobile-ads:generateDebugResValues UP-TO-DATE
+> Task :react-native-google-mobile-ads:generateDebugResources UP-TO-DATE
+> Task :react-native-google-mobile-ads:packageDebugResources UP-TO-DATE
+> Task :react-native-reanimated:generateDebugResValues UP-TO-DATE
+> Task :react-native-reanimated:generateDebugResources UP-TO-DATE
+> Task :react-native-reanimated:packageDebugResources UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugResValues UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugResources UP-TO-DATE
+> Task :react-native-safe-area-context:packageDebugResources UP-TO-DATE
+> Task :react-native-screens:generateDebugResValues UP-TO-DATE
+> Task :react-native-screens:generateDebugResources UP-TO-DATE
+> Task :react-native-screens:packageDebugResources UP-TO-DATE
+> Task :react-native-webview:generateDebugResValues UP-TO-DATE
+> Task :react-native-webview:generateDebugResources UP-TO-DATE
+> Task :react-native-webview:packageDebugResources UP-TO-DATE
+> Task :whisper.rn:generateDebugResValues UP-TO-DATE
+> Task :whisper.rn:generateDebugResources UP-TO-DATE
+> Task :whisper.rn:packageDebugResources UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:generateDebugResValues UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:generateDebugResources UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :expo:extractDeepLinksDebug UP-TO-DATE
+> Task :expo:processDebugManifest UP-TO-DATE
+> Task :expo-asset:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-asset:processDebugManifest UP-TO-DATE
+> Task :expo-av:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-av:processDebugManifest UP-TO-DATE
+> Task :expo-constants:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-constants:processDebugManifest UP-TO-DATE
+> Task :expo-document-picker:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-document-picker:processDebugManifest UP-TO-DATE
+> Task :expo-file-system:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-file-system:processDebugManifest UP-TO-DATE
+> Task :expo-font:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-font:processDebugManifest UP-TO-DATE
+> Task :expo-keep-awake:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-keep-awake:processDebugManifest UP-TO-DATE
+> Task :expo-media-library:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-media-library:processDebugManifest UP-TO-DATE
+> Task :expo-modules-core:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-modules-core:processDebugManifest UP-TO-DATE
+> Task :expo-screen-orientation:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-screen-orientation:processDebugManifest UP-TO-DATE
+> Task :expo-video-thumbnails:extractDeepLinksDebug UP-TO-DATE
+> Task :expo-video-thumbnails:processDebugManifest UP-TO-DATE
+> Task :react-native-async-storage_async-storage:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-async-storage_async-storage:processDebugManifest UP-TO-DATE
+> Task :react-native-cookies_cookies:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-cookies_cookies:processDebugManifest UP-TO-DATE
+> Task :react-native-gesture-handler:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-gesture-handler:processDebugManifest UP-TO-DATE
+> Task :react-native-google-mobile-ads:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-google-mobile-ads:processDebugManifest UP-TO-DATE
+> Task :react-native-reanimated:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-reanimated:processDebugManifest UP-TO-DATE
+> Task :react-native-safe-area-context:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-safe-area-context:processDebugManifest UP-TO-DATE
+> Task :react-native-screens:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-screens:processDebugManifest UP-TO-DATE
+> Task :react-native-webview:extractDeepLinksDebug UP-TO-DATE
+> Task :react-native-webview:processDebugManifest UP-TO-DATE
+> Task :whisper.rn:extractDeepLinksDebug UP-TO-DATE
+> Task :whisper.rn:processDebugManifest UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:extractDeepLinksDebug UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :expo:compileDebugLibraryResources UP-TO-DATE
+> Task :expo:parseDebugLocalResources UP-TO-DATE
+> Task :expo:generateDebugRFile UP-TO-DATE
+> Task :expo-asset:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-asset:parseDebugLocalResources UP-TO-DATE
+> Task :expo-asset:generateDebugRFile UP-TO-DATE
+> Task :expo-av:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-av:parseDebugLocalResources UP-TO-DATE
+> Task :expo-av:generateDebugRFile UP-TO-DATE
+> Task :expo-constants:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-constants:parseDebugLocalResources UP-TO-DATE
+> Task :expo-constants:generateDebugRFile UP-TO-DATE
+> Task :expo-document-picker:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-document-picker:parseDebugLocalResources UP-TO-DATE
+> Task :expo-document-picker:generateDebugRFile UP-TO-DATE
+> Task :expo-file-system:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-file-system:parseDebugLocalResources UP-TO-DATE
+> Task :expo-file-system:generateDebugRFile UP-TO-DATE
+> Task :expo-font:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-font:parseDebugLocalResources UP-TO-DATE
+> Task :expo-font:generateDebugRFile UP-TO-DATE
+> Task :expo-keep-awake:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-keep-awake:parseDebugLocalResources UP-TO-DATE
+> Task :expo-keep-awake:generateDebugRFile UP-TO-DATE
+> Task :expo-media-library:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-media-library:parseDebugLocalResources UP-TO-DATE
+> Task :expo-media-library:generateDebugRFile UP-TO-DATE
+> Task :expo-modules-core:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-modules-core:parseDebugLocalResources UP-TO-DATE
+> Task :expo-modules-core:generateDebugRFile UP-TO-DATE
+> Task :expo-screen-orientation:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-screen-orientation:parseDebugLocalResources UP-TO-DATE
+> Task :expo-screen-orientation:generateDebugRFile UP-TO-DATE
+> Task :expo-video-thumbnails:compileDebugLibraryResources UP-TO-DATE
+> Task :expo-video-thumbnails:parseDebugLocalResources UP-TO-DATE
+> Task :expo-video-thumbnails:generateDebugRFile UP-TO-DATE
+> Task :react-native-async-storage_async-storage:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-async-storage_async-storage:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateDebugRFile UP-TO-DATE
+> Task :react-native-cookies_cookies:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-cookies_cookies:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-cookies_cookies:generateDebugRFile UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-gesture-handler:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-gesture-handler:generateDebugRFile UP-TO-DATE
+> Task :react-native-google-mobile-ads:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-google-mobile-ads:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-google-mobile-ads:generateDebugRFile UP-TO-DATE
+> Task :react-native-reanimated:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-reanimated:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-reanimated:generateDebugRFile UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-safe-area-context:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-safe-area-context:generateDebugRFile UP-TO-DATE
+> Task :react-native-screens:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-screens:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-screens:generateDebugRFile UP-TO-DATE
+> Task :react-native-webview:compileDebugLibraryResources UP-TO-DATE
+> Task :react-native-webview:parseDebugLocalResources UP-TO-DATE
+> Task :react-native-webview:generateDebugRFile UP-TO-DATE
+> Task :whisper.rn:compileDebugLibraryResources UP-TO-DATE
+> Task :whisper.rn:parseDebugLocalResources UP-TO-DATE
+> Task :whisper.rn:generateDebugRFile UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:compileDebugLibraryResources UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:parseDebugLocalResources UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :expo:checkKotlinGradlePluginConfigurationErrors
+> Task :expo:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-asset:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-asset:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-modules-core:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-modules-core:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-modules-core:compileDebugKotlin UP-TO-DATE
+> Task :expo-modules-core:javaPreCompileDebug UP-TO-DATE
+> Task :expo-modules-core:compileDebugJavaWithJavac UP-TO-DATE
+> Task :expo-modules-core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :expo-asset:compileDebugKotlin UP-TO-DATE
+> Task :expo-asset:javaPreCompileDebug UP-TO-DATE
+> Task :expo-asset:compileDebugJavaWithJavac
+> Task :expo-av:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-av:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-av:compileDebugKotlin UP-TO-DATE
+> Task :expo-av:javaPreCompileDebug UP-TO-DATE
+> Task :expo-asset:bundleLibCompileToJarDebug
+
+> Task :expo-av:compileDebugJavaWithJavac
+./gradlew : Note: Some input files use or override a deprecated API.
+At line:1 char:1
++ ./gradlew assembleDebug --stacktrace 2>&1 | Out-File -FilePath "C:\re ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Note: Some inpu...deprecated API.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :expo-constants:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-constants:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-constants:compileDebugKotlin UP-TO-DATE
+> Task :expo-constants:javaPreCompileDebug UP-TO-DATE
+> Task :expo-av:bundleLibCompileToJarDebug
+> Task :expo-constants:compileDebugJavaWithJavac
+> Task :expo-document-picker:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-document-picker:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-constants:bundleLibCompileToJarDebug
+> Task :expo-document-picker:compileDebugKotlin UP-TO-DATE
+> Task :expo-document-picker:javaPreCompileDebug UP-TO-DATE
+> Task :expo-document-picker:compileDebugJavaWithJavac UP-TO-DATE
+> Task :expo-document-picker:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :expo-file-system:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-file-system:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-file-system:compileDebugKotlin UP-TO-DATE
+> Task :expo-file-system:javaPreCompileDebug UP-TO-DATE
+> Task :expo-file-system:compileDebugJavaWithJavac
+> Task :expo-font:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-font:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-font:compileDebugKotlin UP-TO-DATE
+> Task :expo-font:javaPreCompileDebug UP-TO-DATE
+> Task :expo-file-system:bundleLibCompileToJarDebug
+> Task :expo-font:compileDebugJavaWithJavac
+> Task :expo-keep-awake:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-keep-awake:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-keep-awake:compileDebugKotlin UP-TO-DATE
+> Task :expo-keep-awake:javaPreCompileDebug UP-TO-DATE
+> Task :expo-font:bundleLibCompileToJarDebug
+> Task :expo-keep-awake:compileDebugJavaWithJavac
+> Task :expo-media-library:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-media-library:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-media-library:compileDebugKotlin UP-TO-DATE
+> Task :expo-media-library:javaPreCompileDebug UP-TO-DATE
+> Task :expo-keep-awake:bundleLibCompileToJarDebug
+> Task :expo-media-library:compileDebugJavaWithJavac
+> Task :expo-screen-orientation:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-screen-orientation:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-media-library:bundleLibCompileToJarDebug
+> Task :expo-screen-orientation:compileDebugKotlin UP-TO-DATE
+> Task :expo-screen-orientation:javaPreCompileDebug UP-TO-DATE
+> Task :expo-screen-orientation:compileDebugJavaWithJavac UP-TO-DATE
+> Task :expo-screen-orientation:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :expo-video-thumbnails:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-video-thumbnails:generateDebugBuildConfig UP-TO-DATE
+> Task :expo-video-thumbnails:compileDebugKotlin UP-TO-DATE
+> Task :expo-video-thumbnails:javaPreCompileDebug UP-TO-DATE
+> Task :expo-video-thumbnails:compileDebugJavaWithJavac
+> Task :expo:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-async-storage_async-storage:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-async-storage_async-storage:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-async-storage_async-storage:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-cookies_cookies:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-cookies_cookies:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-cookies_cookies:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-cookies_cookies:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-gesture-handler:checkKotlinGradlePluginConfigurationErrors
+> Task :expo-video-thumbnails:bundleLibCompileToJarDebug
+> Task :react-native-gesture-handler:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-reanimated:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-reanimated:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-reanimated:packageNdkLibs NO-SOURCE
+> Task :react-native-reanimated:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-reanimated:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugKotlin UP-TO-DATE
+> Task :react-native-gesture-handler:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-gesture-handler:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-google-mobile-ads:checkKotlinGradlePluginConfigurationErrors
+> Task :react-native-google-mobile-ads:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-google-mobile-ads:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-safe-area-context:checkKotlinGradlePluginConfigurationErrors
+> Task :react-native-safe-area-context:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugKotlin UP-TO-DATE
+> Task :react-native-safe-area-context:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :react-native-screens:checkKotlinGradlePluginConfigurationErrors
+> Task :react-native-screens:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-screens:compileDebugKotlin UP-TO-DATE
+> Task :react-native-screens:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-screens:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-webview:checkKotlinGradlePluginConfigurationErrors
+> Task :react-native-webview:generateDebugBuildConfig UP-TO-DATE
+> Task :react-native-screens:bundleLibCompileToJarDebug
+> Task :react-native-webview:compileDebugKotlin UP-TO-DATE
+> Task :react-native-webview:javaPreCompileDebug UP-TO-DATE
+> Task :react-native-webview:compileDebugJavaWithJavac UP-TO-DATE
+> Task :react-native-webview:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :whisper.rn:generateDebugBuildConfig UP-TO-DATE
+> Task :whisper.rn:javaPreCompileDebug UP-TO-DATE
+> Task :whisper.rn:compileDebugJavaWithJavac UP-TO-DATE
+> Task :whisper.rn:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:generateDebugBuildConfig UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:javaPreCompileDebug UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:compileDebugJavaWithJavac UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :expo:mergeDebugShaders UP-TO-DATE
+> Task :expo:compileDebugShaders NO-SOURCE
+> Task :expo:generateDebugAssets UP-TO-DATE
+> Task :expo:packageDebugAssets UP-TO-DATE
+> Task :expo-asset:mergeDebugShaders UP-TO-DATE
+> Task :expo-asset:compileDebugShaders NO-SOURCE
+> Task :expo-asset:generateDebugAssets UP-TO-DATE
+> Task :expo-asset:packageDebugAssets UP-TO-DATE
+> Task :expo-av:mergeDebugShaders UP-TO-DATE
+> Task :expo-av:compileDebugShaders NO-SOURCE
+> Task :expo-av:generateDebugAssets UP-TO-DATE
+> Task :expo-av:packageDebugAssets UP-TO-DATE
+> Task :expo-constants:mergeDebugShaders UP-TO-DATE
+> Task :expo-constants:compileDebugShaders NO-SOURCE
+> Task :expo-constants:generateDebugAssets UP-TO-DATE
+> Task :expo-constants:packageDebugAssets UP-TO-DATE
+> Task :expo-document-picker:mergeDebugShaders UP-TO-DATE
+> Task :expo-document-picker:compileDebugShaders NO-SOURCE
+> Task :expo-document-picker:generateDebugAssets UP-TO-DATE
+> Task :expo-document-picker:packageDebugAssets UP-TO-DATE
+> Task :expo-file-system:mergeDebugShaders UP-TO-DATE
+> Task :expo-file-system:compileDebugShaders NO-SOURCE
+> Task :expo-file-system:generateDebugAssets UP-TO-DATE
+> Task :expo-file-system:packageDebugAssets UP-TO-DATE
+> Task :expo-font:mergeDebugShaders UP-TO-DATE
+> Task :expo-font:compileDebugShaders NO-SOURCE
+> Task :expo-font:generateDebugAssets UP-TO-DATE
+> Task :expo-font:packageDebugAssets UP-TO-DATE
+> Task :expo-keep-awake:mergeDebugShaders UP-TO-DATE
+> Task :expo-keep-awake:compileDebugShaders NO-SOURCE
+> Task :expo-keep-awake:generateDebugAssets UP-TO-DATE
+> Task :expo-keep-awake:packageDebugAssets UP-TO-DATE
+> Task :expo-media-library:mergeDebugShaders UP-TO-DATE
+> Task :expo-media-library:compileDebugShaders NO-SOURCE
+> Task :expo-media-library:generateDebugAssets UP-TO-DATE
+> Task :expo-media-library:packageDebugAssets UP-TO-DATE
+> Task :expo-modules-core:mergeDebugShaders UP-TO-DATE
+> Task :expo-modules-core:compileDebugShaders NO-SOURCE
+> Task :expo-modules-core:generateDebugAssets UP-TO-DATE
+> Task :expo-modules-core:packageDebugAssets UP-TO-DATE
+> Task :expo-screen-orientation:mergeDebugShaders UP-TO-DATE
+> Task :expo-screen-orientation:compileDebugShaders NO-SOURCE
+> Task :expo-screen-orientation:generateDebugAssets UP-TO-DATE
+> Task :expo-screen-orientation:packageDebugAssets UP-TO-DATE
+> Task :expo-video-thumbnails:mergeDebugShaders UP-TO-DATE
+> Task :expo-video-thumbnails:compileDebugShaders NO-SOURCE
+> Task :expo-video-thumbnails:generateDebugAssets UP-TO-DATE
+> Task :expo-video-thumbnails:packageDebugAssets UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeDebugShaders UP-TO-DATE
+> Task :react-native-async-storage_async-storage:compileDebugShaders NO-SOURCE
+> Task :react-native-async-storage_async-storage:generateDebugAssets UP-TO-DATE
+> Task :react-native-async-storage_async-storage:packageDebugAssets UP-TO-DATE
+> Task :react-native-cookies_cookies:mergeDebugShaders UP-TO-DATE
+> Task :react-native-cookies_cookies:compileDebugShaders NO-SOURCE
+> Task :react-native-cookies_cookies:generateDebugAssets UP-TO-DATE
+> Task :react-native-cookies_cookies:packageDebugAssets UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugShaders UP-TO-DATE
+> Task :react-native-gesture-handler:compileDebugShaders NO-SOURCE
+> Task :react-native-gesture-handler:generateDebugAssets UP-TO-DATE
+> Task :react-native-gesture-handler:packageDebugAssets UP-TO-DATE
+> Task :react-native-google-mobile-ads:mergeDebugShaders UP-TO-DATE
+> Task :react-native-google-mobile-ads:compileDebugShaders NO-SOURCE
+> Task :react-native-google-mobile-ads:generateDebugAssets UP-TO-DATE
+> Task :react-native-google-mobile-ads:packageDebugAssets UP-TO-DATE
+> Task :react-native-reanimated:mergeDebugShaders UP-TO-DATE
+> Task :react-native-reanimated:compileDebugShaders NO-SOURCE
+> Task :react-native-reanimated:generateDebugAssets UP-TO-DATE
+> Task :react-native-reanimated:packageDebugAssets UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugShaders UP-TO-DATE
+> Task :react-native-safe-area-context:compileDebugShaders NO-SOURCE
+> Task :react-native-safe-area-context:generateDebugAssets UP-TO-DATE
+> Task :react-native-safe-area-context:packageDebugAssets UP-TO-DATE
+> Task :react-native-screens:mergeDebugShaders UP-TO-DATE
+> Task :react-native-screens:compileDebugShaders NO-SOURCE
+> Task :react-native-screens:generateDebugAssets UP-TO-DATE
+> Task :react-native-screens:packageDebugAssets UP-TO-DATE
+> Task :react-native-webview:mergeDebugShaders UP-TO-DATE
+> Task :react-native-webview:compileDebugShaders NO-SOURCE
+> Task :react-native-webview:generateDebugAssets UP-TO-DATE
+> Task :react-native-webview:packageDebugAssets UP-TO-DATE
+> Task :whisper.rn:mergeDebugShaders UP-TO-DATE
+> Task :whisper.rn:compileDebugShaders NO-SOURCE
+> Task :whisper.rn:generateDebugAssets UP-TO-DATE
+> Task :whisper.rn:packageDebugAssets UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:mergeDebugShaders UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:compileDebugShaders NO-SOURCE
+> Task :wokcito_ffmpeg-kit-react-native:generateDebugAssets UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:packageDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :react-native-async-storage_async-storage:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-cookies_cookies:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-reanimated:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-webview:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :whisper.rn:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-av:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-document-picker:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-file-system:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-font:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-keep-awake:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibRuntimeToJarDebug
+> Task :react-native-gesture-handler:bundleLibRuntimeToJarDebug
+> Task :react-native-screens:bundleLibRuntimeToJarDebug
+> Task :expo-constants:bundleLibRuntimeToJarDebug
+> Task :expo-media-library:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-screen-orientation:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-video-thumbnails:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :expo-asset:bundleLibRuntimeToJarDebug
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :expo-asset:processDebugJavaRes
+> Task :expo-av:processDebugJavaRes UP-TO-DATE
+> Task :expo-constants:processDebugJavaRes UP-TO-DATE
+> Task :expo-document-picker:processDebugJavaRes UP-TO-DATE
+> Task :expo-file-system:processDebugJavaRes UP-TO-DATE
+> Task :expo-font:processDebugJavaRes UP-TO-DATE
+> Task :expo-keep-awake:processDebugJavaRes UP-TO-DATE
+> Task :expo-media-library:processDebugJavaRes UP-TO-DATE
+> Task :expo-modules-core:processDebugJavaRes UP-TO-DATE
+> Task :expo-screen-orientation:processDebugJavaRes UP-TO-DATE
+> Task :expo-video-thumbnails:processDebugJavaRes UP-TO-DATE
+> Task :react-native-async-storage_async-storage:processDebugJavaRes NO-SOURCE
+> Task :react-native-cookies_cookies:processDebugJavaRes NO-SOURCE
+> Task :react-native-gesture-handler:processDebugJavaRes UP-TO-DATE
+> Task :react-native-reanimated:processDebugJavaRes NO-SOURCE
+> Task :react-native-safe-area-context:processDebugJavaRes UP-TO-DATE
+> Task :react-native-screens:processDebugJavaRes UP-TO-DATE
+> Task :react-native-webview:processDebugJavaRes UP-TO-DATE
+> Task :whisper.rn:processDebugJavaRes NO-SOURCE
+> Task :wokcito_ffmpeg-kit-react-native:processDebugJavaRes NO-SOURCE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :react-native-async-storage_async-storage:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-cookies_cookies:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :wokcito_ffmpeg-kit-react-native:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-gesture-handler:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-reanimated:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-safe-area-context:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-screens:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :react-native-webview:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :whisper.rn:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-asset:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-av:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-constants:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-document-picker:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-file-system:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-font:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-keep-awake:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-media-library:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-screen-orientation:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-video-thumbnails:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :expo-modules-core:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :expo:mergeDebugJniLibFolders UP-TO-DATE
+> Task :expo:mergeDebugNativeLibs NO-SOURCE
+> Task :expo:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :expo-asset:mergeDebugJniLibFolders UP-TO-DATE
+> Task :expo-asset:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-asset:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :expo-av:configureCMakeDebug[arm64-v8a]
+
+> Task :react-native-google-mobile-ads:compileDebugKotlin FAILED
+e: Incompatible classes were found in dependencies. Remove them from the classpath or use '-Xskip-metadata-version-check' to 
+suppress errors
+e: Supertypes of the following classes cannot be resolved. Please make sure you have the required dependencies in the classpath:
+    class io.invertase.googlemobileads.ReactNativeAppModule, unresolved supertypes: NativeAppModuleSpec
+Adding -Xextended-compiler-checks argument might provide additional information.
+
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/abuse.orcas.externs.java.com.google.abuse.orcas.externs_externs.kotlin_moduleModule was compiled with an 
+incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.gms.libs.filecompliance.proto_file_access_api_type_kt_proto_lite.kotlin_moduleModul
+e was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics.internal_ad_quality_lib_impl.kotlin_moduleModule
+ was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_ad_quality_data_pinger.kotlin_moduleModule was 
+compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_ad_quality_data_serializer.kotlin_moduleModule 
+was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_ad_quality_data_store_module.kotlin_moduleModule
+ was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_ad_quality_kt_proto_lite.kotlin_moduleModule 
+was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_ad_quality_lib.kotlin_moduleModule was compiled 
+with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_ad_quality_scope_provider.kotlin_moduleModule 
+was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.admob.ad_quality_metrics_clock.kotlin_moduleModule was compiled with an 
+incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.ads.mobile.sdk.internal.annotations_annotations.kotlin_moduleModule was 
+compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.ads.mobile.sdk.internal.util_clock.kotlin_moduleModule was compiled with 
+an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.ads.mobile.sdk.internal.util_clock_module.kotlin_moduleModule was 
+compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.android.libraries.internal.ads.adshield.protos_adshield_options_kt_proto_lite.kotlin_module
+Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 
+1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.async.coroutines_annotations.kotlin_moduleModule was compiled with an incompatible version 
+of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/java.com.google.async.coroutines_coroutines-android.kotlin_moduleModule was compiled with an incompatible 
+version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/logs.proto.chrome_search_chrome_search_extensions_kt_proto_lite.kotlin_moduleModule was compiled with an 
+incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/third_party.kotlin.protobuf.src.commonMain.kotlin.com.google.protobuf.kotlin_only_for_use_in_proto_generate
+d_code_its_generator_and_tests.kotlin_moduleModule was compiled with an incompatible version of Kotlin. The binary version of its 
+metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/a7e238afb5642c79bc7ebec6b10add79/transformed/jetified-play-services-ads-25
+.0.0-api.jar!/META-INF/third_party.kotlin.protobuf.src.commonMain.kotlin.com.google.protobuf.kotlin_shared_runtime.kotlin_moduleMo
+dule was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.2.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin-stdlib-2.1.0.
+jar!/META-INF/kotlin-stdlib-jdk7.kotlin_moduleModule was compiled with an incompatible version of Kotlin. The binary version of 
+its metadata is 2.1.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin-stdlib-2.1.0.
+jar!/META-INF/kotlin-stdlib-jdk8.kotlin_moduleModule was compiled with an incompatible version of Kotlin. The binary version of 
+its metadata is 2.1.0, expected version is 1.9.0.
+e: file:///C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin-stdlib-2.1.0.
+jar!/META-INF/kotlin-stdlib.kotlin_moduleModule was compiled with an incompatible version of Kotlin. The binary version of its 
+metadata is 2.1.0, expected version is 1.9.0.
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:34:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:35:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:36:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:37:52 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:37:61 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:37:76 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:38:64 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:38:73 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:38:88 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:43:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:44:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:45:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:46:27 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:47:39 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:53:10 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:58:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:59:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:60:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:61:27 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:62:39 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:67:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:68:27 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAdHelper.kt:69:39 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAppOpenModule.kt:39:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAppOpenModule.kt:46:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAppOpenModule.kt:55:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAppOpenModule.kt:62:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsAppOpenModule.kt:65:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:59:38 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:75:13 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:76:13 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:80:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:95:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:96:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:110:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:117:14 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:125:16 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:127:16 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:129:14 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:130:14 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:131:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:139:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:149:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:156:19 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:157:19 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:158:19 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:159:11 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:168:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:169:44 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:170:30 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:171:31 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:172:43 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:180:16 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:181:16 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:184:15 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:184:21 Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:188:35 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:191:39 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:193:24 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:198:20 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:200:21 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:201:21 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:202:13 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:215:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:219:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:223:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:231:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:240:18 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:242:17 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:246:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:257:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:258:15 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:259:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:274:13 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:275:13 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsFullScreenAdModule.kt:276:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsInterstitialModule.kt:40:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsInterstitialModule.kt:47:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsInterstitialModule.kt:56:29 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsInterstitialModule.kt:63:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsInterstitialModule.kt:66:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:30:32 Not enough information to infer type variable T
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:30:94 Unresolved reference: java
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:32:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:32:27 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:33:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:38:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:39:18 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:40:20 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:41:20 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:46:11 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:51:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaView.kt:55:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaViewManager.kt:42:10 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsMediaViewManager.kt:47:10 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. 
+The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:41:21 Unresolved reference: checkNotNull
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:43:18 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:96:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:105:30 For-loop range must have an 'iterator()' method
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:107:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:108:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:109:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:110:18 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:112:17 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:121:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:122:13 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:129:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:132:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:133:17 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:136:11 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:144:21 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:146:21 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:155:46 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:156:17 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:162:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsModule.kt:167:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The actual 
+metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:46:18 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:47:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:51:32 Not enough information to infer type variable T
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:51:94 Unresolved reference: java
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:53:23 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:54:9 'return' is not allowed here
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:56:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:56:18 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:57:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:64:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:65:36 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:66:30 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:67:38 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:68:34 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:69:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:70:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:71:36 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:72:30 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:73:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:74:31 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:76:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:80:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:81:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:81:17 Class 'kotlin.coroutines.CoroutineContext' was compiled with an incompatible 
+version of Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/coroutines/CoroutineContext.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:81:50 Class 'kotlin.coroutines.CoroutineContext' was compiled with an incompatible 
+version of Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/coroutines/CoroutineContext.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:82:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:83:17 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:83:36 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:83:48 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:84:29 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:89:11 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:94:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:95:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:96:18 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:97:18 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:101:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdView.kt:105:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdViewManager.kt:43:11 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdViewManager.kt:44:12 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdViewManager.kt:56:10 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdViewManager.kt:61:10 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdViewManager.kt:65:22 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeAdViewManager.kt:77:22 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:38:27 Unresolved reference: HashMap
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:45:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:50:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:51:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:52:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:53:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:54:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:55:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:56:12 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:57:28 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:58:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:58:38 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:59:12 Unresolved reference: run
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:60:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:62:22 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:64:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:64:33 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:65:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:65:31 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:66:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:67:12 Unresolved reference: run
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:68:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:71:30 Unresolved reference: let
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:72:22 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:72:47 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:73:22 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:73:52 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:74:22 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:74:44 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:75:14 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:78:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:89:11 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:91:7 Unresolved reference: it
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:106:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:110:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:114:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:118:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:124:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:128:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:132:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:136:9 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:185:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:186:51 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:187:20 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:189:25 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:190:25 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:191:25 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:192:13 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:194:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:198:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:202:17 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:203:7 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:210:17 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:212:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:213:15 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsNativeModule.kt:214:51 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:32:12 Unresolved reference: listOf
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:34:53 Too many arguments for public constructor 
+ReactNativeGoogleMobileAdsNativeAdViewManager() defined in 
+io.invertase.googlemobileads.ReactNativeGoogleMobileAdsNativeAdViewManager
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:35:50 Too many arguments for public constructor 
+ReactNativeGoogleMobileAdsMediaViewManager() defined in io.invertase.googlemobileads.ReactNativeGoogleMobileAdsMediaViewManager
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:41:28 Cannot access 'NativeAppModuleSpec' which is a supertype of 
+'io.invertase.googlemobileads.ReactNativeAppModule'. Check your module classpath for missing or conflicting dependencies
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:41:43 Type mismatch: inferred type is ReactNativeAppModule but NativeModule? was expected
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:55:62 Unresolved reference: HashMap
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:57:18 Unresolved reference: moduleInfos[ReactNativeAppModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:57:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:57:40 Cannot access 'NativeAppModuleSpec' which is a supertype of 
+'io.invertase.googlemobileads.ReactNativeAppModule'. Check your module classpath for missing or conflicting dependencies
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:59:32 Cannot access 'NativeAppModuleSpec' which is a supertype of 
+'io.invertase.googlemobileads.ReactNativeAppModule'. Check your module classpath for missing or conflicting dependencies
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:60:39 Unresolved reference: java
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:66:18 Unresolved reference: moduleInfos[ReactNativeGoogleMobileAdsModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:66:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:75:18 Unresolved reference: moduleInfos[ReactNativeGoogleMobileAdsConsentModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:75:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:84:18 Unresolved reference: moduleInfos[ReactNativeGoogleMobileAdsAppOpenModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:84:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:93:18 Unresolved reference: moduleInfos[ReactNativeGoogleMobileAdsInterstitialModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:93:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:102:18 Unresolved reference: moduleInfos[ReactNativeGoogleMobileAdsRewardedModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:102:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:111:18 Unresolved reference: 
+moduleInfos[ReactNativeGoogleMobileAdsRewardedInterstitialModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:111:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:120:18 Unresolved reference: moduleInfos[ReactNativeGoogleMobileAdsNativeModule.NAME]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsPackage.kt:120:18 No set method providing array access
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedInterstitialModule.kt:40:5 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedInterstitialModule.kt:47:5 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+
+> Task :expo-av:buildCMakeDebug[arm64-v8a]
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedInterstitialModule.kt:56:28 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedInterstitialModule.kt:63:26 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedInterstitialModule.kt:66:26 Class 'kotlin.Unit' was compiled with an incompatible version of 
+Kotlin. The actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedModule.kt:40:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedModule.kt:47:5 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedModule.kt:56:16 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedModule.kt:63:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobilea
+ds/ReactNativeGoogleMobileAdsRewardedModule.kt:66:26 Class 'kotlin.Unit' was compiled with an incompatible version of Kotlin. The 
+actual metadata version is 2.1.0, but the compiler version 1.9.0 can read versions up to 2.0.0.
+The class is loaded from C:/Users/pr23j/.gradle/caches/8.8/transforms/c706199dd56a8e89dc0f8a4d5d166953/transformed/jetified-kotlin
+-stdlib-2.1.0.jar!/kotlin/Unit.class
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/oldarch/io/invertase/googlemobileads
+/NativeGoogleMobileAdsNativeModuleSpec.kt:15:8 Not enough information to infer type variable T
+e: file:///C:/react-native/my-browser/node_modules/react-native-google-mobile-ads/android/src/oldarch/io/invertase/googlemobileads
+/NativeGoogleMobileAdsNativeModuleSpec.kt:15:74 Unresolved reference: java
+> Task :expo-modules-core:bundleLibRuntimeToJarDebug
+
+> Task :expo:compileDebugKotlin
+w: file:///C:/react-native/my-browser/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:20:34 'ReactFeatureFlags' is deprecated. Deprecated in Java
+w: file:///C:/react-native/my-browser/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:153:11 'ReactFeatureFlags' is deprecated. Deprecated in Java
+w: file:///C:/react-native/my-browser/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:161:34 'constructor ReactDelegate(Activity!, ReactNativeHost!, String?, Bundle?)' is deprecated. Deprecated in Java
+w: file:///C:/react-native/my-browser/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:231:10 'ReactFeatureFlags' is deprecated. Deprecated in Java
+
+> Task :app:mergeExtDexDebug
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':react-native-google-mobile-ads:compileDebugKotlin'.
+> A failure occurred while executing 
+org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':react-native-google-mobile-ads:compileDebugKotlin'.
+	at 
+org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:130)
+	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:282)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:128)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:116)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+	at org.gradle.execution.plan.LocalTaskNodeExecutor.execute(LocalTaskNodeExecutor.java:42)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:331)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:318)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecut
+ionGraph.java:314)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:80)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.
+java:314)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.
+java:303)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:463)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:380)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing 
+org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:287)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:130)
+	at org.gradle.internal.Factories$1.create(Factories.java:31)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:336)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:319)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLock(DefaultWorkerLeaseService.java:324)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:126)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:92)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForAll(DefaultAsyncWorkTracker.java:78)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForCompletion(DefaultAsyncWorkTracker.java:66)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:252)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:229)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:212)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:195)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:162)
+	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:105)
+	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:44)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:59)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:56)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:56)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:44)
+	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:41)
+	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:74)
+	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:50)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:28)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(RemovePreviousOutputsStep.java:67)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(RemovePreviousOutputsStep.java:37)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:61)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:26)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:67)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:45)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(ResolveInputChangesStep.java:40)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(ResolveInputChangesStep.java:29)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:75)
+	at org.gradle.internal.Either$Right.fold(Either.java:175)
+	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:73)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:48)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:46)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:35)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:76)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:54)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:54)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:36)
+	at 
+org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+	at 
+org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+	at 
+org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:49)
+	at 
+org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:27)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:71)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.execute(ResolveChangesStep.java:65)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.execute(ResolveChangesStep.java:36)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:106)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:55)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.ja
+va:64)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.ja
+va:43)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.executeWithNonEmptySources(AbstractSkipEmptyWorkStep.java:125)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:61)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:36)
+	at 
+org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:36)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:23)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(HandleStaleOutputsStep.java:75)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(HandleStaleOutputsStep.java:41)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(AssignMutableWorkspaceStep.java:35)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:289)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:31)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:22)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.j
+ava:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:48)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:35)
+	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:61)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:127)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:116)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+	at org.gradle.execution.plan.LocalTaskNodeExecutor.execute(LocalTaskNodeExecutor.java:42)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:331)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:318)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecut
+ionGraph.java:314)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:80)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.
+java:314)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.
+java:303)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:463)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:380)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:20)
+	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:141)
+	at org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction.execute(GradleCompilerRunne
+rWithWorkers.kt:73)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:63)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.ja
+va:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:174)
+	at 
+org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:187)
+	at 
+org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:120)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:162)
+	at org.gradle.internal.Factories$1.create(Factories.java:31)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:264)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:128)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:133)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:157)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:126)
+	... 2 more
+
+
+BUILD FAILED in 26s
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.8/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+435 actionable tasks: 50 executed, 385 up-to-date

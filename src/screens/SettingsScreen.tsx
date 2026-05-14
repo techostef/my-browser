@@ -21,6 +21,7 @@ import { useActiveTabId, useTabActions } from "../store/tabStore";
 import { LOCAL_MODEL_PATH } from "../lib/videoEditor/whisper";
 import { clearAllSubtitles, getSubtitleCount } from "../lib/videoEditor/subtitleCache";
 import { ENABLE_AI_CAPTIONS } from "../config";
+import { AdBanner } from '../components/AdBanner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -565,7 +566,9 @@ export default function SettingsScreen() {
           <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{section.title}</Text>
         )}
         stickySectionHeadersEnabled={false}
+        contentContainerStyle={{ paddingBottom: 60 }}
       />
+      <AdBanner />
     </SafeAreaView>
   );
 }

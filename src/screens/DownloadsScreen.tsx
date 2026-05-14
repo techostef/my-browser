@@ -36,6 +36,8 @@ import ManageLabelsModal from "../components/downloads/ManageLabelsModal";
 import MoveProgressModal from "../components/downloads/MoveProgressModal";
 import DownloadsHeader from "../components/downloads/DownloadsHeader";
 import FilterBar from "../components/downloads/FilterBar";
+import { AdBanner } from '../components/AdBanner';
+import { useAdActions } from '../store/adStore';
 
 const DEVICE_ROOT_PATH = "__device_download__";
 const TRASH_FOLDER_PATH = "__trash__";
@@ -63,6 +65,7 @@ export default function DownloadsScreen() {
     deleteFromTrash,
     prefetchDeviceFileSizes,
   } = useDownloads();
+  const { incrementDownload } = useAdActions();
 
   // ── state ──────────────────────────────────────────────────────────────────
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
@@ -97,6 +100,32 @@ export default function DownloadsScreen() {
   fileLabelsRef.current = fileLabels;
   const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
   prefetchSizesRef.current = prefetchDeviceFileSizes;
+
+  // Track download completions to trigger interstitial ad every 4 downloads
+  const prevStatusRef = useRef<Record<string, string>>({});
+  const adTrackerInitRef = useRef(false);
+
+  useEffect(() => {
+    if (!adTrackerInitRef.current) {
+      // Seed with current statuses on mount so pre-existing completed files
+      // (from cache/device scan) don't count as new completions.
+      downloads.forEach(d => {
+        prevStatusRef.current[d.id] = d.status;
+      });
+      adTrackerInitRef.current = true;
+      return;
+    }
+
+    downloads.forEach(d => {
+      const prev = prevStatusRef.current[d.id];
+      // Only count when source is 'private' — active downloads complete with source undefined
+      // first, then refresh replaces them with source:'private' tasks. This prevents double-counting.
+      if (prev !== 'completed' && d.status === 'completed' && d.source === 'private') {
+        incrementDownload();
+      }
+      prevStatusRef.current[d.id] = d.status;
+    });
+  }, [downloads, incrementDownload]);
 
   useEffect(() => {
     currentFolderPathRef.current = currentFolderPath;
@@ -1043,6 +1072,7 @@ export default function DownloadsScreen() {
       />
 
       <MoveProgressModal progress={moveProgress} />
+      <AdBanner />
     </SafeAreaView>
   );
 }
@@ -1056,6 +1086,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
+    paddingBottom: 60,
   },
   listRow: {
     justifyContent: "space-between",

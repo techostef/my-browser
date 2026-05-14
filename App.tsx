@@ -16,6 +16,8 @@ import { DownloadProvider } from './src/store/downloadStore';
 import { TabProvider } from './src/store/tabStore';
 import { SettingsProvider, useSettings } from './src/store/settingsStore';
 import { ProjectProvider } from './src/store/projectStore';
+import { AdProvider } from './src/store/adStore';
+import { AdController } from './src/components/AdController';
 import type { RootStackParamList } from './src/types/videoEditor';
 
 const Tab = createBottomTabNavigator();
@@ -90,6 +92,7 @@ function AppNavigator() {
 
   return (
     <NavigationContainer theme={navTheme}>
+      <AdController />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="Trim" component={TrimScreen} />
@@ -107,7 +110,9 @@ export default function App() {
         <ProjectProvider>
           <TabProvider>
             <DownloadProvider>
-              <AppNavigator />
+              <AdProvider>
+                <AppNavigator />
+              </AdProvider>
             </DownloadProvider>
           </TabProvider>
         </ProjectProvider>
