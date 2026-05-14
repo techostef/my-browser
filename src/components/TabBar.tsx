@@ -8,6 +8,7 @@ import {
   Modal,
   SafeAreaView,
   Dimensions,
+  Alert,
 } from "react-native";
 import { BrowserTab } from "../types";
 
@@ -24,6 +25,7 @@ interface Props {
   onAddTab: () => void;
   onAddIncognitoTab: () => void;
   onRemoveTab: (id: string) => void;
+  onCloseAllTabs: (ids: string[]) => void;
   visible: boolean;
   onClose: () => void;
 }
@@ -35,6 +37,7 @@ export default function TabBar({
   onAddTab,
   onAddIncognitoTab,
   onRemoveTab,
+  onCloseAllTabs,
   visible,
   onClose,
 }: Props) {
@@ -60,6 +63,26 @@ export default function TabBar({
     onClose();
   };
 
+  const handleCloseAll = () => {
+    if (visibleTabs.length === 0) return;
+    const label = isIncognito ? "incognito tabs" : "tabs";
+    Alert.alert(
+      `Close all ${label}?`,
+      `This will close all ${visibleTabs.length} ${label}.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Close All",
+          style: "destructive",
+          onPress: () => {
+            onCloseAllTabs(visibleTabs.map(t => t.id));
+            onClose();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -69,6 +92,14 @@ export default function TabBar({
       <SafeAreaView style={[styles.root, isIncognito && styles.rootIncognito]}>
         {/* Header */}
         <View style={[styles.header, isIncognito && styles.headerIncognito]}>
+          <TouchableOpacity
+            style={styles.closeAllBtn}
+            onPress={handleCloseAll}
+            disabled={visibleTabs.length === 0}>
+            <Text style={[styles.closeAllText, visibleTabs.length === 0 && styles.closeAllTextDisabled]}>
+              Close All
+            </Text>
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, isIncognito && styles.headerTitleIncognito]}>
             {visibleTabs.length} {isIncognito ? "incognito" : ""} tab{visibleTabs.length !== 1 ? "s" : ""}
           </Text>
@@ -250,6 +281,9 @@ const styles = StyleSheet.create({
 
   doneBtn: { paddingHorizontal: 4 },
   doneBtnText: { fontSize: 17, fontWeight: "600", color: "#4ECDC4" },
+  closeAllBtn: { paddingHorizontal: 4 },
+  closeAllText: { fontSize: 17, fontWeight: "600", color: "#FF3B30" },
+  closeAllTextDisabled: { opacity: 0.3 },
 
   segmentRow: {
     flexDirection: "row",

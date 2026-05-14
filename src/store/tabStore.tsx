@@ -31,6 +31,7 @@ type TabAction =
   | { type: 'PUSH_URL'; payload: { id: string; url: string; title?: string } }
   | { type: 'REPLACE_URL'; payload: { id: string; url: string; title?: string } }
   | { type: 'NAVIGATE_HISTORY'; payload: { id: string; direction: -1 | 1 } }
+  | { type: 'REMOVE_MULTIPLE_TABS'; payload: { ids: string[] } }
   | { type: 'RESTORE'; payload: TabState };
 
 interface TabState {
@@ -79,6 +80,17 @@ function tabReducer(state: TabState, action: TabAction): TabState {
         );
         newActiveId = visible[Math.max(0, visibleIdx)].id;
       }
+      return { tabs: newTabs, activeTabId: newActiveId };
+    }
+    case 'REMOVE_MULTIPLE_TABS': {
+      const idSet = new Set(action.payload.ids);
+      let newTabs = state.tabs.filter(t => !idSet.has(t.id));
+      if (newTabs.filter(t => !t.hidden).length === 0) {
+        newTabs = [...newTabs, createTab()];
+      }
+      const newActiveId = idSet.has(state.activeTabId)
+        ? (newTabs.find(t => !t.hidden)?.id ?? newTabs[0].id)
+        : state.activeTabId;
       return { tabs: newTabs, activeTabId: newActiveId };
     }
     case 'UPDATE_TAB': {
@@ -176,6 +188,7 @@ function tabReducer(state: TabState, action: TabAction): TabState {
 interface TabActions {
   addTab: (url?: string, incognito?: boolean) => void;
   removeTab: (id: string) => void;
+  removeMultipleTabs: (ids: string[]) => void;
   setActiveTab: (id: string) => void;
   updateTab: (id: string, updates: { url?: string; title?: string; lastVisitedUrl?: string }) => void;
   setTabHidden: (id: string, hidden: boolean) => void;
@@ -257,6 +270,10 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'REMOVE_TAB', payload: { id } });
   }, []);
 
+  const removeMultipleTabs = useCallback((ids: string[]) => {
+    dispatch({ type: 'REMOVE_MULTIPLE_TABS', payload: { ids } });
+  }, []);
+
   const setActiveTab = useCallback((id: string) => {
     dispatch({ type: 'SET_ACTIVE_TAB', payload: { id } });
   }, []);
@@ -300,6 +317,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     () => ({
       addTab,
       removeTab,
+      removeMultipleTabs,
       setActiveTab,
       updateTab,
       setTabHidden,
@@ -308,7 +326,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       navigateHistory,
       getTabsSnapshot,
     }),
-    [addTab, removeTab, setActiveTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot],
+    [addTab, removeTab, removeMultipleTabs, setActiveTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot],
   );
 
   const legacyValue = useMemo<TabContextValue>(

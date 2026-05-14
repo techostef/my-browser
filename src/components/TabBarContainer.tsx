@@ -6,7 +6,7 @@ function TabBarContainerInner() {
   const [visible, setVisible] = useState(false);
   const tabs = useTabList();
   const activeTabId = useActiveTabId();
-  const { addTab, removeTab, setActiveTab } = useTabActions();
+  const { addTab, removeTab, removeMultipleTabs, setActiveTab } = useTabActions();
 
   const open = useCallback(() => setVisible(true), []);
   const close = useCallback(() => setVisible(false), []);
@@ -34,6 +34,7 @@ function TabBarContainerInner() {
         onAddTab={() => addTab('about:home')}
         onAddIncognitoTab={() => addTab('about:home', true)}
         onRemoveTab={removeTab}
+        onCloseAllTabs={removeMultipleTabs}
         visible={visible}
         onClose={close}
       />
