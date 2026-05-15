@@ -1,7 +1,11 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
-import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
+import {
+  ShouldStartLoadRequest,
+  WebViewErrorEvent,
+  WebViewHttpErrorEvent,
+} from 'react-native-webview/lib/WebViewTypes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -23,6 +27,7 @@ import {
 } from '../store/tabStore';
 import { DetectedVideo, HlsVariant } from '../types';
 import Browser from '@/components/Browser';
+import PageErrorView, { PageError } from '../components/PageErrorView';
 import PopupBlockedBanner from '../components/PopupBlockedBanner';
 import CookieManager from '@react-native-cookies/cookies';
 
@@ -130,6 +135,16 @@ export default function BrowserScreen() {
   const [bannerDismissedMap, setBannerDismissedMap] = useState<Record<string, boolean>>({});
   const [playingVideoUrlMap, setPlayingVideoUrlMap] = useState<Record<string, string>>({});
   const [segmentBlobMap, setSegmentBlobMap] = useState<Record<string, Record<string, string>>>({});
+
+  // Per-tab page-load state: progress bar + custom error page.
+  interface LoadState { loading: boolean; progress: number; error: PageError | null; }
+  const [loadStateMap, setLoadStateMap] = useState<Record<string, LoadState>>({});
+  const updateLoadState = useCallback((tabId: string, partial: Partial<LoadState>) => {
+    setLoadStateMap(prev => {
+      const current = prev[tabId] ?? { loading: false, progress: 0, error: null };
+      return { ...prev, [tabId]: { ...current, ...partial } };
+    });
+  }, []);
 
   const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number; tabId: string }>>(new Map());
 
@@ -639,6 +654,55 @@ export default function BrowserScreen() {
   const handleGoBackActive = useCallback(() => { handleGoBack(activeTabId); }, [handleGoBack, activeTabId]);
   const handleGoForwardActive = useCallback(() => { handleGoForward(activeTabId); }, [handleGoForward, activeTabId]);
   const handleReloadActive = useCallback(() => { webViewRefs.current[activeTabId]?.reload(); }, [activeTabId]);
+  const handleRetryActive = useCallback(() => {
+    updateLoadState(activeTabId, { loading: true, progress: 0.05, error: null });
+    webViewRefs.current[activeTabId]?.reload();
+  }, [activeTabId, updateLoadState]);
+
+  const handleLoadStart = useCallback(
+    (tabId: string) => () => {
+      updateLoadState(tabId, { loading: true, progress: 0.05, error: null });
+    },
+    [updateLoadState],
+  );
+  const handleLoadProgress = useCallback(
+    (tabId: string) => (progress: number) => {
+      updateLoadState(tabId, { loading: progress < 1, progress });
+    },
+    [updateLoadState],
+  );
+  const handleLoadEnd = useCallback(
+    (tabId: string) => () => {
+      updateLoadState(tabId, { loading: false, progress: 1 });
+    },
+    [updateLoadState],
+  );
+  const handleLoadError = useCallback(
+    (tabId: string) => (event: WebViewErrorEvent) => {
+      const { url, description, code } = event.nativeEvent;
+      // Ignore user-cancelled loads (e.g. a new navigation supersedes the previous one).
+      if (code === -999 || code === -1) return;
+      updateLoadState(tabId, {
+        loading: false,
+        progress: 0,
+        error: { kind: 'network', url, code, description },
+      });
+    },
+    [updateLoadState],
+  );
+  const handleHttpError = useCallback(
+    (tabId: string) => (event: WebViewHttpErrorEvent) => {
+      const { url, statusCode, description } = event.nativeEvent;
+      if (statusCode < 400) return;
+      updateLoadState(tabId, {
+        loading: false,
+        progress: 0,
+        error: { kind: 'http', url, code: statusCode, description },
+      });
+    },
+    [updateLoadState],
+  );
+
   const setWebViewRef = useCallback((tabId: string, ref: WebView | null) => {
     webViewRefs.current[tabId] = ref;
   }, []);
@@ -654,6 +718,7 @@ export default function BrowserScreen() {
         delete webViewCanGoForwardRef.current[id];
         setDetectedVideosMap(prev => { const next = { ...prev }; delete next[id]; return next; });
         setBannerDismissedMap(prev => { const next = { ...prev }; delete next[id]; return next; });
+        setLoadStateMap(prev => { const next = { ...prev }; delete next[id]; return next; });
       }
     }
   }, [tabs]);
@@ -694,9 +759,33 @@ export default function BrowserScreen() {
           handleMessage={handleMessage}
           handleNavigationStateChange={handleNavigationStateChange}
           handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+          handleLoadStart={handleLoadStart}
+          handleLoadProgress={handleLoadProgress}
+          handleLoadEnd={handleLoadEnd}
+          handleLoadError={handleLoadError}
+          handleHttpError={handleHttpError}
           adBlockEnabled={settings.adBlockEnabled}
           popupBlockEnabled={settings.popupBlockEnabled}
         />
+
+        {(() => {
+          const ls = loadStateMap[activeTabId];
+          if (!ls?.loading || ls.progress >= 1) return null;
+          return (
+            <View pointerEvents="none" style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.max(2, ls.progress * 100)}%` }]} />
+            </View>
+          );
+        })()}
+
+        {loadStateMap[activeTabId]?.error && (
+          <PageErrorView
+            error={loadStateMap[activeTabId]!.error!}
+            onRetry={handleRetryActive}
+            onGoBack={handleGoBackActive}
+            canGoBack={(tabs.find(t => t.id === activeTabId)?.historyIndex ?? 0) > 0}
+          />
+        )}
 
         <VideoDetectedBanner
           visible={!isVideoPlaying && !activeBannerDismissed}
@@ -762,6 +851,19 @@ const styles = StyleSheet.create({
   },
   webviewArea: {
     flex: 1,
+  },
+  progressTrack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: 'transparent',
+    zIndex: 10,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4ECDC4',
   },
   webviewContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -832,6 +934,11 @@ interface WebViewListProps {
   handleMessage: (tabId: string) => (event: { nativeEvent: { data: string } }) => void;
   handleNavigationStateChange: (tabId: string) => (navState: WebViewNavigation) => void;
   handleShouldStartLoadWithRequest: (tabId: string) => (request: ShouldStartLoadRequest) => boolean;
+  handleLoadStart: (tabId: string) => () => void;
+  handleLoadProgress: (tabId: string) => (progress: number) => void;
+  handleLoadEnd: (tabId: string) => () => void;
+  handleLoadError: (tabId: string) => (event: WebViewErrorEvent) => void;
+  handleHttpError: (tabId: string) => (event: WebViewHttpErrorEvent) => void;
   adBlockEnabled: boolean;
   popupBlockEnabled: boolean;
 }
@@ -841,6 +948,11 @@ function WebViewListInner({
   handleMessage,
   handleNavigationStateChange,
   handleShouldStartLoadWithRequest,
+  handleLoadStart,
+  handleLoadProgress,
+  handleLoadEnd,
+  handleLoadError,
+  handleHttpError,
   adBlockEnabled,
   popupBlockEnabled,
 }: WebViewListProps) {
@@ -1012,6 +1124,11 @@ function WebViewListInner({
               handleMessage={handleMessage(tab.id)}
               handleNavigationStateChange={handleNavigationStateChange(tab.id)}
               handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
+              onLoadStart={handleLoadStart(tab.id)}
+              onLoadProgress={handleLoadProgress(tab.id)}
+              onLoadEnd={handleLoadEnd(tab.id)}
+              onLoadError={handleLoadError(tab.id)}
+              onHttpError={handleHttpError(tab.id)}
               adBlockEnabled={adBlockEnabled}
               popupBlockEnabled={popupBlockEnabled}
             />

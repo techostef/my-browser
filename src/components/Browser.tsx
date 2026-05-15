@@ -1,7 +1,11 @@
 import React from "react";
 import { StyleSheet } from "react-native";
 import { WebView, WebViewNavigation } from "react-native-webview";
-import { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
+import {
+  ShouldStartLoadRequest,
+  WebViewErrorEvent,
+  WebViewHttpErrorEvent,
+} from "react-native-webview/lib/WebViewTypes";
 
 import { VIDEO_DETECTOR_JS } from "../services/videoDetector";
 import { AD_BLOCKER_JS } from "../services/adBlocker";
@@ -15,9 +19,27 @@ interface Props {
   handleShouldStartLoadWithRequest?: (request: ShouldStartLoadRequest) => boolean;
   adBlockEnabled?: boolean;
   popupBlockEnabled?: boolean;
+  onLoadStart?: () => void;
+  onLoadProgress?: (progress: number) => void;
+  onLoadEnd?: () => void;
+  onLoadError?: (event: WebViewErrorEvent) => void;
+  onHttpError?: (event: WebViewHttpErrorEvent) => void;
 }
 
-const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateChange, handleShouldStartLoadWithRequest, adBlockEnabled, popupBlockEnabled }: Props) =>{
+const Browser = ({
+  webViewRef,
+  currentUrl,
+  handleMessage,
+  handleNavigationStateChange,
+  handleShouldStartLoadWithRequest,
+  adBlockEnabled,
+  popupBlockEnabled,
+  onLoadStart,
+  onLoadProgress,
+  onLoadEnd,
+  onLoadError,
+  onHttpError,
+}: Props) => {
   console.log('Render Component Browser:', currentUrl);
   let injectedJS = VIDEO_DETECTOR_JS;
   if (adBlockEnabled) injectedJS = AD_BLOCKER_JS + injectedJS;
@@ -31,7 +53,12 @@ const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateC
       onMessage={handleMessage}
       onNavigationStateChange={handleNavigationStateChange}
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
-      // onLoadEnd={() => setLoading(false)}
+      onLoadStart={onLoadStart}
+      onLoadProgress={({ nativeEvent }) => onLoadProgress?.(nativeEvent.progress)}
+      onLoadEnd={onLoadEnd}
+      onError={onLoadError}
+      onHttpError={onHttpError}
+      renderError={() => <></>}
       javaScriptEnabled
       domStorageEnabled
       mediaPlaybackRequiresUserAction={false}
