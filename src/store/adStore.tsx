@@ -49,9 +49,12 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(adReducer, initialState);
 
   useEffect(() => {
-    mobileAds().initialize().catch(err => {
-      console.warn('MobileAds init failed:', err);
-    });
+    mobileAds()
+      .setRequestConfiguration({ testDeviceIdentifiers: ['EMULATOR'] })
+      .then(() => mobileAds().initialize())
+      .catch(err => {
+        console.warn('MobileAds init failed:', err);
+      });
   }, []);
 
   const incrementDownload = useCallback(() => dispatch({ type: 'INCREMENT_DOWNLOAD' }), []);

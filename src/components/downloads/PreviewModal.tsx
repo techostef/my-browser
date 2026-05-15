@@ -73,6 +73,8 @@ export default function PreviewModal({
   const seekBarWRef = useRef(0);
   const seekingRef = useRef(false);
   const durationRef = useRef(0);
+  const seekTargetMsRef = useRef<number | null>(null);
+  const seekStartTimeRef = useRef(0);
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [position, setPosition] = useState(0);
@@ -103,25 +105,40 @@ export default function PreviewModal({
   }, [task?.id]);
 
   useEffect(() => {
+    let active = true;
+
     const statusSub = player.addListener('statusChange', ({ status }) => {
+      if (!active) return;
       setIsBuffering(status === 'loading');
       if (status === 'readyToPlay') {
-        setDuration(player.duration * 1000);
+        try { setDuration(player.duration * 1000); } catch {}
       }
     });
-    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
-      setIsPlaying(isPlaying);
-      if (!isPlaying) setShowControls(true);
+    const playingSub = player.addListener('playingChange', ({ isPlaying: playing }) => {
+      if (!active) return;
+      setIsPlaying(playing);
+      if (!playing) setShowControls(true);
     });
-    const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
-      if (!seekingRef.current) {
-        setPosition(currentTime * 1000);
-      }
-    });
+    const interval = setInterval(() => {
+      if (!active || seekingRef.current) return;
+      try {
+        const playerPosMs = player.currentTime * 1000;
+        if (seekTargetMsRef.current !== null) {
+          const elapsed = Date.now() - seekStartTimeRef.current;
+          const diff = Math.abs(playerPosMs - seekTargetMsRef.current);
+          if (diff > 1500 && elapsed < 3000) return;
+          seekTargetMsRef.current = null;
+        }
+        setPosition(playerPosMs);
+        if (player.duration > 0) setDuration(player.duration * 1000);
+      } catch {}
+    }, 250);
+
     return () => {
+      active = false;
       statusSub.remove();
       playingSub.remove();
-      timeSub.remove();
+      clearInterval(interval);
     };
   }, [player]);
 
@@ -181,7 +198,7 @@ export default function PreviewModal({
     unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
     unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
     unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => { cleanup(); if (rewardEarned) onEditVideo?.(); }));
-    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); }));
+    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); onEditVideo?.(); }));
 
     ad.load();
   }, [onEditVideo]);
@@ -249,6 +266,8 @@ export default function PreviewModal({
     if (w <= 0 || dur <= 0) return;
     const ratio = Math.max(0, Math.min(1, x / w));
     const newPosSec = (ratio * dur) / 1000;
+    seekTargetMsRef.current = newPosSec * 1000;
+    seekStartTimeRef.current = Date.now();
     setPosition(newPosSec * 1000);
     player.currentTime = newPosSec;
   };
@@ -330,6 +349,7 @@ export default function PreviewModal({
               player={player}
               style={StyleSheet.absoluteFill}
               contentFit="contain"
+              nativeControls={false}
             />
 
             {mediaType === "audio" && (

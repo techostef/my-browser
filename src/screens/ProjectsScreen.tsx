@@ -179,18 +179,20 @@ export default function ProjectsScreen() {
     let rewardEarned = false;
     const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
 
+    const grantReward = () => {
+      (navigation as any).navigate('Trim', {
+        videoUri: project.videoUri,
+        duration: project.duration,
+      });
+    };
+
     unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
     unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
     unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => {
       cleanup();
-      if (rewardEarned) {
-        (navigation as any).navigate('Trim', {
-          videoUri: project.videoUri,
-          duration: project.duration,
-        });
-      }
+      if (rewardEarned) grantReward();
     }));
-    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); }));
+    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); grantReward(); }));
 
     ad.load();
   }, [navigation]);

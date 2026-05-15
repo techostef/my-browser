@@ -616,7 +616,7 @@ export default function TrimScreen({ navigation, route }: Props) {
     unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
     unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
     unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => { cleanup(); if (rewardEarned) handleExport(); }));
-    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); }));
+    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); handleExport(); }));
 
     ad.load();
   }, [handleExport]);
