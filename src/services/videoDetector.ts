@@ -318,8 +318,32 @@ export const VIDEO_DETECTOR_JS = `
       log('[M3U8] Parsed master: ' + variants.length + ' variants, ' + audioTracks.length + ' audio, ' + subtitleTracks.length + ' subs');
     }
 
-    // Only send if we have useful data
-    if (variants.length > 0 || audioTracks.length > 0 || subtitleTracks.length > 0) {
+    var mediaSegments = [];
+    var mediaTargetDuration = 0;
+    var mediaSequence = 0;
+    if (!isMaster) {
+      // === MEDIA PLAYLIST: parse segment list ===
+      log('[M3U8] Parsing media playlist (' + text.length + ' chars) from ' + m3u8Url.substring(0, 100));
+      var mLines = text.split(String.fromCharCode(10));
+      var pendingDuration = 0;
+      for (var mi = 0; mi < mLines.length; mi++) {
+        var mLine = mLines[mi].trim();
+        if (mLine.indexOf('#EXT-X-TARGETDURATION:') === 0) {
+          mediaTargetDuration = parseInt(mLine.substring(22), 10);
+        } else if (mLine.indexOf('#EXT-X-MEDIA-SEQUENCE:') === 0) {
+          mediaSequence = parseInt(mLine.substring(22), 10);
+        } else if (mLine.indexOf('#EXTINF:') === 0) {
+          pendingDuration = parseFloat(mLine.substring(8));
+        } else if (mLine && mLine.charAt(0) !== '#') {
+          mediaSegments.push({ uri: mLine, duration: pendingDuration });
+          pendingDuration = 0;
+        }
+      }
+      log('[M3U8] Parsed media: ' + mediaSegments.length + ' segments, targetDuration=' + mediaTargetDuration + ', seq=' + mediaSequence);
+    }
+
+    // Send for master playlists with tracks/variants, or any media playlist
+    if (variants.length > 0 || audioTracks.length > 0 || subtitleTracks.length > 0 || !isMaster) {
       lastM3u8Url = m3u8Url;
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -336,7 +360,10 @@ export const VIDEO_DETECTOR_JS = `
               isMaster: isMaster,
               variants: variants,
               audioTracks: audioTracks,
-              subtitleTracks: subtitleTracks
+              subtitleTracks: subtitleTracks,
+              mediaSegments: isMaster ? undefined : mediaSegments,
+              mediaTargetDuration: isMaster ? undefined : mediaTargetDuration,
+              mediaSequence: isMaster ? undefined : mediaSequence
             }
           }
         }));
@@ -447,11 +474,8 @@ export const VIDEO_DETECTOR_JS = `
           lower.includes('.mpd') || lower.includes('application/dash') ||
           lower.includes('video/') || lower.includes('mime=video') ||
           lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
-        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
-        if (!lower.includes('.m4s')) {
           log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
           sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
-        }
       }
     }
     return origOpen.apply(this, arguments);
@@ -589,127 +613,6 @@ export const VIDEO_DETECTOR_JS = `
     }
     return fetchPromise;
   };
-
-  // ===== MSE INTERCEPTION FOR BLOB VIDEOS =====
-  var MAX_BLOB_BYTES = 200 * 1024 * 1024;
-  var blobStore = {};
-  var msToBlob = new WeakMap();
-  var sbToMs = new WeakMap();
-  var videoSBs = new WeakSet();
-  var audioSBs = new WeakSet();
-  var blobNotified = {};
-
-  function cloneBuffer(data) {
-    if (data instanceof ArrayBuffer) return data.slice(0);
-    if (data.buffer) return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-    return null;
-  }
-
-  if (typeof MediaSource !== 'undefined') {
-    var origCreateObjectURL = URL.createObjectURL;
-    URL.createObjectURL = function(obj) {
-      var blobUrl = origCreateObjectURL.call(URL, obj);
-      if (obj instanceof MediaSource) {
-        msToBlob.set(obj, blobUrl);
-        blobStore[blobUrl] = {
-          videoChunks: [], audioChunks: [],
-          videoMime: '', audioMime: '',
-          totalBytes: 0, chunkCount: 0, ready: false
-        };
-        log('[BLOB] MediaSource created: ' + blobUrl);
-        obj.addEventListener('sourceended', function() {
-          var e = blobStore[blobUrl];
-          if (e) {
-            e.ready = true;
-            log('[BLOB] sourceended: vChunks=' + e.videoChunks.length + ' aChunks=' + e.audioChunks.length + ' bytes=' + e.totalBytes);
-            notifyBlobReady(blobUrl);
-          }
-        });
-      } else if (obj instanceof Blob && obj.type && obj.type.indexOf('video') !== -1) {
-        log('[BLOB] Video Blob: ' + blobUrl + ' type=' + obj.type + ' size=' + obj.size);
-        blobStore[blobUrl] = { blob: obj, videoMime: obj.type, totalBytes: obj.size, ready: true, videoChunks: [], audioChunks: [], audioMime: '', chunkCount: 0 };
-        notifyBlobReady(blobUrl);
-      }
-      return blobUrl;
-    };
-
-    var origAddSB = MediaSource.prototype.addSourceBuffer;
-    MediaSource.prototype.addSourceBuffer = function(mimeType) {
-      var sb = origAddSB.call(this, mimeType);
-      sbToMs.set(sb, this);
-      var blobUrl = msToBlob.get(this);
-      var isVideo = mimeType.indexOf('video') !== -1;
-      var isAudio = mimeType.indexOf('audio') !== -1;
-      if (isVideo) videoSBs.add(sb);
-      if (isAudio) audioSBs.add(sb);
-      if (blobUrl && blobStore[blobUrl]) {
-        if (isVideo) blobStore[blobUrl].videoMime = mimeType;
-        if (isAudio) blobStore[blobUrl].audioMime = mimeType;
-        log('[BLOB] SB added: ' + mimeType + (isVideo ? ' [VIDEO]' : isAudio ? ' [AUDIO]' : ' [OTHER]'));
-      }
-      return sb;
-    };
-
-    var origAppendBuf = SourceBuffer.prototype.appendBuffer;
-    SourceBuffer.prototype.appendBuffer = function(data) {
-      var isV = videoSBs.has(this);
-      var isA = audioSBs.has(this);
-      if (isV || isA) {
-        var ms = sbToMs.get(this);
-        if (ms) {
-          var blobUrl = msToBlob.get(ms);
-          var e = blobUrl ? blobStore[blobUrl] : null;
-          if (e) {
-            var byteLen = data.byteLength || 0;
-            if (e.totalBytes + byteLen <= MAX_BLOB_BYTES) {
-              var buf = cloneBuffer(data);
-              if (buf) {
-                if (isV) e.videoChunks.push(buf);
-                else e.audioChunks.push(buf);
-                e.totalBytes += buf.byteLength;
-                e.chunkCount++;
-                if (e.chunkCount <= 4 || e.chunkCount % 30 === 0) {
-                  log('[BLOB] ' + (isV ? 'V' : 'A') + ' chunk #' + e.chunkCount + ' sz=' + buf.byteLength + ' total=' + e.totalBytes);
-                }
-              }
-            }
-            if (!blobNotified[blobUrl] && e.totalBytes > 102400) {
-              blobNotified[blobUrl] = true;
-              notifyBlobReady(blobUrl);
-            }
-            // Send updated size notification every 512KB
-            if (blobNotified[blobUrl] && e.totalBytes > 0 && e.totalBytes % 524288 < buf.byteLength) {
-              notifyBlobReady(blobUrl);
-            }
-          }
-        }
-      }
-      return origAppendBuf.call(this, data);
-    };
-  }
-
-  function notifyBlobReady(blobUrl) {
-    var entry = blobStore[blobUrl];
-    if (!entry) return;
-    if (!window.ReactNativeWebView || !window.ReactNativeWebView.postMessage) {
-      setTimeout(function() { notifyBlobReady(blobUrl); }, 500);
-      return;
-    }
-    var hasAudio = entry.audioChunks && entry.audioChunks.length > 0;
-    log('[BLOB] Notify RN: ' + blobUrl + ' bytes=' + entry.totalBytes + ' hasAudio=' + hasAudio);
-    var pageTitle = '';
-    try { pageTitle = document.title || ''; } catch(e2) {}
-    var cookies = '';
-    try { cookies = document.cookie || ''; } catch(e2) {}
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'VIDEO_DETECTED',
-      payload: [{
-        url: blobUrl, type: 'blob-ready', downloadable: true,
-        pageUrl: window.location.href, pageTitle: pageTitle,
-        timestamp: Date.now(), cookies: cookies, blobSize: entry.totalBytes
-      }]
-    }));
-  }
 
   // ===== fMP4 REMUXER: merge separate audio & video tracks =====
   function ru32(d, o) { return ((d[o] << 24) | (d[o+1] << 16) | (d[o+2] << 8) | d[o+3]) >>> 0; }

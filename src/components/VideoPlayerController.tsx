@@ -11,18 +11,13 @@ import {
   FlatList,
 } from 'react-native';
 import { DetectedVideo, HlsVariant } from '../types';
-import { isPlayingVideo } from './VideoDetectedBanner';
+import { isPlayingVideo, isPlayingVideoM4S } from './VideoDetectedBanner';
 
 function formatTime(secs: number): string {
   if (!isFinite(secs) || isNaN(secs) || secs < 0) return '0:00';
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function formatBandwidth(bps: number): string {
-  if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(1) + ' Mbps';
-  return (bps / 1_000).toFixed(0) + ' Kbps';
 }
 
 interface Props {
@@ -38,6 +33,7 @@ interface Props {
   headerTitle?: string;
   onMinimize?: () => void;
   playingUrl?: string;
+  playingUrlM4S?: string;
   videos?: DetectedVideo[];
   onDownloadVariant?: (video: DetectedVideo, variant?: HlsVariant) => void;
 }
@@ -62,6 +58,7 @@ export default function VideoPlayerController({
   headerTitle,
   onMinimize,
   playingUrl,
+  playingUrlM4S,
   videos,
   onDownloadVariant,
 }: Props) {
@@ -116,7 +113,19 @@ export default function VideoPlayerController({
   useEffect(() => {
     if (!videos) return;
     if (!playingUrl) return;
-    setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
+    const hslCount = videos.filter((v) => v.type === "hls").length;
+    if (playingUrlM4S) {
+      const playingVideo = isPlayingVideoM4S(videos, playingUrlM4S);
+      if (playingVideo) {
+        setFilteredVideos([playingVideo]);
+        return;
+      }
+    }
+    if (hslCount === 1) {
+      setFilteredVideos(videos.filter((v) => v.type === "hls"));
+    } else {
+      setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
+    }
   }, [videos, playingUrl]);
 
   const flashSeekIndicator = (opacityAnim: Animated.Value, scaleAnim: Animated.Value) => {

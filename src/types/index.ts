@@ -29,11 +29,17 @@ export interface HlsMediaTrack {
   autoselect?: boolean;
 }
 
+interface MediaSegment {
+  uri: string;
+  duration: number;
+}
+
 export interface HlsMasterInfo {
   isMaster?: boolean;
   variants: HlsVariant[];
   audioTracks: HlsMediaTrack[];
   subtitleTracks: HlsMediaTrack[];
+  mediaSegments?: MediaSegment[];
 }
 
 export interface DetectedVideo {

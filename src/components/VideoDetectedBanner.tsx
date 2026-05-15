@@ -19,6 +19,7 @@ interface Props {
   videos: DetectedVideo[];
   visible?: boolean;
   playingUrl?: string;
+  playingUrlM4S?: string;
   position?: VideoBannerPosition;
   onPreview: (video: DetectedVideo) => void;
   onDownload: (video: DetectedVideo, variant?: HlsVariant) => void;
@@ -42,6 +43,28 @@ export function isPlayingVideo(
   return false;
 }
 
+export function isPlayingVideoM4S(
+  videos: DetectedVideo[],
+  playingUrl: string,
+): DetectedVideo | null {
+  const lastSegment = playingUrl.split("/").pop()?.split("?")[0];
+  if (lastSegment) {
+    // if m4s format
+    if (lastSegment.endsWith('.m4s')) {
+      const selected = videos.find((v) => v.hlsInfo?.mediaSegments?.find((segment) => segment.uri.includes(lastSegment))) || null;
+      if (selected) {
+        return isPlayingVideoM4S(videos, selected.url);
+      }
+    }
+    const selectedVideo = videos.find((v) => v.hlsInfo?.variants?.find((variant) => variant.uri.includes(lastSegment)) || v.hlsInfo?.audioTracks?.find((track) => track.uri?.includes(lastSegment))) || null;
+    if (selectedVideo && selectedVideo.hlsInfo?.isMaster) {
+      return selectedVideo;
+    }
+    return isPlayingVideoM4S(videos, selectedVideo?.url || "");
+  }
+  return null;
+}
+
 const SEEK_SECONDS = 10;
 const DOUBLE_TAP_MS = 300;
 
@@ -49,6 +72,7 @@ export default function VideoDetectedBanner({
   videos,
   visible = true,
   playingUrl = "",
+  playingUrlM4S = "",
   position = 'top',
   onPreview,
   onDownload,
@@ -72,12 +96,19 @@ export default function VideoDetectedBanner({
 
   useEffect(() => {
     const hslCount = videos.filter((v) => v.type === "hls").length;
+    if (playingUrlM4S) {
+      const playingVideo = isPlayingVideoM4S(videos, playingUrlM4S);
+      if (playingVideo) {
+        setFilteredVideos([playingVideo]);
+        return;
+      }
+    }
     if (hslCount === 1) {
       setFilteredVideos(videos.filter((v) => v.type === "hls"));
     } else {
       setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
     }
-  }, [videos, playingUrl]);
+  }, [videos, playingUrl, playingUrlM4S]);
 
   const flashIndicator = (opacity: Animated.Value, scale: Animated.Value) => {
     opacity.stopAnimation();

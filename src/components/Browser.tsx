@@ -15,23 +15,9 @@ interface Props {
   handleShouldStartLoadWithRequest?: (request: ShouldStartLoadRequest) => boolean;
   adBlockEnabled?: boolean;
   popupBlockEnabled?: boolean;
-  onLoadStart?: () => void;
-  onLoadProgress?: (progress: number) => void;
-  onLoadEnd?: () => void;
 }
 
-const Browser = ({
-  webViewRef,
-  currentUrl,
-  handleMessage,
-  handleNavigationStateChange,
-  handleShouldStartLoadWithRequest,
-  adBlockEnabled,
-  popupBlockEnabled,
-  onLoadStart,
-  onLoadProgress,
-  onLoadEnd,
-}: Props) => {
+const Browser = ({ webViewRef, currentUrl, handleMessage, handleNavigationStateChange, handleShouldStartLoadWithRequest, adBlockEnabled, popupBlockEnabled }: Props) =>{
   console.log('Render Component Browser:', currentUrl);
   let injectedJS = VIDEO_DETECTOR_JS;
   if (adBlockEnabled) injectedJS = AD_BLOCKER_JS + injectedJS;
@@ -45,9 +31,7 @@ const Browser = ({
       onMessage={handleMessage}
       onNavigationStateChange={handleNavigationStateChange}
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
-      onLoadStart={onLoadStart}
-      onLoadProgress={({ nativeEvent }) => onLoadProgress?.(nativeEvent.progress)}
-      onLoadEnd={onLoadEnd}
+      // onLoadEnd={() => setLoading(false)}
       javaScriptEnabled
       domStorageEnabled
       mediaPlaybackRequiresUserAction={false}
