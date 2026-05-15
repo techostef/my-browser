@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -851,21 +851,22 @@ export default function BrowserScreen() {
   }, [tabs]);
 
   const c = useThemeColors();
+  const insets = useSafeAreaInsets();
   const barStyle = c.background === '#000000' || c.background === '#1C1C1E' ? 'light-content' : 'dark-content';
 
   if (!isReady) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['top']}>
+      <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top }]}>
         <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4ECDC4" />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: c.background }]} edges={['top']}>
+    <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top, marginBottom: -15 }]}>
       <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
 
       <AddressBarContainer
@@ -942,7 +943,7 @@ export default function BrowserScreen() {
         blobPreviewError={blobPreviewError}
       />
 
-    </SafeAreaView>
+    </View>
   );
 }
 
