@@ -144,10 +144,6 @@ export default function BrowserScreen() {
     Map<string, { previewId: string; tabId: string; totalSize: number; video: DetectedVideo; cancelled?: boolean }>
   >(new Map());
   const previewTempFileRef = useRef<string | null>(null);
-  const [blobPreviewProgress, setBlobPreviewProgress] = useState<
-    { bytesReceived: number; totalBytes: number } | null
-  >(null);
-  const [blobPreviewError, setBlobPreviewError] = useState<string | null>(null);
 
   // Popup blocker state
   const [blockedPopupUrl, setBlockedPopupUrl] = useState<string | null>(null);
@@ -286,54 +282,6 @@ export default function BrowserScreen() {
       return;
     }
 
-    if (video.type === 'blob-ready') {
-      // Already extracting this blob (download or another preview) — just open
-      // modal in extracting state and let messages drive the UI.
-      const alreadyExtracting =
-        activeBlobMap.current.has(video.url) ||
-        activeBlobPreviewMap.current.has(video.url);
-      if (alreadyExtracting) {
-        setBlobPreviewError(
-          'This blob is already being extracted. Wait for it to finish, then try Preview again.',
-        );
-        setPreviewVideo(video);
-        return;
-      }
-      const webView = webViewRefs.current[activeTabId];
-      if (!webView) {
-        setBlobPreviewError('Browser tab is not available for extraction.');
-        setPreviewVideo(video);
-        return;
-      }
-      const previewId = `preview_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      activeBlobPreviewMap.current.set(video.url, {
-        previewId,
-        tabId: activeTabId,
-        totalSize: video.blobSize || 0,
-        video,
-      });
-      setBlobPreviewError(null);
-      setBlobPreviewProgress({
-        bytesReceived: 0,
-        totalBytes: video.blobSize || 0,
-      });
-      setPreviewVideo(video);
-      const escUrl = video.url.replace(/'/g, "\\'");
-      webView.injectJavaScript(
-        `window.__extractionGuardCount = (window.__extractionGuardCount||0) + 1; window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
-      );
-      return;
-    }
-
-    if (video.type === 'blob') {
-      // Raw blob URL with no captured bytes yet — just open the modal which
-      // shows a "still buffering" message.
-      setBlobPreviewError(null);
-      setBlobPreviewProgress(null);
-      setPreviewVideo(video);
-      return;
-    }
-
     setPreviewVideo(video);
   }, [activeTabId]);
 
@@ -379,8 +327,6 @@ export default function BrowserScreen() {
     }
     setPreviewVideo(null);
     setIsVideoPlaying(false);
-    setBlobPreviewProgress(null);
-    setBlobPreviewError(null);
     const REMOVE_JS = `if(window.__rnVideoStateInterval){clearInterval(window.__rnVideoStateInterval);window.__rnVideoStateInterval=null;} window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles(); true;`;
     Object.values(webViewRefs.current).forEach(ref => ref?.injectJavaScript(REMOVE_JS));
     const tempPath = previewTempFileRef.current;
@@ -597,153 +543,6 @@ export default function BrowserScreen() {
           break;
         case 'PAGE_INFO':
           break;
-        case 'BLOB_BUFFERING': {
-          const { blobUrl, bytesBuffered } = message.payload;
-          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
-          if (previewInfo) {
-            setBlobPreviewProgress({
-              bytesReceived: bytesBuffered,
-              totalBytes: previewInfo.totalSize,
-            });
-            break;
-          }
-          const info = activeBlobMap.current.get(blobUrl);
-          if (info) {
-            updateBlobProgress(info.downloadId, bytesBuffered, info.totalSize);
-          }
-          break;
-        }
-        case 'BLOB_DATA_START': {
-          const { blobUrl, totalSize } = message.payload;
-          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
-          if (previewInfo) {
-            blobPreviewChunksMap.current.set(blobUrl, []);
-            previewInfo.totalSize = totalSize;
-            setBlobPreviewProgress({ bytesReceived: 0, totalBytes: totalSize });
-            break;
-          }
-          blobChunksMap.current.set(blobUrl, []);
-          const info = activeBlobMap.current.get(blobUrl);
-          if (info) {
-            info.totalSize = totalSize;
-            updateBlobProgress(info.downloadId, 0, totalSize);
-          }
-          break;
-        }
-        case 'BLOB_DATA_CHUNK': {
-          const { blobUrl, index, data } = message.payload;
-          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
-          if (previewInfo) {
-            const chunks = blobPreviewChunksMap.current.get(blobUrl);
-            if (chunks) {
-              chunks.push(data);
-              const CHUNK_BYTES = 768 * 1024;
-              setBlobPreviewProgress({
-                bytesReceived: Math.min((index + 1) * CHUNK_BYTES, previewInfo.totalSize),
-                totalBytes: previewInfo.totalSize,
-              });
-            }
-            break;
-          }
-          const chunks = blobChunksMap.current.get(blobUrl);
-          if (chunks) {
-            chunks.push(data);
-            const info = activeBlobMap.current.get(blobUrl);
-            if (info) {
-              const CHUNK_BYTES = 768 * 1024;
-              updateBlobProgress(info.downloadId, (index + 1) * CHUNK_BYTES, info.totalSize);
-            }
-          }
-          break;
-        }
-        case 'BLOB_DATA_END': {
-          const { blobUrl } = message.payload;
-          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
-          if (previewInfo) {
-            const chunks = blobPreviewChunksMap.current.get(blobUrl) || [];
-            const wasCancelled = !!previewInfo.cancelled;
-            blobPreviewChunksMap.current.delete(blobUrl);
-            activeBlobPreviewMap.current.delete(blobUrl);
-            webViewRefs.current[previewInfo.tabId]?.injectJavaScript(
-              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
-            );
-            finalizeExtractionForTab(previewInfo.tabId);
-            if (wasCancelled) break;
-            if (chunks.length === 0) {
-              setBlobPreviewError('No video data was captured.');
-              break;
-            }
-            const cacheDir = FileSystem.cacheDirectory;
-            if (!cacheDir) {
-              setBlobPreviewError('No cache directory available.');
-              break;
-            }
-            const tempPath = `${cacheDir}preview_${previewInfo.previewId}.mp4`;
-            previewTempFileRef.current = tempPath;
-            FileSystem.writeAsStringAsync(tempPath, chunks.join(''), {
-              encoding: FileSystem.EncodingType.Base64,
-            })
-              .then(() => {
-                setBlobPreviewProgress(null);
-                setPreviewVideo(prev =>
-                  prev && prev.url === previewInfo.video.url
-                    ? { ...prev, localUri: tempPath }
-                    : prev,
-                );
-              })
-              .catch(err => {
-                console.warn('[BrowserScreen] preview write failed:', err);
-                setBlobPreviewError(err?.message || 'Failed to save preview file.');
-              });
-            break;
-          }
-          const chunks = blobChunksMap.current.get(blobUrl) || [];
-          const info = activeBlobMap.current.get(blobUrl);
-          blobChunksMap.current.delete(blobUrl);
-          activeBlobMap.current.delete(blobUrl);
-          if (info && chunks.length > 0) {
-            completeBlobDownload(info.downloadId, info.pageTitle, chunks.join(''));
-          }
-          if (info) {
-            webViewRefs.current[info.tabId]?.injectJavaScript(
-              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
-            );
-            finalizeExtractionForTab(info.tabId);
-          }
-          break;
-        }
-        case 'BLOB_DATA_ERROR': {
-          const { blobUrl } = message.payload;
-          const previewInfo = activeBlobPreviewMap.current.get(blobUrl);
-          if (previewInfo) {
-            blobPreviewChunksMap.current.delete(blobUrl);
-            activeBlobPreviewMap.current.delete(blobUrl);
-            webViewRefs.current[previewInfo.tabId]?.injectJavaScript(
-              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
-            );
-            finalizeExtractionForTab(previewInfo.tabId);
-            setBlobPreviewError(message.payload?.error || 'Failed to extract blob video data.');
-            break;
-          }
-          const info = activeBlobMap.current.get(blobUrl);
-          blobChunksMap.current.delete(blobUrl);
-          activeBlobMap.current.delete(blobUrl);
-          Alert.alert('Download Error', message.payload?.error || 'Failed to extract blob video data.');
-          if (info) {
-            webViewRefs.current[info.tabId]?.injectJavaScript(
-              'window.__extractionGuardCount = Math.max(0, (window.__extractionGuardCount||0) - 1); true;',
-            );
-            finalizeExtractionForTab(info.tabId);
-          }
-          break;
-        }
-        case 'POPUP_BLOCKED': {
-          const popupUrl: string = message.payload?.url || '';
-          if (popupUrl) {
-            setBlockedPopupUrl(popupUrl);
-          }
-          break;
-        }
         case 'EXTRACTION_LINK_CLICK': {
           const { href } = message.payload;
           // console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
@@ -751,6 +550,9 @@ export default function BrowserScreen() {
           setTabHidden(tabId, true);
           addTab(href);
           break;
+        }
+        case 'M4S_BLOB_MATCH': {
+          console.log("message.payload", message.payload)
         }
       }
     } catch (err) {
@@ -939,8 +741,6 @@ export default function BrowserScreen() {
         video={previewVideo}
         onDownload={handleDownload}
         onClose={handleClosePreview}
-        blobPreviewProgress={blobPreviewProgress}
-        blobPreviewError={blobPreviewError}
       />
 
     </View>

@@ -19,10 +19,6 @@ interface Props {
   video: DetectedVideo | null;
   onDownload: (video: DetectedVideo) => void;
   onClose: () => void;
-  // Progress for blob-preview extraction (raw bytes buffered → bytes copied
-  // to cache file). Null when no extraction is active.
-  blobPreviewProgress?: { bytesReceived: number; totalBytes: number } | null;
-  blobPreviewError?: string | null;
 }
 
 const IS_USE_LOG = true;
@@ -427,8 +423,6 @@ export default function VideoPreviewModal({
   video,
   onDownload,
   onClose,
-  blobPreviewProgress,
-  blobPreviewError,
 }: Props) {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -553,105 +547,71 @@ export default function VideoPreviewModal({
 
         {/* Video Player via WebView */}
         <View style={styles.videoContainer}>
-          {blobNeedsExtraction ? (
-            <View style={styles.blobUnsupported}>
-              {blobPreviewError ? (
-                <>
-                  <Text style={styles.blobIcon}>⚠️</Text>
-                  <Text style={styles.blobTitle}>Preview Failed</Text>
-                  <Text style={styles.blobBody}>{blobPreviewError}</Text>
-                </>
-              ) : video.type === 'blob' ? (
-                <>
-                  <Text style={styles.blobIcon}>⏳</Text>
-                  <Text style={styles.blobTitle}>Still Buffering</Text>
-                  <Text style={styles.blobBody}>
-                    This blob video is still being assembled by the page. Wait
-                    for it to be ready (banner will mark it BLOB) and try
-                    Preview again.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <ActivityIndicator size="large" color="#4ECDC4" />
-                  <Text style={[styles.blobTitle, { marginTop: 16 }]}>
-                    Preparing Preview
-                  </Text>
-                  <Text style={styles.blobBody}>
-                    {blobPreviewProgress
-                      ? `Copying video from page… ${formatBytes(blobPreviewProgress.bytesReceived)} / ${formatBytes(blobPreviewProgress.totalBytes)}`
-                      : 'Extracting captured video bytes…'}
-                  </Text>
-                </>
-              )}
-            </View>
-          ) : (
-            <>
-              {isLoading && !hasError && (
-                <View style={styles.loadingOverlay}>
-                  <ActivityIndicator size="large" color="#4ECDC4" />
-                  <Text style={styles.loadingText}>Loading video...</Text>
-                </View>
-              )}
+          <>
+            {isLoading && !hasError && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color="#4ECDC4" />
+                <Text style={styles.loadingText}>Loading video...</Text>
+              </View>
+            )}
 
-              <WebView
-                ref={webViewRef}
-                source={{
-                  html,
-                  // For locally-extracted blob previews, the HTML must share
-                  // the file:// origin with the video file so the <video> tag
-                  // is allowed to load it. For remote URLs, keep the original
-                  // page origin so cookies/CORS continue to work.
-                  baseUrl: video.localUri
-                    ? video.localUri.replace(/[^/]+$/, '')
-                    : video.pageUrl,
-                }}
-                style={styles.webview}
-                onMessage={handleMessage}
-                onError={(syntheticEvent) => {
-                  const { nativeEvent } = syntheticEvent;
-                  console.error(`${TAG} WebView onError:`, nativeEvent);
-                  setHasError(true);
-                  setIsLoading(false);
-                }}
-                onHttpError={(syntheticEvent) => {
-                  const { nativeEvent } = syntheticEvent;
-                  console.error(`${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`);
-                }}
-                onLoadEnd={() => {
-                  // console.log(`${TAG} WebView HTML loaded`);
-                }}
-                javaScriptEnabled
-                domStorageEnabled
-                mediaPlaybackRequiresUserAction={false}
-                allowsInlineMediaPlayback
-                mixedContentMode="always"
-                allowsFullscreenVideo
-                thirdPartyCookiesEnabled
-                sharedCookiesEnabled
-                originWhitelist={['*']}
-                allowFileAccess
-                allowFileAccessFromFileURLs
-                allowUniversalAccessFromFileURLs
-                allowsProtectedMedia
-                userAgent="Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            <WebView
+              ref={webViewRef}
+              source={{
+                html,
+                // For locally-extracted blob previews, the HTML must share
+                // the file:// origin with the video file so the <video> tag
+                // is allowed to load it. For remote URLs, keep the original
+                // page origin so cookies/CORS continue to work.
+                baseUrl: video.localUri
+                  ? video.localUri.replace(/[^/]+$/, '')
+                  : video.pageUrl,
+              }}
+              style={styles.webview}
+              onMessage={handleMessage}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error(`${TAG} WebView onError:`, nativeEvent);
+                setHasError(true);
+                setIsLoading(false);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error(`${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`);
+              }}
+              onLoadEnd={() => {
+                // console.log(`${TAG} WebView HTML loaded`);
+              }}
+              javaScriptEnabled
+              domStorageEnabled
+              mediaPlaybackRequiresUserAction={false}
+              allowsInlineMediaPlayback
+              mixedContentMode="always"
+              allowsFullscreenVideo
+              thirdPartyCookiesEnabled
+              sharedCookiesEnabled
+              originWhitelist={['*']}
+              allowFileAccess
+              allowFileAccessFromFileURLs
+              allowUniversalAccessFromFileURLs
+              allowsProtectedMedia
+              userAgent="Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            />
+
+            {!hasError && (
+              <VideoPlayerController
+                currentTime={videoCurrentTime}
+                duration={videoDuration}
+                isPaused={videoIsPaused}
+                isMuted={videoIsMuted}
+                onTogglePlay={injectTogglePlay}
+                onToggleMute={injectToggleMute}
+                onSeek={injectSeek}
+                onSkipBack={injectSkipBack}
+                onSkipForward={injectSkipForward}
               />
-
-              {!hasError && (
-                <VideoPlayerController
-                  currentTime={videoCurrentTime}
-                  duration={videoDuration}
-                  isPaused={videoIsPaused}
-                  isMuted={videoIsMuted}
-                  onTogglePlay={injectTogglePlay}
-                  onToggleMute={injectToggleMute}
-                  onSeek={injectSeek}
-                  onSkipBack={injectSkipBack}
-                  onSkipForward={injectSkipForward}
-                />
-              )}
-            </>
-          )}
+            )}
+          </>
         </View>
 
         {/* Bottom Actions */}
