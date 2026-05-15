@@ -19,7 +19,7 @@ interface Props {
   videos: DetectedVideo[];
   visible?: boolean;
   playingUrl?: string;
-  playingUrlM4S?: string;
+  segmentBlob?: Record<string, string>;
   position?: VideoBannerPosition;
   onPreview: (video: DetectedVideo) => void;
   onDownload: (video: DetectedVideo, variant?: HlsVariant) => void;
@@ -72,7 +72,7 @@ export default function VideoDetectedBanner({
   videos,
   visible = true,
   playingUrl = "",
-  playingUrlM4S = "",
+  segmentBlob = {},
   position = 'top',
   onPreview,
   onDownload,
@@ -95,6 +95,10 @@ export default function VideoDetectedBanner({
   const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
+    let playingUrlM4S = ''
+    if (playingUrl.includes("blob") && segmentBlob) {
+      playingUrlM4S = segmentBlob[playingUrl]
+    }
     const hslCount = videos.filter((v) => v.type === "hls").length;
     if (playingUrlM4S) {
       const playingVideo = isPlayingVideoM4S(videos, playingUrlM4S);
@@ -108,7 +112,7 @@ export default function VideoDetectedBanner({
     } else {
       setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
     }
-  }, [videos, playingUrl, playingUrlM4S]);
+  }, [videos, playingUrl]);
 
   const flashIndicator = (opacity: Animated.Value, scale: Animated.Value) => {
     opacity.stopAnimation();

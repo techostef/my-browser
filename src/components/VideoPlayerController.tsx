@@ -34,6 +34,7 @@ interface Props {
   onMinimize?: () => void;
   playingUrl?: string;
   playingUrlM4S?: string;
+  segmentBlob?: Record<string, string>;
   videos?: DetectedVideo[];
   onDownloadVariant?: (video: DetectedVideo, variant?: HlsVariant) => void;
 }
@@ -58,7 +59,7 @@ export default function VideoPlayerController({
   headerTitle,
   onMinimize,
   playingUrl,
-  playingUrlM4S,
+  segmentBlob,
   videos,
   onDownloadVariant,
 }: Props) {
@@ -113,6 +114,10 @@ export default function VideoPlayerController({
   useEffect(() => {
     if (!videos) return;
     if (!playingUrl) return;
+    let playingUrlM4S = ''
+    if (playingUrl.includes("blob") && segmentBlob) {
+      playingUrlM4S = segmentBlob[playingUrl]
+    }
     const hslCount = videos.filter((v) => v.type === "hls").length;
     if (playingUrlM4S) {
       const playingVideo = isPlayingVideoM4S(videos, playingUrlM4S);

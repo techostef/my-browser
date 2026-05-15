@@ -129,9 +129,8 @@ export default function BrowserScreen() {
   const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
   const [bannerDismissedMap, setBannerDismissedMap] = useState<Record<string, boolean>>({});
   const [playingVideoUrlMap, setPlayingVideoUrlMap] = useState<Record<string, string>>({});
+  const [segmentBlobMap, setSegmentBlobMap] = useState<Record<string, Record<string, string>>>({});
 
-  // Keyed by blobUrl so multiple blob downloads from different tabs can run simultaneously.
-  const blobChunksMap = useRef<Map<string, string[]>>(new Map());
   const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number; tabId: string }>>(new Map());
 
   // Parallel pipeline for blob *previews*: extracts the same captured bytes
@@ -139,7 +138,6 @@ export default function BrowserScreen() {
   // private downloads folder, then plays the temp file in the preview modal.
   // The extraction message handlers below check this map first so a blob being
   // previewed doesn't get treated as a download.
-  const blobPreviewChunksMap = useRef<Map<string, string[]>>(new Map());
   const activeBlobPreviewMap = useRef<
     Map<string, { previewId: string; tabId: string; totalSize: number; video: DetectedVideo; cancelled?: boolean }>
   >(new Map());
@@ -251,6 +249,7 @@ export default function BrowserScreen() {
   const activeDetectedVideos = detectedVideosMap[activeTabId] || [];
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
   const activePlayingVideoUrl = playingVideoUrlMap[activeTabId] || '';
+  const activeSegmentBlob = segmentBlobMap[activeTabId] || {}
   const activeTab = useActiveTab();
   const navbarTitle = activeDetectedVideos[0]?.pageTitle || activeTab?.title || 'Video';
 
@@ -290,8 +289,9 @@ export default function BrowserScreen() {
   }, [activeTabId]);
 
   const injectLiveTogglePlay = useCallback(() => {
+    const sendTheData = `window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: v.src || v.currentSrc || '' } }));`
     webViewRefs.current[activeTabId]?.injectJavaScript(
-      "(function(){var v=document.querySelector('.__rn-playing');if(v){v.paused?v.play().catch(function(){}):v.pause();}})();true;",
+      `(function(){var v=document.querySelector('.__rn-playing');if(v){${sendTheData};v.paused?v.play().catch(function(){}):v.pause();}})();true;`,
     );
   }, [activeTabId]);
 
@@ -552,7 +552,13 @@ export default function BrowserScreen() {
           break;
         }
         case 'M4S_BLOB_MATCH': {
-          console.log("message.payload", message.payload)
+          setSegmentBlobMap(prev => {
+            const { m4sUrl, blobUrl } = message.payload
+            const existing = prev[tabId] || {};
+            existing[blobUrl] = m4sUrl;
+            return { ...prev, [tabId]: existing }
+          });
+          // console.log("message.payload", message.payload)
         }
       }
     } catch (err) {
@@ -696,6 +702,7 @@ export default function BrowserScreen() {
           visible={!isVideoPlaying && !activeBannerDismissed}
           videos={activeDetectedVideos}
           playingUrl={activePlayingVideoUrl}
+          segmentBlob={activeSegmentBlob}
           position={settings.videoBannerPosition}
           onPreview={handlePreviewVideo}
           onDownload={handleDownloadWithVariant}
@@ -709,6 +716,7 @@ export default function BrowserScreen() {
             headerTitle={navbarTitle}
             onMinimize={handleToggleFullscreen}
             playingUrl={activePlayingVideoUrl}
+            segmentBlob={activeSegmentBlob}
             videos={activeDetectedVideos}
             onDownloadVariant={handleDownloadWithVariant}
             currentTime={liveCurrentTime}
