@@ -36,6 +36,8 @@ import ManageLabelsModal from "../components/downloads/ManageLabelsModal";
 import MoveProgressModal from "../components/downloads/MoveProgressModal";
 import DownloadsHeader from "../components/downloads/DownloadsHeader";
 import FilterBar from "../components/downloads/FilterBar";
+import DuplicateModePicker, { DuplicateMode } from "../components/downloads/DuplicateModePicker";
+import DuplicatesModal from "../components/downloads/DuplicatesModal";
 import { AdBanner } from '../components/AdBanner';
 import { useAdActions } from '../store/adStore';
 
@@ -91,6 +93,9 @@ export default function DownloadsScreen() {
   const [manageLabelModalVisible, setManageLabelModalVisible] = useState(false);
   const [manageLabelNewText, setManageLabelNewText] = useState("");
   const [moveProgress, setMoveProgress] = useState<{ total: number; label: string } | null>(null);
+  const [duplicatePickerVisible, setDuplicatePickerVisible] = useState(false);
+  const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>("both");
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
 
   // ── refs ───────────────────────────────────────────────────────────────────
   const currentFolderPathRef = useRef(currentFolderPath);
@@ -599,6 +604,31 @@ export default function DownloadsScreen() {
     [bulkMoveDownloadsToFolder, selectedIds, migrateLabels],
   );
 
+  // ── duplicates ─────────────────────────────────────────────────────────────
+  const handleOpenDuplicatePicker = useCallback(() => {
+    setDuplicatePickerVisible(true);
+  }, []);
+
+  const handleStartDuplicateScan = useCallback(() => {
+    setDuplicatePickerVisible(false);
+    setDuplicatesOpen(true);
+  }, []);
+
+  const handleDeleteDuplicates = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
+        const mapping: Record<string, string> = {};
+        for (let i = 0; i < ids.length; i++) {
+          const newId = results[i];
+          if (newId) mapping[ids[i]] = newId;
+        }
+        if (Object.keys(mapping).length > 0) migrateLabels(mapping);
+      });
+    },
+    [removeDownload, migrateLabels],
+  );
+
   // ── device rescan ──────────────────────────────────────────────────────────
   const handleRescanDevice = useCallback(() => {
     scanDeviceDownloadFolder().catch((err) => {
@@ -1031,6 +1061,7 @@ export default function DownloadsScreen() {
         onRescan={() => { setActionsDialogVisible(false); handleRescanDevice(); }}
         onSortChange={applySortKey}
         onManageLabels={() => { setActionsDialogVisible(false); setManageLabelModalVisible(true); }}
+        onFindDuplicates={handleOpenDuplicatePicker}
       />
 
       <FilterDialog
@@ -1067,6 +1098,23 @@ export default function DownloadsScreen() {
       />
 
       <MoveProgressModal progress={moveProgress} />
+
+      <DuplicateModePicker
+        visible={duplicatePickerVisible}
+        mode={duplicateMode}
+        onChangeMode={setDuplicateMode}
+        onCancel={() => setDuplicatePickerVisible(false)}
+        onScan={handleStartDuplicateScan}
+      />
+
+      <DuplicatesModal
+        visible={duplicatesOpen}
+        mode={duplicateMode}
+        downloads={downloads}
+        onClose={() => setDuplicatesOpen(false)}
+        onDelete={handleDeleteDuplicates}
+      />
+
       <AdBanner />
     </SafeAreaView>
   );

@@ -30,6 +30,7 @@ type Props = {
   onRescan: () => void;
   onSortChange: (key: SortKey) => void;
   onManageLabels: () => void;
+  onFindDuplicates: () => void;
 };
 
 export default function ActionsDropdown({
@@ -42,6 +43,7 @@ export default function ActionsDropdown({
   onRescan,
   onSortChange,
   onManageLabels,
+  onFindDuplicates,
 }: Props) {
   const [page, setPage] = useState<"main" | "sort">("main");
 
@@ -114,6 +116,16 @@ export default function ActionsDropdown({
               >
                 <Text style={styles.icon}>🏷</Text>
                 <Text style={styles.label}>Manage labels</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => {
+                  close();
+                  onFindDuplicates();
+                }}
+              >
+                <Text style={styles.icon}>🔍</Text>
+                <Text style={styles.label}>Find duplicates</Text>
               </TouchableOpacity>
             </>
           ) : (
