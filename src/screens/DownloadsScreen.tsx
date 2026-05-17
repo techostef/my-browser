@@ -39,7 +39,6 @@ import FilterBar from "../components/downloads/FilterBar";
 import DuplicateModePicker, { DuplicateMode } from "../components/downloads/DuplicateModePicker";
 import DuplicatesModal from "../components/downloads/DuplicatesModal";
 import { AdBanner } from '../components/AdBanner';
-import { useAdActions } from '../store/adStore';
 
 const DEVICE_ROOT_PATH = "__device_download__";
 const TRASH_FOLDER_PATH = "__trash__";
@@ -67,8 +66,6 @@ export default function DownloadsScreen() {
     deleteFromTrash,
     prefetchDeviceFileSizes,
   } = useDownloads();
-  const { incrementDownload } = useAdActions();
-
   // ── state ──────────────────────────────────────────────────────────────────
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
   const [renameText, setRenameText] = useState("");
@@ -105,27 +102,6 @@ export default function DownloadsScreen() {
   fileLabelsRef.current = fileLabels;
   const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
   prefetchSizesRef.current = prefetchDeviceFileSizes;
-
-  // Track download completions to trigger interstitial ad every 4 downloads
-  const prevStatusRef = useRef<Record<string, string>>({});
-
-  useEffect(() => {
-    downloads.forEach(d => {
-      const prev = prevStatusRef.current[d.id];
-      if (prev === undefined) {
-        // First time seeing this download — seed without counting so existing
-        // completed files (including those loaded async after mount) are ignored.
-        prevStatusRef.current[d.id] = d.status;
-        return;
-      }
-      // Only count when source is 'private' — active downloads complete with source undefined
-      // first, then refresh replaces them with source:'private' tasks. This prevents double-counting.
-      if (prev !== 'completed' && d.status === 'completed' && d.source === 'private') {
-        incrementDownload();
-      }
-      prevStatusRef.current[d.id] = d.status;
-    });
-  }, [downloads, incrementDownload]);
 
   useEffect(() => {
     currentFolderPathRef.current = currentFolderPath;

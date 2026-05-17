@@ -18,6 +18,7 @@ import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 import VideoPlayerController from '../components/VideoPlayerController';
 import { useDownloadActions } from '../store/downloadStore';
+import { useAdActions } from '../store/adStore';
 import {
   useActiveTab,
   useActiveTabId,
@@ -116,6 +117,7 @@ export default function BrowserScreen() {
   const tabs = useTabList();
   const { addTab, removeTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
+  const { requestDownload } = useAdActions();
   const { settings, pushHistory, setSetting } = useSettings();
   const previousUrl = useRef('');
   const navigation = useNavigation();
@@ -583,10 +585,12 @@ export default function BrowserScreen() {
 
   const handleDownloadWithVariant = useCallback(
     (video: DetectedVideo, variant?: HlsVariant) => {
-      startDownload(video, variant);
-      Alert.alert('Download Started', 'Check the Downloads tab for progress.');
+      requestDownload(() => {
+        startDownload(video, variant);
+        Alert.alert('Download Started', 'Check the Downloads tab for progress.');
+      });
     },
-    [startDownload],
+    [startDownload, requestDownload],
   );
 
 

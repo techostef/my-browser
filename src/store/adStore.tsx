@@ -4,11 +4,12 @@ import React, {
   useReducer,
   useCallback,
   useEffect,
+  useRef,
   useMemo,
 } from 'react';
 import mobileAds from 'react-native-google-mobile-ads';
 
-const AD_TRIGGER_FREQUENCY = 4;
+const AD_TRIGGER_FREQUENCY = 3;
 
 interface AdState {
   downloadCount: number;
@@ -16,7 +17,10 @@ interface AdState {
 }
 
 interface AdActions {
-  incrementDownload: () => void;
+  // Call this instead of startDownload directly. On every 3rd press the ad
+  // shows first and startFn runs after the ad is dismissed/rewarded.
+  // On other presses startFn runs immediately.
+  requestDownload: (startFn: () => void) => void;
   markAdCompleted: () => void;
 }
 
@@ -47,6 +51,10 @@ const AdActionsContext = createContext<AdActions | null>(null);
 
 export function AdProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(adReducer, initialState);
+  // Tracks count synchronously so requestDownload can decide before the
+  // async dispatch settles whether this press will trigger an ad.
+  const countRef = useRef(0);
+  const pendingDownloadRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     mobileAds()
@@ -57,12 +65,28 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
       });
   }, []);
 
-  const incrementDownload = useCallback(() => dispatch({ type: 'INCREMENT_DOWNLOAD' }), []);
-  const markAdCompleted = useCallback(() => dispatch({ type: 'MARK_AD_COMPLETED' }), []);
+  const markAdCompleted = useCallback(() => {
+    dispatch({ type: 'MARK_AD_COMPLETED' });
+    const pending = pendingDownloadRef.current;
+    pendingDownloadRef.current = null;
+    if (pending) { pending(); }
+  }, []);
+
+  const requestDownload = useCallback((startFn: () => void) => {
+    countRef.current += 1;
+    const triggersAd = countRef.current % AD_TRIGGER_FREQUENCY === 0;
+    dispatch({ type: 'INCREMENT_DOWNLOAD' });
+    if (triggersAd) {
+      // Ad will show via AdController; download starts after markAdCompleted fires.
+      pendingDownloadRef.current = startFn;
+    } else {
+      startFn();
+    }
+  }, []);
 
   const actions = useMemo<AdActions>(
-    () => ({ incrementDownload, markAdCompleted }),
-    [incrementDownload, markAdCompleted],
+    () => ({ requestDownload, markAdCompleted }),
+    [requestDownload, markAdCompleted],
   );
 
   return (
