@@ -1,0 +1,136 @@
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+index 251939e..1870f9f 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
+@@ -94,6 +94,131 @@ public class RNCWebViewClient extends WebViewClient {
+       reactWebView.callInjectedJavaScriptBeforeContentLoaded();
+     }
+ 
++    // ── Patched: inject injectedJSBeforeContentLoaded into cross-origin iframe
++    // HTML responses by intercepting WebViewClient.shouldInterceptRequest. Without
++    // this, our injection only runs in the top frame (Android WebView limitation).
++    @Override
++    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
++        if (request == null || request.isForMainFrame()) {
++            return super.shouldInterceptRequest(view, request);
++        }
++        if (!"GET".equalsIgnoreCase(request.getMethod())) {
++            return super.shouldInterceptRequest(view, request);
++        }
++        java.util.Map<String, String> reqHeaders = request.getRequestHeaders();
++        String accept = reqHeaders != null ? reqHeaders.get("Accept") : null;
++        if (accept == null || !accept.contains("text/html")) {
++            return super.shouldInterceptRequest(view, request);
++        }
++        RNCWebView reactWebView = (view instanceof RNCWebView) ? (RNCWebView) view : null;
++        String injectedJS = reactWebView != null ? reactWebView.injectedJSBeforeContentLoaded : null;
++        if (injectedJS == null || injectedJS.isEmpty()) {
++            return super.shouldInterceptRequest(view, request);
++        }
++        java.net.HttpURLConnection conn = null;
++        try {
++            java.net.URL url = new java.net.URL(request.getUrl().toString());
++            conn = (java.net.HttpURLConnection) url.openConnection();
++            conn.setRequestMethod("GET");
++            conn.setInstanceFollowRedirects(false);
++            conn.setConnectTimeout(15000);
++            conn.setReadTimeout(15000);
++            for (java.util.Map.Entry<String, String> h : reqHeaders.entrySet()) {
++                if (h.getKey() == null || h.getValue() == null) continue;
++                String name = h.getKey();
++                if ("Connection".equalsIgnoreCase(name) ||
++                    "Host".equalsIgnoreCase(name) ||
++                    "Content-Length".equalsIgnoreCase(name)) continue;
++                conn.setRequestProperty(name, h.getValue());
++            }
++            int statusCode = conn.getResponseCode();
++            String contentType = conn.getContentType();
++            if (contentType == null) {
++                return super.shouldInterceptRequest(view, request);
++            }
++            String mimeType = contentType.split(";")[0].trim();
++            if (!mimeType.equalsIgnoreCase("text/html")) {
++                return super.shouldInterceptRequest(view, request);
++            }
++            String charset = "UTF-8";
++            for (String part : contentType.split(";")) {
++                part = part.trim();
++                if (part.toLowerCase().startsWith("charset=")) {
++                    charset = part.substring(8).trim();
++                    break;
++                }
++            }
++            java.io.InputStream input = (statusCode >= 400) ? conn.getErrorStream() : conn.getInputStream();
++            if (input == null) {
++                return super.shouldInterceptRequest(view, request);
++            }
++            if ("gzip".equalsIgnoreCase(conn.getContentEncoding())) {
++                input = new java.util.zip.GZIPInputStream(input);
++            }
++            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
++            byte[] buffer = new byte[8192];
++            int n;
++            while ((n = input.read(buffer)) != -1) {
++                baos.write(buffer, 0, n);
++            }
++            input.close();
++            String body = baos.toString(charset);
++            // Forward Set-Cookie headers to WebView's CookieManager so the iframe
++            // session persists across navigations.
++            java.util.List<String> setCookies = conn.getHeaderFields().get("Set-Cookie");
++            if (setCookies != null) {
++                String urlStr = request.getUrl().toString();
++                for (String cookieValue : setCookies) {
++                    if (cookieValue != null) {
++                        android.webkit.CookieManager.getInstance().setCookie(urlStr, cookieValue);
++                    }
++                }
++            }
++            String scriptTag = "<script>(function(){try{" + injectedJS + "}catch(e){}})();</script>";
++            String lower = body.toLowerCase();
++            int insertAt = -1;
++            int headStart = lower.indexOf("<head");
++            if (headStart != -1) {
++                int gt = body.indexOf('>', headStart);
++                if (gt != -1) insertAt = gt + 1;
++            }
++            if (insertAt < 0) {
++                int htmlStart = lower.indexOf("<html");
++                if (htmlStart != -1) {
++                    int gt = body.indexOf('>', htmlStart);
++                    if (gt != -1) insertAt = gt + 1;
++                }
++            }
++            if (insertAt < 0) insertAt = 0;
++            String modified = body.substring(0, insertAt) + scriptTag + body.substring(insertAt);
++            java.util.Map<String, String> respHeaders = new java.util.HashMap<>();
++            for (java.util.Map.Entry<String, java.util.List<String>> h : conn.getHeaderFields().entrySet()) {
++                String key = h.getKey();
++                if (key == null) continue;
++                if ("Content-Encoding".equalsIgnoreCase(key)) continue;
++                if ("Content-Length".equalsIgnoreCase(key)) continue;
++                java.util.List<String> values = h.getValue();
++                if (values == null || values.isEmpty()) continue;
++                respHeaders.put(key, values.get(0));
++            }
++            byte[] bodyBytes = modified.getBytes(charset);
++            String reason = conn.getResponseMessage();
++            if (reason == null || reason.isEmpty()) reason = "OK";
++            return new WebResourceResponse(
++                mimeType,
++                charset,
++                statusCode,
++                reason,
++                respHeaders,
++                new java.io.ByteArrayInputStream(bodyBytes)
++            );
++        } catch (Exception e) {
++            return super.shouldInterceptRequest(view, request);
++        } finally {
++            if (conn != null) conn.disconnect();
++        }
++    }
++
+     @Override
+     public boolean shouldOverrideUrlLoading(WebView view, String url) {
+         final RNCWebView rncWebView = (RNCWebView) view;
