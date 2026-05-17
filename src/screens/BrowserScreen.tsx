@@ -581,6 +581,11 @@ export default function BrowserScreen() {
           const item = message.payload;
           setDetectedVideosMap(prev => {
             const existing = prev[tabId] || [];
+            const indexExisting = existing.findIndex((v) => v.url === item.url);
+            if (indexExisting !== -1) {
+              existing[indexExisting] = item;
+              return { ...prev, [tabId]: existing };
+            }
             return { ...prev, [tabId]: [...existing, item] };
           });
           setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
@@ -751,14 +756,47 @@ export default function BrowserScreen() {
   //   });
   // }, []);
 
+  // Reset all per-tab video detection state for a tab. Called on refresh so the
+  // banner/fullscreen/segment data doesn't leak across a page reload.
+  const resetTabVideoState = useCallback((tabId: string) => {
+    setDetectedVideosMap(prev => {
+      if (!prev[tabId]) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+    setBannerDismissedMap(prev => {
+      if (prev[tabId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+    setPlayingVideoUrlMap(prev => {
+      if (prev[tabId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+    setSegmentBlobMap(prev => {
+      if (prev[tabId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+  }, []);
+
   // Stable wrappers so memoized children don't invalidate on every render.
   const handleGoBackActive = useCallback(() => { handleGoBack(activeTabId); }, [handleGoBack, activeTabId]);
   const handleGoForwardActive = useCallback(() => { handleGoForward(activeTabId); }, [handleGoForward, activeTabId]);
-  const handleReloadActive = useCallback(() => { webViewRefs.current[activeTabId]?.reload(); }, [activeTabId]);
+  const handleReloadActive = useCallback(() => {
+    resetTabVideoState(activeTabId);
+    webViewRefs.current[activeTabId]?.reload();
+  }, [activeTabId, resetTabVideoState]);
   const handleRetryActive = useCallback(() => {
+    resetTabVideoState(activeTabId);
     updateLoadState(activeTabId, { loading: true, progress: 0.05, error: null });
     webViewRefs.current[activeTabId]?.reload();
-  }, [activeTabId, updateLoadState]);
+  }, [activeTabId, updateLoadState, resetTabVideoState]);
 
   const handleLoadStart = useCallback(
     (tabId: string) => () => {
