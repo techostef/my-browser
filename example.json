@@ -1,49 +1,95 @@
-{
-  "url": "https://video.twimg.com/amplify_video/2051962711932567554/pl/L4dyVXKtlGCX_rbZ.m3u8?tag=27&variant_version=1",
-  "type": "hsl",
-  "pageUrl": "https://x.com/JhaydowBet/status/2051963111146393757",
-  "pageTitle": "priceless movie on X: \"🔥 This is the kind of movie you finish and instantly want to recommend to everyone. https://t.co/G9o1EIB15P\" / X",
-  "timestamp": 1778069465519,
-  "cookies": "guest_id_marketing=v1%3A177754703125682396; guest_id_ads=v1%3A177754703125682396; guest_id=v1%3A177754703125682396; personalization_id=\"v1_JdC3M7poCjPlh835NuqR5A==\"; g_state={\"i_l\":0,\"i_ll\":1777547036714,\"i_b\":\"Wlmtlt6K19p2PfFMeGYHaaL92LN0WhoAeR5tzhgxT4Q\",\"i_e\":{\"enable_itp_optimization\":22},\"i_et\":1777547036709}; __cuid=54ea9cb448bf443784e8d4d97c73a8d4; external_referer=padhuUp37zjgzgv1mFWxJ12Ozwit7owX|0|8e8t2xd8A2w%3D; ct0=0fe19b460282d122339b035a382ead7d43f7aa613a12197a1d7593bab7b1841da03730b51e9da1cf1046f6e10e4287c991c68b3201ca37577906b9534113f074de44bf5842c723880541bcc9ad86eddd; lang=en; twid=u%3D1779098063736573952",
-  "hslInfo": {
-    "url": "https://video.twimg.com/amplify_video/2051962711932567554/pl/L4dyVXKtlGCX_rbZ.m3u8?tag=27&variant_version=1",        
-    "isMaster": true,
-    "variants": [
-      {
-        "bandwidth": 893825,
-        "averageBandwidth": 520035,        
-        "resolution": "852x478",
-        "codecs": "mp4a.40.2,avc1.4D401F", 
-        "audio": "audio-64000",
-        "uri": "/amplify_video/2051962711932567554/pl/avc1/852x478/6w9vxUHPH8I3h3FU.m3u8"
-      },
-      {
-        "bandwidth": 215086,
-        "averageBandwidth": 127111,        
-        "resolution": "480x270",
-        "codecs": "mp4a.40.2,avc1.4D4015", 
-        "audio": "audio-32000",
-        "uri": "/amplify_video/2051962711932567554/pl/avc1/480x270/jdlw0BADaysECMQu.m3u8"
-      }
-    ],
-    "audioTracks": [
-      {
-        "type": "AUDIO",
-        "groupId": "audio-64000",
-        "name": "Audio",
-        "uri": "/amplify_video/2051962711932567554/pl/mp4a/64000/nUPF9DBKcLQ_cDyf.m3u8",
-        "default": false,
-        "autoselect": true
-      },
-      {
-        "type": "AUDIO",
-        "groupId": "audio-32000",
-        "name": "Audio",
-        "uri": "/amplify_video/2051962711932567554/pl/mp4a/32000/gI5EYOFDpz5dzACL.m3u8",
-        "default": false,
-        "autoselect": true
-      }
-    ],
-    "subtitleTracks": []
+[
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b",
+    "hlsInfo": {
+      "audioTracks": [],
+      "isMaster": true,
+      "subtitleTracks": [],
+      "url": "https://minochinos.com/stream/R6NXHNgVgDAP_ZZ0fiZbkA/hjkrhuihghfvu/1779082987/40978962/master.m3u8",
+      "variants": []
+    },
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039789405,
+    "type": "hls",
+    "url": "https://minochinos.com/stream/R6NXHNgVgDAP_ZZ0fiZbkA/hjkrhuihghfvu/1779082987/40978962/master.m3u8"
+  },
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b; tsn=1",
+    "hlsInfo": {
+      "audioTracks": [],
+      "isMaster": false,
+      "mediaSegments": [],
+      "mediaSequence": 1,
+      "mediaTargetDuration": 10,
+      "subtitleTracks": [],
+      "url": "https://minochinos.com/stream/R6NXHNgVgDAP_ZZ0fiZbkA/hjkrhuihghfvu/1779082987/40978962/index-f2-v1-a1.m3u8",
+      "variants": []
+    },
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039791784,
+    "type": "hls",
+    "url": "https://minochinos.com/stream/R6NXHNgVgDAP_ZZ0fiZbkA/hjkrhuihghfvu/1779082987/40978962/index-f2-v1-a1.m3u8"
+  },
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b",
+    "downloadable": false,
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039789456,
+    "type": "blob",
+    "url": "blob:https://minochinos.com/473ce089-340c-4ff9-b250-b0524cc05485"
+  },
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b",
+    "hlsInfo": {
+      "audioTracks": [],
+      "isMaster": true,
+      "subtitleTracks": [],
+      "url": "https://minochinos.com/stream/jA-cXU2zpeEOYt-eLPKMuQ/hjkrhuihghfvu/1779083009/40978962/master.m3u8",
+      "variants": []
+    },
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039810405,
+    "type": "hls",
+    "url": "https://minochinos.com/stream/jA-cXU2zpeEOYt-eLPKMuQ/hjkrhuihghfvu/1779083009/40978962/master.m3u8"
+  },
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b",
+    "downloadable": false,
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039810390,
+    "type": "blob",
+    "url": "blob:https://minochinos.com/65300575-5738-453c-bee1-da100e11b3db"
+  },
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b; tsn=1",
+    "hlsInfo": {
+      "audioTracks": [],
+      "isMaster": false,
+      "mediaSegments": [],
+      "mediaSequence": 1,
+      "mediaTargetDuration": 10,
+      "subtitleTracks": [],
+      "url": "https://minochinos.com/stream/jA-cXU2zpeEOYt-eLPKMuQ/hjkrhuihghfvu/1779083009/40978962/index-f2-v1-a1.m3u8",
+      "variants": []
+    },
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039812300,
+    "type": "hls",
+    "url": "https://minochinos.com/stream/jA-cXU2zpeEOYt-eLPKMuQ/hjkrhuihghfvu/1779083009/40978962/index-f2-v1-a1.m3u8"
+  },
+  {
+    "cookies": "_ym_uid=1778851246483238679; _ym_d=1778851246; _ym_isad=2; _ym_visorc=b; tsn=42",
+    "downloadable": true,
+    "pageTitle": "Embed",
+    "pageUrl": "https://minochinos.com/embed/1dcpvq9u854c",
+    "timestamp": 1779039828890,
+    "type": "mp4",
+    "url": "https://ahabrabbins.cfd/cv/v/56/c7/56c759cd958e185c792ee5f7a554ad173a55a2fe_x264.mp4"
   }
-}
+]

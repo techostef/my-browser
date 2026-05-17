@@ -68,27 +68,149 @@ export const VIDEO_DETECTOR_JS = `
   if (window.__VIDEO_DETECTOR_INSTALLED__) return;
   window.__VIDEO_DETECTOR_INSTALLED__ = true;
 
-  // Cross-frame fullscreen coordination. The top frame broadcasts
-  // __RN_FS_QUERY with an id identifying which top-level iframe was
-  // queried. Each frame either replies (if it has a playing video)
-  // directly to window.top — echoing the id so the top frame knows
-  // which iframe to fullscreen — or forwards the query down to its
-  // own child iframes (handling arbitrary nesting depth).
+  // Cross-frame fullscreen coordination.
+  //   __RN_FS_QUERY: if this frame has a playing <video>, fullscreen it
+  //     locally (position:fixed at top z-index) and notify window.top —
+  //     the top frame will make the outer iframe element full-viewport.
+  //     Also starts a VIDEO_STATE interval so the RN player controller
+  //     gets time/duration/play-state updates.
+  //   __RN_FS_EXIT: restore any video this frame fullscreened, stop the
+  //     state interval, forward to child iframes.
+  //   __RN_FS_TOGGLE_PLAY / TOGGLE_MUTE / SEEK / SKIP_BACK / SKIP_FORWARD:
+  //     control commands from the RN player controller. Each frame acts
+  //     locally if it owns the fullscreened video, otherwise forwards.
   try {
-    window.addEventListener('message', function(e) {
-      if (!e || !e.data || typeof e.data !== 'object') return;
-      if (e.data.type !== '__RN_FS_QUERY') return;
-      var queryId = e.data.id;
-      var vids = document.querySelectorAll('video');
-      for (var i = 0; i < vids.length; i++) {
-        if (!vids[i].paused) {
-          try { window.top.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId }, '*'); } catch(_) {}
+    var fsStateInterval = null;
+    function startStateInterval() {
+      if (fsStateInterval) clearInterval(fsStateInterval);
+      fsStateInterval = setInterval(function() {
+        var el = document.querySelector('.__rn-iframe-playing');
+        if (!el) {
+          clearInterval(fsStateInterval);
+          fsStateInterval = null;
           return;
         }
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'VIDEO_STATE',
+            currentTime: el.currentTime || 0,
+            duration: isFinite(el.duration) ? el.duration : 0,
+            paused: el.paused,
+            muted: el.muted,
+          }));
+        } catch(_) {}
+      }, 250);
+    }
+    function stopStateInterval() {
+      if (fsStateInterval) { clearInterval(fsStateInterval); fsStateInterval = null; }
+    }
+    function forwardToChildren(message) {
+      var ifr = document.querySelectorAll('iframe');
+      for (var i = 0; i < ifr.length; i++) {
+        try { ifr[i].contentWindow.postMessage(message, '*'); } catch(_) {}
       }
-      var iframes = document.querySelectorAll('iframe');
-      for (var j = 0; j < iframes.length; j++) {
-        try { iframes[j].contentWindow.postMessage({ type: '__RN_FS_QUERY', id: queryId }, '*'); } catch(_) {}
+    }
+    // Hide every element that isn't on the target's ancestor chain. Used
+    // both for the video element (in the leaf frame) and for the iframe
+    // element that a descendant responded through (in intermediate frames).
+    function hideAroundNode(target) {
+      var node = target;
+      while (node && node.parentElement) {
+        var siblings = node.parentElement.children;
+        for (var s = 0; s < siblings.length; s++) {
+          var sib = siblings[s];
+          if (sib === node) continue;
+          if (sib.dataset && sib.dataset.rnFsHidden === '1') continue;
+          if (sib.dataset) {
+            sib.dataset.rnFsHidden = '1';
+            sib.dataset.rnFsOrigCssText = sib.style.cssText || '';
+          }
+          sib.style.setProperty('display', 'none', 'important');
+        }
+        node = node.parentElement;
+        if (node === document.documentElement) break;
+      }
+    }
+    window.addEventListener('message', function(e) {
+      if (!e || !e.data || typeof e.data !== 'object') return;
+      var type = e.data.type;
+      if (type === '__RN_FS_QUERY') {
+        var queryId = e.data.id;
+        var vids = document.querySelectorAll('video');
+        for (var i = 0; i < vids.length; i++) {
+          var v = vids[i];
+          if (!v.paused) {
+            if (!v.dataset.rnIframeFsOrig) {
+              v.dataset.rnIframeFsOrig = v.getAttribute('style') || '';
+            }
+            v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:black!important;object-fit:contain!important;margin:0!important;padding:0!important;';
+            v.classList.add('__rn-iframe-playing');
+            hideAroundNode(v);
+            startStateInterval();
+            // Reply to our parent — intermediate frames also need to know
+            // (so they can hide their own UI around the iframe that led
+            // here). The message bubbles up the chain to the top frame.
+            try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId }, '*'); } catch(_) {}
+            return;
+          }
+        }
+        forwardToChildren({ type: '__RN_FS_QUERY', id: queryId });
+      } else if (type === '__RN_FS_HAS_PLAYING') {
+        // A descendant frame replied: hide our own UI around the child
+        // iframe that produced this response, then forward up the chain.
+        var queryId2 = e.data.id;
+        if (e.source) {
+          var ifs = document.querySelectorAll('iframe');
+          for (var ii = 0; ii < ifs.length; ii++) {
+            if (ifs[ii].contentWindow === e.source) {
+              hideAroundNode(ifs[ii]);
+              break;
+            }
+          }
+        }
+        try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId2 }, '*'); } catch(_) {}
+      } else if (type === '__RN_FS_EXIT') {
+        var fsVids = document.querySelectorAll('.__rn-iframe-playing');
+        for (var k = 0; k < fsVids.length; k++) {
+          var fv = fsVids[k];
+          fv.setAttribute('style', fv.dataset.rnIframeFsOrig || '');
+          fv.classList.remove('__rn-iframe-playing');
+          delete fv.dataset.rnIframeFsOrig;
+        }
+        // Un-hide everything this frame hid (restore full cssText since
+        // we wrote display:none with !important).
+        var hidden = document.querySelectorAll('[data-rn-fs-hidden="1"]');
+        for (var hh = 0; hh < hidden.length; hh++) {
+          hidden[hh].style.cssText = hidden[hh].dataset.rnFsOrigCssText || '';
+          delete hidden[hh].dataset.rnFsHidden;
+          delete hidden[hh].dataset.rnFsOrigCssText;
+        }
+        stopStateInterval();
+        forwardToChildren({ type: '__RN_FS_EXIT' });
+      } else if (
+        type === '__RN_FS_TOGGLE_PLAY' ||
+        type === '__RN_FS_TOGGLE_MUTE' ||
+        type === '__RN_FS_SEEK' ||
+        type === '__RN_FS_SKIP_BACK' ||
+        type === '__RN_FS_SKIP_FORWARD'
+      ) {
+        var target = document.querySelector('.__rn-iframe-playing');
+        if (target) {
+          if (type === '__RN_FS_TOGGLE_PLAY') {
+            if (target.paused) { try { target.play().catch(function(){}); } catch(_) {} }
+            else target.pause();
+          } else if (type === '__RN_FS_TOGGLE_MUTE') {
+            target.muted = !target.muted;
+          } else if (type === '__RN_FS_SEEK') {
+            target.currentTime = e.data.time || 0;
+          } else if (type === '__RN_FS_SKIP_BACK') {
+            target.currentTime = Math.max(0, target.currentTime - 10);
+          } else if (type === '__RN_FS_SKIP_FORWARD') {
+            target.currentTime = Math.min(target.duration || 0, target.currentTime + 10);
+          }
+          return;
+        }
+        forwardToChildren(e.data);
       }
     });
   } catch(e) {}

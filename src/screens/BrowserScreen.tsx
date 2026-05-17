@@ -55,6 +55,15 @@ const TOGGLE_FULLSCREEN_JS = `(function(){
     // 1. Restore path — iframe was fullscreen
     var fsIframe = document.querySelector('iframe[data-rn-fullscreen="1"]');
     if (fsIframe) {
+      try { fsIframe.contentWindow.postMessage({ type: '__RN_FS_EXIT' }, '*'); } catch(_) {}
+      // Un-hide everything we hid (restore the original style attribute
+      // wholesale, since we may have written display:none with !important).
+      var hidden = document.querySelectorAll('[data-rn-fs-hidden="1"]');
+      for (var h = 0; h < hidden.length; h++) {
+        hidden[h].style.cssText = hidden[h].dataset.rnFsOrigCssText || '';
+        delete hidden[h].dataset.rnFsHidden;
+        delete hidden[h].dataset.rnFsOrigCssText;
+      }
       fsIframe.setAttribute('style', fsIframe.dataset.rnOrigStyle || '');
       delete fsIframe.dataset.rnFullscreen;
       delete fsIframe.dataset.rnOrigStyle;
@@ -124,9 +133,29 @@ const TOGGLE_FULLSCREEN_JS = `(function(){
       if (!iframe) return;
       handled = true;
       window.removeEventListener('message', listener);
+      // Hide every element that isn't an ancestor of the iframe. Start
+      // with the iframe itself so its own direct siblings are hidden too.
+      // Use setProperty(..., 'important') so page CSS with !important
+      // cannot override our hide.
+      var node = iframe;
+      while (node && node.parentElement) {
+        var siblings = node.parentElement.children;
+        for (var s = 0; s < siblings.length; s++) {
+          var sib = siblings[s];
+          if (sib === node) continue;
+          if (sib.dataset && sib.dataset.rnFsHidden === '1') continue;
+          if (sib.dataset) {
+            sib.dataset.rnFsHidden = '1';
+            sib.dataset.rnFsOrigCssText = sib.style.cssText || '';
+          }
+          sib.style.setProperty('display', 'none', 'important');
+        }
+        node = node.parentElement;
+        if (node === document.documentElement) break;
+      }
       iframe.dataset.rnFullscreen = '1';
       iframe.dataset.rnOrigStyle = iframe.getAttribute('style') || '';
-      iframe.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:99999!important;border:none!important;background:black!important;';
+      iframe.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:2147483647!important;border:none!important;background:black!important;';
       rnLog('[FULLSCREEN] iframe[' + id + '] fullscreened');
       notifyChanged(true);
     };
@@ -378,34 +407,39 @@ export default function BrowserScreen() {
     webViewRefs.current[activeTabId]?.injectJavaScript(TOGGLE_FULLSCREEN_JS);
   }, [activeTabId]);
 
+  // Each control tries the top-frame .__rn-playing video first. If none,
+  // forwards the command via postMessage to the iframe that's currently
+  // fullscreened (data-rn-fullscreen="1"); videoDetector inside the iframe
+  // acts on its __rn-iframe-playing video (or forwards further to nested
+  // iframes).
   const injectLiveTogglePlay = useCallback(() => {
     const sendTheData = `window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: v.src || v.currentSrc || '' } }));`
     webViewRefs.current[activeTabId]?.injectJavaScript(
-      `(function(){var v=document.querySelector('.__rn-playing');if(v){${sendTheData};v.paused?v.play().catch(function(){}):v.pause();}})();true;`,
+      `(function(){var v=document.querySelector('.__rn-playing');if(v){${sendTheData};v.paused?v.play().catch(function(){}):v.pause();return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_TOGGLE_PLAY'},'*');}catch(_){}}})();true;`,
     );
   }, [activeTabId]);
 
   const injectLiveToggleMute = useCallback(() => {
     webViewRefs.current[activeTabId]?.injectJavaScript(
-      "(function(){var v=document.querySelector('.__rn-playing');if(v)v.muted=!v.muted;})();true;",
+      `(function(){var v=document.querySelector('.__rn-playing');if(v){v.muted=!v.muted;return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_TOGGLE_MUTE'},'*');}catch(_){}}})();true;`,
     );
   }, [activeTabId]);
 
   const injectLiveSeek = useCallback((time: number) => {
     webViewRefs.current[activeTabId]?.injectJavaScript(
-      `(function(){var v=document.querySelector('.__rn-playing');if(v)v.currentTime=${time};})();true;`,
+      `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=${time};return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SEEK',time:${time}},'*');}catch(_){}}})();true;`,
     );
   }, [activeTabId]);
 
   const injectLiveSkipBack = useCallback(() => {
     webViewRefs.current[activeTabId]?.injectJavaScript(
-      "(function(){var v=document.querySelector('.__rn-playing');if(v)v.currentTime=Math.max(0,v.currentTime-10);})();true;",
+      `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=Math.max(0,v.currentTime-10);return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SKIP_BACK'},'*');}catch(_){}}})();true;`,
     );
   }, [activeTabId]);
 
   const injectLiveSkipForward = useCallback(() => {
     webViewRefs.current[activeTabId]?.injectJavaScript(
-      "(function(){var v=document.querySelector('.__rn-playing');if(v)v.currentTime=Math.min(v.duration||0,v.currentTime+10);})();true;",
+      `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=Math.min(v.duration||0,v.currentTime+10);return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SKIP_FORWARD'},'*');}catch(_){}}})();true;`,
     );
   }, [activeTabId]);
 
