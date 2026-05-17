@@ -12,6 +12,82 @@ const DURATION_CACHE_KEY = '@media_duration_cache_v1';
 let durationCache: Record<string, number> | null = null;
 let durationCacheDirty = false;
 
+// ---- Persistent download state -------------------------------------------
+// Stored as a JSON-serialized record keyed by download id under a single
+// AsyncStorage key. Only `paused` downloads survive — completed/cancelled
+// records are deleted, and `downloading` snapshots are written as `paused`
+// so that a crash mid-download leaves a resumable entry.
+const PERSISTED_DOWNLOADS_KEY = '@persisted_downloads_v1';
+
+interface PersistedDownload {
+  id: string;
+  type: 'direct' | 'hls';
+  url: string;
+  fileUri: string;
+  fileName: string;
+  pageTitle: string;
+  pageUrl?: string;
+  cookies?: string;
+  expectedTotalBytes: number;
+  bytesDownloaded: number;
+  createdAt: number;
+  status: 'paused';
+
+  // direct-only — full savable state from DownloadResumable.savable().
+  // resumeData is populated only after pauseAsync() succeeds.
+  savable?: FileSystem.DownloadPauseState;
+
+  // HLS-only
+  hlsInfo?: HlsMasterInfo;
+  selectedVariant?: HlsVariant;
+}
+
+let persistedCache: Record<string, PersistedDownload> | null = null;
+
+async function loadPersistedDownloads(): Promise<Record<string, PersistedDownload>> {
+  if (persistedCache) { return persistedCache; }
+  try {
+    const raw = await AsyncStorage.getItem(PERSISTED_DOWNLOADS_KEY);
+    if (!raw) {
+      persistedCache = {};
+      return persistedCache;
+    }
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      persistedCache = parsed as Record<string, PersistedDownload>;
+    } else {
+      persistedCache = {};
+    }
+  } catch (err) {
+    console.warn('Failed to load persisted downloads (resetting):', err);
+    persistedCache = {};
+  }
+  return persistedCache;
+}
+
+async function flushPersistedDownloads(): Promise<void> {
+  if (!persistedCache) { return; }
+  try {
+    await AsyncStorage.setItem(PERSISTED_DOWNLOADS_KEY, JSON.stringify(persistedCache));
+  } catch (err) {
+    console.warn('Failed to persist downloads:', err);
+  }
+}
+
+async function upsertPersistedDownload(record: PersistedDownload): Promise<void> {
+  const cache = await loadPersistedDownloads();
+  cache[record.id] = record;
+  await flushPersistedDownloads();
+}
+
+async function removePersistedDownload(id: string): Promise<void> {
+  const cache = await loadPersistedDownloads();
+  if (cache[id]) {
+    delete cache[id];
+    await flushPersistedDownloads();
+  }
+}
+
 async function loadDurationCache(): Promise<Record<string, number>> {
   if (durationCache) { return durationCache; }
   try {
@@ -160,12 +236,36 @@ type StatusCallback = (
 ) => void;
 
 interface ActiveTask {
+  type: 'direct' | 'hls';
   task?: FileSystem.DownloadResumable;
   ffmpegSessionId?: number;
   url: string;
   fileUri: string;
+  fileName: string;
   bytesDownloaded: number;
   totalBytes: number;
+  // Authoritative expected size captured from a HEAD pre-flight. Many video
+  // servers don't include Content-Length in the GET progress events (chunked
+  // transfer), which would otherwise make truncation undetectable.
+  expectedTotalBytes?: number;
+  paused?: boolean;
+  // Stall-watchdog: epoch ms of the last progress event. Used to detect
+  // connection loss without depending on NetInfo.
+  lastProgressAt?: number;
+  // Headers used for the original GET, preserved so a savable-based resume
+  // (post app restart) can reconstruct the DownloadResumable.
+  requestHeaders?: Record<string, string>;
+  // Cached copy of the most recent task.savable() so resumeDownload can find
+  // resumeData without recalling savable() (the live task may already be gone
+  // after an auto-pause failure).
+  savable?: FileSystem.DownloadPauseState;
+  createdAt: number;
+  pageTitle: string;
+  pageUrl?: string;
+  cookies?: string;
+  // HLS-only — preserved so resumeDownload can restart the FFmpeg job from scratch.
+  hlsInfo?: HlsMasterInfo;
+  selectedVariant?: HlsVariant;
 }
 
 interface DeviceFolderScanResult {
@@ -173,12 +273,22 @@ interface DeviceFolderScanResult {
   folders: string[];
 }
 
+// Auto-pause a download whose last progress event is older than this. Lets us
+// detect connection loss without depending on NetInfo.
+const STALL_THRESHOLD_MS = 15_000;
+const STALL_SCAN_INTERVAL_MS = 1_000;
+// Debounce persisted-progress writes so we don't pound AsyncStorage on every
+// progress event.
+const PERSIST_PROGRESS_DEBOUNCE_MS = 2_000;
+
 class DownloadManager {
   private activeTasks: Map<string, ActiveTask> = new Map();
   private onProgress: ProgressCallback | null = null;
   private onStatusChange: StatusCallback | null = null;
   private readonly privateFolderName = 'private_downloads/';
   private privateFolderUri: string | null = null;
+  private stallWatchdogHandle: ReturnType<typeof setInterval> | null = null;
+  private persistProgressTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   setProgressCallback(cb: ProgressCallback) {
     this.onProgress = cb;
@@ -204,6 +314,111 @@ class DownloadManager {
 
   setStatusCallback(cb: StatusCallback) {
     this.onStatusChange = cb;
+  }
+
+  // ---- Persistence ------------------------------------------------------
+
+  private async persistFromActive(id: string): Promise<void> {
+    const active = this.activeTasks.get(id);
+    if (!active) { return; }
+    // Try to capture the latest savable() snapshot for direct downloads.
+    let savable = active.savable;
+    if (active.type === 'direct' && active.task) {
+      try {
+        savable = active.task.savable();
+        active.savable = savable;
+      } catch { /* keep stale snapshot if savable throws */ }
+    }
+    await upsertPersistedDownload({
+      id,
+      type: active.type,
+      url: active.url,
+      fileUri: active.fileUri,
+      fileName: active.fileName,
+      pageTitle: active.pageTitle,
+      pageUrl: active.pageUrl,
+      cookies: active.cookies,
+      expectedTotalBytes: active.expectedTotalBytes ?? active.totalBytes ?? 0,
+      bytesDownloaded: active.bytesDownloaded,
+      createdAt: active.createdAt,
+      status: 'paused',
+      savable,
+      hlsInfo: active.hlsInfo,
+      selectedVariant: active.selectedVariant,
+    });
+  }
+
+  private schedulePersistProgress(id: string): void {
+    if (this.persistProgressTimers.has(id)) { return; }
+    const timer = setTimeout(() => {
+      this.persistProgressTimers.delete(id);
+      void this.persistFromActive(id);
+    }, PERSIST_PROGRESS_DEBOUNCE_MS);
+    this.persistProgressTimers.set(id, timer);
+  }
+
+  private clearPersistTimer(id: string): void {
+    const timer = this.persistProgressTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.persistProgressTimers.delete(id);
+    }
+  }
+
+  // ---- Stall watchdog ---------------------------------------------------
+
+  private ensureStallWatchdog(): void {
+    if (this.stallWatchdogHandle) { return; }
+    this.stallWatchdogHandle = setInterval(() => {
+      const now = Date.now();
+      let anyActive = false;
+      for (const [id, active] of this.activeTasks) {
+        if (active.paused) { continue; }
+        anyActive = true;
+        const last = active.lastProgressAt ?? active.createdAt;
+        if (now - last > STALL_THRESHOLD_MS) {
+          this.autoPauseStalled(id).catch(err => {
+            console.warn(`auto-pause for ${id} failed:`, err);
+          });
+        }
+      }
+      if (!anyActive) { this.stopStallWatchdog(); }
+    }, STALL_SCAN_INTERVAL_MS);
+  }
+
+  private stopStallWatchdog(): void {
+    if (this.stallWatchdogHandle) {
+      clearInterval(this.stallWatchdogHandle);
+      this.stallWatchdogHandle = null;
+    }
+  }
+
+  private async autoPauseStalled(id: string): Promise<void> {
+    const active = this.activeTasks.get(id);
+    if (!active || active.paused) { return; }
+    active.paused = true;
+    if (active.type === 'hls') {
+      if (active.ffmpegSessionId !== undefined) {
+        const sessionId = active.ffmpegSessionId;
+        active.ffmpegSessionId = undefined;
+        FFmpegKit.cancel(sessionId);
+        await FileSystem.deleteAsync(active.fileUri, { idempotent: true }).catch(() => {});
+      }
+      this.onStatusChange?.(id, 'paused', undefined, 'Connection lost — tap Resume to continue');
+      await this.persistFromActive(id);
+      return;
+    }
+    // direct
+    try {
+      await active.task?.pauseAsync();
+      active.savable = active.task?.savable();
+    } catch (err) {
+      // pauseAsync may throw if the underlying network is already broken;
+      // we still want to persist what we have so resume can be attempted.
+      console.warn(`auto-pause pauseAsync failed for ${id}:`, err);
+    }
+    this.onStatusChange?.(id, 'paused', undefined, 'Connection lost — tap Resume to continue');
+    await this.persistFromActive(id);
   }
 
   private async ensurePrivateFolder(): Promise<string> {
@@ -706,6 +921,24 @@ class DownloadManager {
     return lower.includes('.m3u8') || lower.includes('m3u8');
   }
 
+  // HEAD pre-flight so we know the real Content-Length even when the GET
+  // progress callback doesn't surface it (chunked transfer, some CDNs).
+  // Returns 0 if the size can't be determined — caller treats that as
+  // "unverifiable" rather than "zero bytes".
+  private async fetchExpectedContentLength(url: string, headers: Record<string, string>): Promise<number> {
+    try {
+      const response = await fetch(url, { method: 'HEAD', headers });
+      const value = response.headers.get('Content-Length') || response.headers.get('content-length');
+      if (value) {
+        const n = parseInt(value, 10);
+        if (Number.isFinite(n) && n > 0) {
+          return n;
+        }
+      }
+    } catch { /* network error or HEAD not supported — fall back */ }
+    return 0;
+  }
+
   async startDownload(
     id: string,
     url: string,
@@ -742,33 +975,68 @@ class DownloadManager {
       headers['Cookie'] = cookies;
     }
 
-    const task = FileSystem.createDownloadResumable(
-      url,
-      destPath,
-      { headers },
-      (progress: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => {
-        const received = progress.totalBytesWritten || 0;
-        const total = progress.totalBytesExpectedToWrite || 0;
+    // Capture the real expected size up front so we can detect a truncated
+    // download even when the server doesn't send Content-Length on the GET.
+    const expectedTotalBytes = await this.fetchExpectedContentLength(url, headers);
 
-        const active = this.activeTasks.get(id);
-        if (active) {
-          active.bytesDownloaded = received;
-          active.totalBytes = total;
-        }
+    const progressCb = this.makeProgressCallback(id, expectedTotalBytes);
+    const task = FileSystem.createDownloadResumable(url, destPath, { headers }, progressCb);
 
-        this.onProgress?.(id, received, total);
-      },
-    );
-
+    const createdAt = Date.now();
     this.activeTasks.set(id, {
+      type: 'direct',
       task,
       url,
       fileUri: destPath,
+      fileName,
       bytesDownloaded: 0,
       totalBytes: 0,
+      expectedTotalBytes,
+      lastProgressAt: createdAt,
+      requestHeaders: headers,
+      createdAt,
+      pageTitle,
+      pageUrl,
+      cookies,
     });
 
+    void upsertPersistedDownload({
+      id,
+      type: 'direct',
+      url,
+      fileUri: destPath,
+      fileName,
+      pageTitle,
+      pageUrl,
+      cookies,
+      expectedTotalBytes,
+      bytesDownloaded: 0,
+      createdAt,
+      status: 'paused',
+      savable: task.savable(),
+    });
+
+    this.ensureStallWatchdog();
     return this.runTask(id);
+  }
+
+  // Factored out so the resume-from-savable path can wire the same callback.
+  private makeProgressCallback(id: string, expectedTotalBytes: number) {
+    return (progress: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => {
+      const received = progress.totalBytesWritten || 0;
+      const total = progress.totalBytesExpectedToWrite || 0;
+
+      const active = this.activeTasks.get(id);
+      if (active) {
+        active.bytesDownloaded = received;
+        active.totalBytes = total;
+        active.lastProgressAt = Date.now();
+      }
+
+      const reportedTotal = total > 0 ? total : expectedTotalBytes;
+      this.onProgress?.(id, received, reportedTotal);
+      this.schedulePersistProgress(id);
+    };
   }
 
   // ===== HLS (.m3u8) Download via FFmpegKit =====
@@ -888,30 +1156,137 @@ class DownloadManager {
         },
       );
 
+      const createdAt = Date.now();
       this.activeTasks.set(id, {
+        type: 'hls',
         ffmpegSessionId: session.getSessionId(),
         url,
         fileUri: outputPath,
+        fileName: outputPath.split('/').pop() || '',
         bytesDownloaded: 0,
         totalBytes: 0,
+        lastProgressAt: createdAt,
+        createdAt,
+        // Preserve original args so pauseDownload can keep the task alive and
+        // resumeDownload can restart the FFmpeg job with the same parameters.
+        pageTitle,
+        pageUrl,
+        cookies,
+        hlsInfo: hslInfo,
+        selectedVariant,
       });
+
+      void upsertPersistedDownload({
+        id,
+        type: 'hls',
+        url,
+        fileUri: outputPath,
+        fileName: outputPath.split('/').pop() || '',
+        pageTitle,
+        pageUrl,
+        cookies,
+        expectedTotalBytes: 0,
+        bytesDownloaded: 0,
+        createdAt,
+        status: 'paused',
+        hlsInfo: hslInfo,
+        selectedVariant,
+      });
+
+      this.ensureStallWatchdog();
 
       await done;
 
       this.activeTasks.delete(id);
+      this.clearPersistTimer(id);
+      void removePersistedDownload(id);
       this.onStatusChange?.(id, 'completed', outputPath);
       return outputPath;
     } catch (err: any) {
       await FileSystem.deleteAsync(outputPath, { idempotent: true }).catch(() => {});
+      const stillActive = this.activeTasks.get(id);
+      if (stillActive?.paused) {
+        // Pause path: status is already 'paused' and the task record stays in
+        // the map so resumeDownload can restart it.
+        return '';
+      }
       if (err?.message === 'cancelled') {
         this.activeTasks.delete(id);
+        this.clearPersistTimer(id);
+        void removePersistedDownload(id);
         this.onStatusChange?.(id, 'cancelled');
         return '';
       }
       console.error('[HLS-FFmpeg] download failed:', err?.message);
+      this.activeTasks.delete(id);
+      this.clearPersistTimer(id);
+      void removePersistedDownload(id);
       this.onStatusChange?.(id, 'failed', undefined, err?.message || 'HLS download failed');
       throw err;
     }
+  }
+
+  // On Android, expo-file-system can resolve downloadAsync()/resumeAsync()
+  // successfully with a truncated body when the underlying HTTP connection
+  // drops mid-stream (e.g. airplane mode toggled). We verify against the
+  // best-known expected size and the on-disk size.
+  private async verifyDownloadComplete(
+    uri: string,
+    expectedBytes: number,
+    lastReceivedBytes: number,
+  ): Promise<{ ok: boolean; actualBytes: number; expectedBytes: number }> {
+    let actualBytes = lastReceivedBytes;
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      const sizeFromDisk = (info as any).size;
+      if (typeof sizeFromDisk === 'number' && sizeFromDisk > 0) {
+        actualBytes = sizeFromDisk;
+      }
+    } catch { /* fall back to progress-reported bytes */ }
+
+    // If we genuinely have no expected size, we can't verify — accept it.
+    if (expectedBytes <= 0) {
+      return { ok: true, actualBytes, expectedBytes };
+    }
+    return { ok: actualBytes >= expectedBytes, actualBytes, expectedBytes };
+  }
+
+  private async finalizeDownload(
+    id: string,
+    uri: string,
+    expectedBytes: number,
+    lastReceivedBytes: number,
+  ): Promise<string> {
+    const verification = await this.verifyDownloadComplete(uri, expectedBytes, lastReceivedBytes);
+    if (!verification.ok) {
+      // Truncated post-fact (downloadAsync resolved but bytes are short).
+      // Keep the partial file and persist as paused so the user can resume.
+      const active = this.activeTasks.get(id);
+      if (active) {
+        active.paused = true;
+        active.bytesDownloaded = verification.actualBytes;
+        try { active.savable = active.task?.savable(); } catch { /* ignore */ }
+      }
+      await this.persistFromActive(id);
+      const msg = `Download incomplete: received ${verification.actualBytes} of ${verification.expectedBytes} bytes — tap Resume to continue`;
+      this.onStatusChange?.(id, 'paused', undefined, msg);
+      throw new Error(msg);
+    }
+
+    this.activeTasks.delete(id);
+    this.clearPersistTimer(id);
+    void removePersistedDownload(id);
+    this.onStatusChange?.(id, 'completed', uri);
+    return uri;
+  }
+
+  // Prefer the HEAD-derived expected size over the progress-reported one
+  // because some servers don't include Content-Length in GET responses.
+  private resolveExpectedBytes(active: ActiveTask): number {
+    if (active.expectedTotalBytes && active.expectedTotalBytes > 0) {
+      return active.expectedTotalBytes;
+    }
+    return active.totalBytes;
   }
 
   private async runTask(id: string): Promise<string> {
@@ -926,19 +1301,22 @@ class DownloadManager {
         throw new Error('Download was cancelled');
       }
 
-      this.activeTasks.delete(id);
-      this.onStatusChange?.(id, 'completed', result.uri);
-      return result.uri;
+      return await this.finalizeDownload(id, result.uri, this.resolveExpectedBytes(active), active.bytesDownloaded);
     } catch (err: any) {
-      if (err?.message?.includes('pause')) {
+      const current = this.activeTasks.get(id);
+      if (current?.paused) {
         return '';
       }
       if (err?.message?.includes('cancel')) {
         this.activeTasks.delete(id);
+        this.clearPersistTimer(id);
+        void removePersistedDownload(id);
         this.onStatusChange?.(id, 'cancelled');
         return '';
       }
       this.activeTasks.delete(id);
+      this.clearPersistTimer(id);
+      void removePersistedDownload(id);
       this.onStatusChange?.(id, 'failed', undefined, err?.message || 'Download failed');
       throw err;
     }
@@ -946,19 +1324,30 @@ class DownloadManager {
 
   pauseDownload(id: string): void {
     const active = this.activeTasks.get(id);
-    if (active) {
+    if (!active) { return; }
+    active.paused = true;
+    if (active.type === 'hls') {
       if (active.ffmpegSessionId !== undefined) {
-        // FFmpeg doesn't support pause; cancel instead
-        FFmpegKit.cancel(active.ffmpegSessionId);
-        this.activeTasks.delete(id);
-        this.onStatusChange?.(id, 'cancelled');
-        return;
+        const sessionId = active.ffmpegSessionId;
+        active.ffmpegSessionId = undefined;
+        FFmpegKit.cancel(sessionId);
+        FileSystem.deleteAsync(active.fileUri, { idempotent: true }).catch(() => {});
       }
       this.onStatusChange?.(id, 'paused');
-      active.task?.pauseAsync().catch((err: unknown) => {
-        console.log(`Paused download ${id}`, err);
-      });
+      void this.persistFromActive(id);
+      return;
     }
+    this.onStatusChange?.(id, 'paused');
+    // Wait for pauseAsync so savable() captures the resumeData, then persist.
+    (async () => {
+      try {
+        await active.task?.pauseAsync();
+        active.savable = active.task?.savable();
+      } catch (err) {
+        console.log(`Paused download ${id} (pauseAsync threw)`, err);
+      }
+      await this.persistFromActive(id);
+    })();
   }
 
   async resumeDownload(id: string): Promise<string> {
@@ -967,8 +1356,42 @@ class DownloadManager {
       throw new Error('No paused task found for this download');
     }
 
+    // HLS: restart FFmpeg from scratch with the stored args.
+    if (active.type === 'hls') {
+      const { url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant } = active;
+      this.activeTasks.delete(id);
+      this.clearPersistTimer(id);
+      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant);
+    }
+
+    // Direct: if the in-memory task is gone (e.g. restored from persistence),
+    // reconstruct the DownloadResumable from the saved state.
+    if (!active.task) {
+      const headers = active.requestHeaders ?? active.savable?.options?.headers ?? {};
+      const resumeData = active.savable?.resumeData;
+      const progressCb = this.makeProgressCallback(id, active.expectedTotalBytes ?? 0);
+      const reconstructed = FileSystem.createDownloadResumable(
+        active.url,
+        active.fileUri,
+        { headers },
+        progressCb,
+        resumeData,
+      );
+      active.task = reconstructed;
+    }
+
+    active.paused = false;
+    active.lastProgressAt = Date.now();
     this.onStatusChange?.(id, 'downloading');
-    return this.runResumeTask(id);
+    this.ensureStallWatchdog();
+
+    // If there's no resumeData (truncation-detected case or never-paused),
+    // calling resumeAsync would no-op or fail — fall back to fresh download.
+    const hasResumeData = !!active.savable?.resumeData;
+    if (hasResumeData) {
+      return this.runResumeTask(id);
+    }
+    return this.runTask(id);
   }
 
   private async runResumeTask(id: string): Promise<string> {
@@ -983,19 +1406,22 @@ class DownloadManager {
         throw new Error('Download was cancelled');
       }
 
-      this.activeTasks.delete(id);
-      this.onStatusChange?.(id, 'completed', result.uri);
-      return result.uri;
+      return await this.finalizeDownload(id, result.uri, this.resolveExpectedBytes(active), active.bytesDownloaded);
     } catch (err: any) {
+      const current = this.activeTasks.get(id);
+      if (current?.paused) {
+        return '';
+      }
       if (err?.message?.includes('cancel')) {
         this.activeTasks.delete(id);
+        this.clearPersistTimer(id);
+        void removePersistedDownload(id);
         this.onStatusChange?.(id, 'cancelled');
         return '';
       }
-      if (err?.message?.includes('pause')) {
-        return '';
-      }
       this.activeTasks.delete(id);
+      this.clearPersistTimer(id);
+      void removePersistedDownload(id);
       this.onStatusChange?.(id, 'failed', undefined, err?.message || 'Resume failed');
       throw err;
     }
@@ -1009,8 +1435,12 @@ class DownloadManager {
       } else {
         active.task?.cancelAsync().catch(() => {});
       }
+      // Delete partial bytes so a stale file doesn't survive across restarts.
+      FileSystem.deleteAsync(active.fileUri, { idempotent: true }).catch(() => {});
       this.activeTasks.delete(id);
     }
+    this.clearPersistTimer(id);
+    void removePersistedDownload(id);
     this.onStatusChange?.(id, 'cancelled');
   }
 
@@ -1025,6 +1455,94 @@ class DownloadManager {
       uris.add(task.fileUri.replace(/^file:\/\//, ''));
     }
     return uris;
+  }
+
+  // Loads paused records from AsyncStorage and re-creates in-memory ActiveTask
+  // entries for each, ready to be resumed by the user. Returns DownloadTask
+  // snapshots for the store to merge into the visible list.
+  async restorePersistedDownloads(): Promise<DownloadTask[]> {
+    const cache = await loadPersistedDownloads();
+    const restored: DownloadTask[] = [];
+
+    for (const record of Object.values(cache)) {
+      // Skip records whose partial file was wiped from disk (e.g. user cleared
+      // app storage). Otherwise resume would fail in confusing ways.
+      let existingBytes = 0;
+      try {
+        const info = await FileSystem.getInfoAsync(record.fileUri);
+        if (info.exists && !info.isDirectory) {
+          const anyInfo = info as any;
+          if (typeof anyInfo.size === 'number') { existingBytes = anyInfo.size; }
+        } else if (record.type === 'direct' && record.bytesDownloaded > 0) {
+          // Partial expected but missing — drop the orphaned record.
+          await removePersistedDownload(record.id);
+          continue;
+        }
+      } catch { /* best effort */ }
+
+      if (this.activeTasks.has(record.id)) {
+        // Already restored (e.g. duplicate call) — skip.
+        continue;
+      }
+
+      if (record.type === 'direct') {
+        const headers = record.savable?.options?.headers ?? {};
+        // Defer creating the DownloadResumable until the user taps Resume:
+        // savable() may not be present yet (e.g. crash before first pause),
+        // and we don't want to fire any network calls on app start.
+        this.activeTasks.set(record.id, {
+          type: 'direct',
+          url: record.url,
+          fileUri: record.fileUri,
+          fileName: record.fileName,
+          bytesDownloaded: existingBytes || record.bytesDownloaded,
+          totalBytes: record.expectedTotalBytes,
+          expectedTotalBytes: record.expectedTotalBytes,
+          requestHeaders: headers as Record<string, string>,
+          savable: record.savable,
+          paused: true,
+          createdAt: record.createdAt,
+          pageTitle: record.pageTitle,
+          pageUrl: record.pageUrl,
+          cookies: record.cookies,
+        });
+      } else {
+        this.activeTasks.set(record.id, {
+          type: 'hls',
+          url: record.url,
+          fileUri: record.fileUri,
+          fileName: record.fileName,
+          bytesDownloaded: 0,
+          totalBytes: 0,
+          paused: true,
+          createdAt: record.createdAt,
+          pageTitle: record.pageTitle,
+          pageUrl: record.pageUrl,
+          cookies: record.cookies,
+          hlsInfo: record.hlsInfo,
+          selectedVariant: record.selectedVariant,
+        });
+      }
+
+      const sizeForTask = existingBytes || record.bytesDownloaded;
+      const totalForTask = record.expectedTotalBytes || sizeForTask;
+      const progress = totalForTask > 0 ? Math.min(99, Math.round((sizeForTask / totalForTask) * 100)) : 0;
+      restored.push({
+        id: record.id,
+        url: record.url,
+        fileName: record.fileName,
+        filePath: record.fileUri,
+        status: 'paused',
+        progress,
+        bytesDownloaded: sizeForTask,
+        totalBytes: totalForTask,
+        pageTitle: record.pageTitle,
+        createdAt: record.createdAt,
+        error: 'Paused — tap Resume to continue',
+      });
+    }
+
+    return restored;
   }
 
   async saveBlobData(

@@ -428,13 +428,18 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         // Restore both caches in parallel — these are AsyncStorage reads, fast & cheap.
         // CRITICAL: do NOT call listPrivateDownloads here. With 350+ files, the duration
         // probes block the JS thread for many seconds and can OOM-kill the app.
-        const [cachedPrivate, cachedDeviceScan] = await Promise.all([
+        const [cachedPrivate, cachedDeviceScan, persistedPaused] = await Promise.all([
           restorePrivateCache(),
           restoreDeviceScanCache(),
+          downloadManager.restorePersistedDownloads().catch(err => {
+            console.warn('Failed to restore persisted downloads:', err);
+            return [] as DownloadTask[];
+          }),
         ]);
 
         const merged = [
           ...downloadsRef.current.filter(d => d.status !== 'completed'),
+          ...persistedPaused,
           ...cachedPrivate.files,
           ...cachedDeviceScan.files,
         ].sort((a, b) => b.createdAt - a.createdAt);
