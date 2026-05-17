@@ -18,10 +18,8 @@ export const POPUP_BLOCKER_JS = `
   function postPopupBlocked(url) {
     try {
       if (!url) return;
-      // Resolve relative URLs
       var resolved = url;
       try { resolved = new URL(url, location.href).href; } catch(e) {}
-      // Don't block same-page anchors
       try {
         var cur = new URL(location.href);
         var tgt = new URL(resolved);
@@ -31,7 +29,8 @@ export const POPUP_BLOCKER_JS = `
         type: 'POPUP_BLOCKED',
         payload: { url: resolved }
       }));
-    } catch(e) {}
+    } catch(e) {
+    }
   }
 
   // ── 1. Intercept window.open ───────────────────────────────────────────────
@@ -44,7 +43,8 @@ export const POPUP_BLOCKER_JS = `
       }
       return null;
     };
-  } catch(e) {}
+  } catch(e) {
+  }
 
   // ── 2. Intercept target="_blank" link clicks ───────────────────────────────
 
@@ -57,14 +57,13 @@ export const POPUP_BLOCKER_JS = `
       }
       if (!el || el.tagName !== 'A') return;
       var target = (el.getAttribute('target') || '').toLowerCase();
-      if (target === '_blank' || target === '_new') {
-        var href = el.href;
-        if (!href) return;
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-        postPopupBlocked(href);
-      }
+      if (target !== '_blank' && target !== '_new') return;
+      var href = el.href;
+      if (!href) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      postPopupBlocked(href);
     }, true);
   } catch(e) {}
 

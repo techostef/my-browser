@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import {
@@ -28,6 +28,9 @@ import {
 } from '../store/tabStore';
 import { DetectedVideo, HlsVariant } from '../types';
 import Browser from '@/components/Browser';
+import { VIDEO_DETECTOR_JS } from '../services/videoDetector';
+import { AD_BLOCKER_JS } from '../services/adBlocker';
+import { POPUP_BLOCKER_JS } from '../services/popupBlocker';
 import PageErrorView, { PageError } from '../components/PageErrorView';
 import PopupBlockedBanner from '../components/PopupBlockedBanner';
 import CookieManager from '@react-native-cookies/cookies';
@@ -119,6 +122,13 @@ export default function BrowserScreen() {
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
   const { requestDownload } = useAdActions();
   const { settings, pushHistory, setSetting } = useSettings();
+  const injectedJavaScript = useMemo(() => {
+    let js = VIDEO_DETECTOR_JS;
+    console.log("settings.popupBlockEnabled", settings.popupBlockEnabled)
+    if (settings.adBlockEnabled) js = AD_BLOCKER_JS + js;
+    if (settings.popupBlockEnabled) js = POPUP_BLOCKER_JS + js;
+    return js;
+  }, [settings.adBlockEnabled, settings.popupBlockEnabled]);
   const previousUrl = useRef('');
   const navigation = useNavigation();
 
@@ -225,6 +235,21 @@ export default function BrowserScreen() {
   const handleShouldStartLoadWithRequest = useCallback(
     (tabId: string) => (request: ShouldStartLoadRequest) => {
       if (!request.isTopFrame) return true;
+      // Block non-web schemes that Android dispatches via Intent to other apps
+      // (intent://, fb://, twitter://, etc.). Without this, sites can force-open
+      // popups in Chrome / Facebook / TikTok / etc. via Android's app links.
+      const url = request.url;
+      if (
+        !url.startsWith('http://') &&
+        !url.startsWith('https://') &&
+        !url.startsWith('about:') &&
+        !url.startsWith('data:') &&
+        !url.startsWith('blob:') &&
+        !url.startsWith('file:') &&
+        !url.startsWith('javascript:')
+      ) {
+        return false;
+      }
       if (!tabHasActiveExtraction(tabId)) return true;
       const tab = getTabsSnapshot().find(t => t.id === tabId);
       if (!tab) return true;
@@ -238,6 +263,19 @@ export default function BrowserScreen() {
       return false;
     },
     [tabHasActiveExtraction, setTabHidden, addTab, getTabsSnapshot],
+  );
+
+  // Native popup handler: fires when window.open() is called from ANY frame
+  // (including cross-origin iframes that our injected JS can't reach). Requires
+  // setSupportMultipleWindows to be true (the default). The native side intercepts
+  // the URL load in a temp WebView and dispatches this event without navigating.
+  const handleOpenWindow = useCallback(
+    (event: { nativeEvent: { targetUrl: string } }) => {
+      if (!settings.popupBlockEnabled) return;
+      const url = event.nativeEvent.targetUrl;
+      if (url) setBlockedPopupUrl(url);
+    },
+    [settings.popupBlockEnabled, setBlockedPopupUrl],
   );
 
   const finalizeExtractionForTab = useCallback(
@@ -577,11 +615,35 @@ export default function BrowserScreen() {
           });
           // console.log("message.payload", message.payload)
         }
+        case 'POPUP_BLOCKED': {
+          const url: string = message.payload?.url;
+          if (url) setBlockedPopupUrl(url);
+          break;
+        }
       }
     } catch (err) {
       // Ignore non-JSON messages from websites
     }
-  }, [updateBlobProgress, completeBlobDownload, finalizeExtractionForTab, setTabHidden, addTab]);
+  }, [updateBlobProgress, completeBlobDownload, finalizeExtractionForTab, setTabHidden, addTab, setBlockedPopupUrl]);
+
+  // Stable ref wrappers — Browser is memoized so its onMessage / onShouldStartLoad
+  // props are frozen at mount. Reading through a ref ensures the latest handler
+  // body is always invoked even when Browser doesn't re-render (e.g. hot-reload).
+  const handleMessageRef = useRef(handleMessage);
+  handleMessageRef.current = handleMessage;
+  const stableHandleMessage = useCallback(
+    (tabId: string) => (event: { nativeEvent: { data: string } }) =>
+      handleMessageRef.current(tabId)(event),
+    [],
+  );
+
+  const handleShouldStartLoadRef = useRef(handleShouldStartLoadWithRequest);
+  handleShouldStartLoadRef.current = handleShouldStartLoadWithRequest;
+  const stableHandleShouldStartLoad = useCallback(
+    (tabId: string) => (request: ShouldStartLoadRequest) =>
+      handleShouldStartLoadRef.current(tabId)(request),
+    [],
+  );
 
   const handleDownloadWithVariant = useCallback(
     (video: DetectedVideo, variant?: HlsVariant) => {
@@ -761,16 +823,16 @@ export default function BrowserScreen() {
 
         <WebViewList
           setWebViewRef={setWebViewRef}
-          handleMessage={handleMessage}
+          handleMessage={stableHandleMessage}
           handleNavigationStateChange={handleNavigationStateChange}
-          handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+          handleShouldStartLoadWithRequest={stableHandleShouldStartLoad}
           handleLoadStart={handleLoadStart}
           handleLoadProgress={handleLoadProgress}
           handleLoadEnd={handleLoadEnd}
           handleLoadError={handleLoadError}
           handleHttpError={handleHttpError}
-          adBlockEnabled={settings.adBlockEnabled}
-          popupBlockEnabled={settings.popupBlockEnabled}
+          handleOpenWindow={handleOpenWindow}
+          injectedJavaScript={injectedJavaScript}
         />
 
         {(() => {
@@ -944,8 +1006,8 @@ interface WebViewListProps {
   handleLoadEnd: (tabId: string) => () => void;
   handleLoadError: (tabId: string) => (event: WebViewErrorEvent) => void;
   handleHttpError: (tabId: string) => (event: WebViewHttpErrorEvent) => void;
-  adBlockEnabled: boolean;
-  popupBlockEnabled: boolean;
+  handleOpenWindow: (event: { nativeEvent: { targetUrl: string } }) => void;
+  injectedJavaScript: string;
 }
 
 function WebViewListInner({
@@ -958,8 +1020,8 @@ function WebViewListInner({
   handleLoadEnd,
   handleLoadError,
   handleHttpError,
-  adBlockEnabled,
-  popupBlockEnabled,
+  handleOpenWindow,
+  injectedJavaScript,
 }: WebViewListProps) {
   const tabs = useTabList();
   const activeTabId = useActiveTabId();
@@ -1134,8 +1196,8 @@ function WebViewListInner({
               onLoadEnd={handleLoadEnd(tab.id)}
               onLoadError={handleLoadError(tab.id)}
               onHttpError={handleHttpError(tab.id)}
-              adBlockEnabled={adBlockEnabled}
-              popupBlockEnabled={popupBlockEnabled}
+              onOpenWindow={handleOpenWindow}
+              injectedJavaScript={injectedJavaScript}
             />
           </View>
         ))}

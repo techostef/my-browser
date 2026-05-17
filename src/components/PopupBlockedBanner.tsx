@@ -49,6 +49,7 @@ const s = StyleSheet.create({
     borderTopColor: '#3A3A3C',
     gap: 10,
     zIndex: 50,
+    marginBottom: 15
   },
   iconCol: {
     width: 28,

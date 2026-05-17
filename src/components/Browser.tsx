@@ -1,24 +1,21 @@
-import React from "react";
+import React, { useMemo, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { WebView, WebViewNavigation } from "react-native-webview";
 import {
   ShouldStartLoadRequest,
   WebViewErrorEvent,
   WebViewHttpErrorEvent,
+  WebViewOpenWindowEvent,
 } from "react-native-webview/lib/WebViewTypes";
-
-import { VIDEO_DETECTOR_JS } from "../services/videoDetector";
-import { AD_BLOCKER_JS } from "../services/adBlocker";
-import { POPUP_BLOCKER_JS } from "../services/popupBlocker";
 
 interface Props {
   webViewRef: React.RefObject<WebView> | ((ref: WebView | null) => void);
   currentUrl: string;
+  injectedJavaScript: string;
   handleMessage: (event: any) => void;
   handleNavigationStateChange: (navState: WebViewNavigation) => void;
   handleShouldStartLoadWithRequest?: (request: ShouldStartLoadRequest) => boolean;
-  adBlockEnabled?: boolean;
-  popupBlockEnabled?: boolean;
+  onOpenWindow?: (event: WebViewOpenWindowEvent) => void;
   onLoadStart?: () => void;
   onLoadProgress?: (progress: number) => void;
   onLoadEnd?: () => void;
@@ -29,30 +26,32 @@ interface Props {
 const Browser = ({
   webViewRef,
   currentUrl,
+  injectedJavaScript,
   handleMessage,
   handleNavigationStateChange,
   handleShouldStartLoadWithRequest,
-  adBlockEnabled,
-  popupBlockEnabled,
+  onOpenWindow,
   onLoadStart,
   onLoadProgress,
   onLoadEnd,
   onLoadError,
   onHttpError,
 }: Props) => {
-  console.log('Render Component Browser:', currentUrl);
-  let injectedJS = VIDEO_DETECTOR_JS;
-  if (adBlockEnabled) injectedJS = AD_BLOCKER_JS + injectedJS;
-  if (popupBlockEnabled) injectedJS = POPUP_BLOCKER_JS + injectedJS;
+  // source is frozen at mount — all navigation after that is handled
+  // imperatively via injectNavigation / goBack / goForward.
+  const initialUrl = useRef(currentUrl);
+  const source = useMemo(() => ({ uri: initialUrl.current }), []);
   return (
     <WebView
       ref={webViewRef as any}
-      source={{ uri: currentUrl }}
+      source={source}
       style={styles.webview}
-      injectedJavaScriptBeforeContentLoaded={injectedJS}
+      injectedJavaScriptBeforeContentLoaded={injectedJavaScript}
+      injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
       onMessage={handleMessage}
       onNavigationStateChange={handleNavigationStateChange}
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+      onOpenWindow={onOpenWindow}
       onLoadStart={onLoadStart}
       onLoadProgress={({ nativeEvent }) => onLoadProgress?.(nativeEvent.progress)}
       onLoadEnd={onLoadEnd}
@@ -81,4 +80,7 @@ const styles = StyleSheet.create({
 });
 
 
-export default React.memo(Browser, () => true);
+// Re-render only when injectedJavaScript changes (settings toggled). All other
+// prop changes (onMessage, navState callbacks, currentUrl) are handled via refs
+// or imperative WebView calls so frozen closures are intentional.
+export default React.memo(Browser, (prev, next) => prev.injectedJavaScript === next.injectedJavaScript);
