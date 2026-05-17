@@ -746,12 +746,13 @@ export default function BrowserScreen() {
     <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top, marginBottom: -15 }]}>
       <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
 
-      <AddressBarContainer
-        onNavigate={handleNavigate}
-        onGoBack={handleGoBackActive}
-        onGoForward={handleGoForwardActive}
-        onReload={handleReloadActive}
-      />
+      {!isVideoPlaying && 
+          <AddressBarContainer
+            onNavigate={handleNavigate}
+            onGoBack={handleGoBackActive}
+            onGoForward={handleGoForwardActive}
+            onReload={handleReloadActive}
+          />}
 
       <View style={styles.webviewArea}>
         {tabs.find(t => t.id === activeTabId)?.url === 'about:home' && (
