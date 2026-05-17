@@ -68,6 +68,31 @@ export const VIDEO_DETECTOR_JS = `
   if (window.__VIDEO_DETECTOR_INSTALLED__) return;
   window.__VIDEO_DETECTOR_INSTALLED__ = true;
 
+  // Cross-frame fullscreen coordination. The top frame broadcasts
+  // __RN_FS_QUERY with an id identifying which top-level iframe was
+  // queried. Each frame either replies (if it has a playing video)
+  // directly to window.top — echoing the id so the top frame knows
+  // which iframe to fullscreen — or forwards the query down to its
+  // own child iframes (handling arbitrary nesting depth).
+  try {
+    window.addEventListener('message', function(e) {
+      if (!e || !e.data || typeof e.data !== 'object') return;
+      if (e.data.type !== '__RN_FS_QUERY') return;
+      var queryId = e.data.id;
+      var vids = document.querySelectorAll('video');
+      for (var i = 0; i < vids.length; i++) {
+        if (!vids[i].paused) {
+          try { window.top.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId }, '*'); } catch(_) {}
+          return;
+        }
+      }
+      var iframes = document.querySelectorAll('iframe');
+      for (var j = 0; j < iframes.length; j++) {
+        try { iframes[j].contentWindow.postMessage({ type: '__RN_FS_QUERY', id: queryId }, '*'); } catch(_) {}
+      }
+    });
+  } catch(e) {}
+
   const SCAN_INTERVAL_MS = 500;
   const detectedUrls = new Set();
   var lastM3u8Url = '';

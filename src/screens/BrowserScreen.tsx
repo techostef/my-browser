@@ -39,58 +39,61 @@ import CookieManager from '@react-native-cookies/cookies';
 // Posts the currentTime of the most-advanced playing video element.
 const GET_VIDEO_TIME_JS = `(function(){try{var vids=document.querySelectorAll('video');var t=0;for(var i=0;i<vids.length;i++){if(vids[i].currentTime>t)t=vids[i].currentTime;}window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_CURRENT_TIME',payload:{time:t}}));}catch(e){}})();true;`;
 
-// Toggles the first actively-playing video between fullscreen (position:fixed)
-// and its original position. Relies on __removeVideoPlayingStyles defined by
-// videoDetector.ts when the script is injected.
+// Toggles fullscreen for the currently-playing video. Tries the top frame's
+// own <video> elements first (existing CSS-positioning path); if none are
+// playing, broadcasts to iframes via postMessage and — when an iframe replies
+// that it has a playing video — makes that iframe element fullscreen (covers
+// the WebView viewport). Restoration handles both paths.
 const TOGGLE_FULLSCREEN_JS = `(function(){
   function rnLog(msg) {
     try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'DETECTOR_LOG', payload: msg})); } catch(_){}
   }
+  function notifyChanged(active) {
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_CHANGED', payload:{active:active}})); } catch(_){}
+  }
   try {
+    // 1. Restore path — iframe was fullscreen
+    var fsIframe = document.querySelector('iframe[data-rn-fullscreen="1"]');
+    if (fsIframe) {
+      fsIframe.setAttribute('style', fsIframe.dataset.rnOrigStyle || '');
+      delete fsIframe.dataset.rnFullscreen;
+      delete fsIframe.dataset.rnOrigStyle;
+      rnLog('[FULLSCREEN] iframe restored');
+      notifyChanged(false);
+      return;
+    }
+    // 2. Restore path — top-frame video was fullscreen
     var playing = document.querySelectorAll('.__rn-playing');
-    rnLog('[FULLSCREEN] toggle — playing count=' + playing.length);
     if (playing.length > 0) {
       if (window.__rnVideoStateInterval) { clearInterval(window.__rnVideoStateInterval); window.__rnVideoStateInterval = null; }
       window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles();
-      rnLog('[FULLSCREEN] restored original styles');
-      window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_CHANGED',payload:{active:false}}));
-    } else {
-      var vids = document.querySelectorAll('video');
-      rnLog('[FULLSCREEN] total videos=' + vids.length);
-      for (var i = 0; i < vids.length; i++) {
-        var v = vids[i];
-        rnLog('[FULLSCREEN] video[' + i + '] paused=' + v.paused + ' src=' + (v.currentSrc || v.src).substring(0, 80));
-        if (!v.paused) {
-          if (!v.dataset.rnOrigStyle) {
-            v.dataset.rnOrigStyle = v.getAttribute('style') || '';
-          }
-          window.__rnPlayingParent = v.parentNode;
-          window.__rnPlayingNextSibling = v.nextSibling;
-          var backdrop = document.createElement('div');
-          backdrop.id = '__rn-playing-backdrop';
-          backdrop.style.setProperty('position', 'fixed', 'important');
-          backdrop.style.setProperty('top', '0', 'important');
-          backdrop.style.setProperty('left', '0', 'important');
-          backdrop.style.setProperty('width', '100%', 'important');
-          backdrop.style.setProperty('height', '100%', 'important');
-          backdrop.style.setProperty('z-index', '9998', 'important');
-          backdrop.style.setProperty('background', 'black', 'important');
-          v.dataset.rnOrigHadControls = v.hasAttribute('controls') ? '1' : '0';
-          document.body.appendChild(backdrop);
-          document.body.appendChild(v);
-          v.removeAttribute('controls');
-          v.style.setProperty('position', 'fixed', 'important');
-          v.style.setProperty('top', '0', 'important');
-          v.style.setProperty('left', '0', 'important');
-          v.style.setProperty('width', '100%', 'important');
-          v.style.setProperty('height', '100%', 'important');
-          v.style.setProperty('z-index', '9999', 'important');
-          v.style.setProperty('transform', 'none', 'important');
-          v.classList.add('__rn-playing');
-          if (window.__rnVideoStateInterval) clearInterval(window.__rnVideoStateInterval);
-          window.__rnVideoStateInterval = setInterval(function() {
-            var el = document.querySelector('.__rn-playing');
-            if (!el) { clearInterval(window.__rnVideoStateInterval); return; }
+      rnLog('[FULLSCREEN] top-frame video restored');
+      notifyChanged(false);
+      return;
+    }
+    // 3. Activate path — try top-frame videos
+    var vids = document.querySelectorAll('video');
+    rnLog('[FULLSCREEN] top-frame videos=' + vids.length);
+    for (var i = 0; i < vids.length; i++) {
+      var v = vids[i];
+      if (!v.paused) {
+        if (!v.dataset.rnOrigStyle) v.dataset.rnOrigStyle = v.getAttribute('style') || '';
+        window.__rnPlayingParent = v.parentNode;
+        window.__rnPlayingNextSibling = v.nextSibling;
+        var backdrop = document.createElement('div');
+        backdrop.id = '__rn-playing-backdrop';
+        backdrop.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:9998!important;background:black!important;';
+        v.dataset.rnOrigHadControls = v.hasAttribute('controls') ? '1' : '0';
+        document.body.appendChild(backdrop);
+        document.body.appendChild(v);
+        v.removeAttribute('controls');
+        v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:9999!important;transform:none!important;';
+        v.classList.add('__rn-playing');
+        if (window.__rnVideoStateInterval) clearInterval(window.__rnVideoStateInterval);
+        window.__rnVideoStateInterval = setInterval(function() {
+          var el = document.querySelector('.__rn-playing');
+          if (!el) { clearInterval(window.__rnVideoStateInterval); return; }
+          try {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'VIDEO_STATE',
               currentTime: el.currentTime || 0,
@@ -98,15 +101,47 @@ const TOGGLE_FULLSCREEN_JS = `(function(){
               paused: el.paused,
               muted: el.muted,
             }));
-          }, 250);
-          rnLog('[FULLSCREEN] moved to body and applied fullscreen to video[' + i + ']');
-          window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_CHANGED',payload:{active:true}}));
-          break;
-        }
+          } catch(_) {}
+        }, 250);
+        rnLog('[FULLSCREEN] top-frame video[' + i + '] fullscreened');
+        notifyChanged(true);
+        return;
       }
     }
+    // 4. Activate path — query iframes (with id so nested-iframe replies
+    // can be mapped back to the top-level iframe).
+    var iframes = document.querySelectorAll('iframe');
+    rnLog('[FULLSCREEN] querying ' + iframes.length + ' iframe(s)');
+    if (iframes.length === 0) return;
+    var handled = false;
+    var listener = function(e) {
+      if (handled) return;
+      if (!e.data || typeof e.data !== 'object' || e.data.type !== '__RN_FS_HAS_PLAYING') return;
+      var id = e.data.id;
+      if (typeof id !== 'number') return;
+      var all = document.querySelectorAll('iframe');
+      var iframe = all[id];
+      if (!iframe) return;
+      handled = true;
+      window.removeEventListener('message', listener);
+      iframe.dataset.rnFullscreen = '1';
+      iframe.dataset.rnOrigStyle = iframe.getAttribute('style') || '';
+      iframe.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:99999!important;border:none!important;background:black!important;';
+      rnLog('[FULLSCREEN] iframe[' + id + '] fullscreened');
+      notifyChanged(true);
+    };
+    window.addEventListener('message', listener);
+    for (var k = 0; k < iframes.length; k++) {
+      try { iframes[k].contentWindow.postMessage({ type: '__RN_FS_QUERY', id: k }, '*'); } catch(_) {}
+    }
+    setTimeout(function() {
+      if (!handled) {
+        window.removeEventListener('message', listener);
+        rnLog('[FULLSCREEN] no iframe responded');
+      }
+    }, 500);
   } catch(e) {
-    try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'DETECTOR_LOG', payload: '[FULLSCREEN] error: ' + e.message})); } catch(_){}
+    rnLog('[FULLSCREEN] error: ' + e.message);
   }
 })(); true;`;
 
@@ -590,10 +625,10 @@ export default function BrowserScreen() {
           break;
         }
         case 'DETECTOR_LOG':
-          const filterLogs = ['[VIDEO_PLAYING]'];
+          const filterLogs = ['[FULLSCREEN]'];
           const log = message.payload;
           if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
-            // console.log('[Detector]', log);
+            console.log('[Detector]', log);
           }
           break;
         case 'PAGE_INFO':
