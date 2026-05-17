@@ -118,7 +118,6 @@ export default function VideoPlayerController({
     if (playingUrl.includes("blob") && segmentBlob) {
       playingUrlM4S = segmentBlob[playingUrl]
     }
-    const hslCount = videos.filter((v) => v.type === "hls").length;
     if (playingUrlM4S) {
       const playingVideo = isPlayingVideoM4S(videos, playingUrlM4S);
       if (playingVideo) {
@@ -126,8 +125,12 @@ export default function VideoPlayerController({
         return;
       }
     }
+    const hslCount = videos.filter((v) => v.type === "hls").length;
+    const masterCount = videos.filter((v) => v.hlsInfo?.isMaster === true).length;
     if (hslCount === 1) {
       setFilteredVideos(videos.filter((v) => v.type === "hls"));
+    } else if (masterCount === 1) {
+      setFilteredVideos(videos.filter((v) => v.hlsInfo?.isMaster === true));
     } else {
       setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
     }
