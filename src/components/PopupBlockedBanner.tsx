@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 interface Props {
@@ -7,7 +7,17 @@ interface Props {
   onDismiss: () => void;
 }
 
+const AUTO_DISMISS_MS = 3000;
+
 export default function PopupBlockedBanner({ url, onAllow, onDismiss }: Props) {
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
+  useEffect(() => {
+    const t = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
+    return () => clearTimeout(t);
+  }, [url]);
+
   let display = url;
   try {
     const u = new URL(url);
