@@ -259,7 +259,12 @@ function parseTimeSec(raw: string): number | null {
 export default function TrimScreen({ navigation, route }: Props) {
   const { videoUri, duration: paramDuration } = route.params;
 
-  const player = useVideoPlayer({ uri: videoUri }, p => { p.loop = false; });
+  const player = useVideoPlayer({ uri: videoUri }, p => {
+    p.loop = false;
+    // expo-video default is 0 (disabled); without this the timeUpdate event
+    // never fires and the playhead time stays stuck at 0:00.
+    p.timeUpdateEventInterval = 0.1;
+  });
   const [duration, setDuration] = useState(paramDuration > 0 ? paramDuration : 0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -367,6 +372,11 @@ export default function TrimScreen({ navigation, route }: Props) {
   // ─── Playback ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    // Handle the case where the player was already ready before listeners
+    // attached — statusChange won't re-fire, so seed duration directly.
+    if (player.duration > 0 && Math.abs(player.duration - durationRef.current) > 0.5) {
+      setDuration(player.duration);
+    }
     const statusSub = player.addListener('statusChange', ({ status }) => {
       if (status === 'readyToPlay' && player.duration > 0) {
         const realDur = player.duration;
