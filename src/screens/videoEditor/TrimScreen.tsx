@@ -311,7 +311,7 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [manualEnd, setManualEnd] = useState('');
   const [manualText, setManualText] = useState('');
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
-  const [setupSource, setSetupSource] = useState<'ai' | 'local' | null>(null);
+  const [setupSource, setSetupSource] = useState<'ai' | 'local' | 'edit' | null>(null);
 
   // Split-based editing state
   const [splitPoints, setSplitPoints] = useState<number[]>([]);
@@ -1088,6 +1088,21 @@ export default function TrimScreen({ navigation, route }: Props) {
                 style={styles.menuItem}
                 onPress={() => {
                   setCaptionMenuOpen(false);
+                  setSetupSource('edit');
+                }}
+              >
+                <Text style={styles.menuItemIcon}>🎨</Text>
+                <View style={styles.menuItemBody}>
+                  <Text style={styles.menuItemLabel}>Change subtitle style</Text>
+                  <Text style={styles.menuItemDetail}>Update font, color, and background for all captions</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            {subtitleSegments.length > 0 && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setCaptionMenuOpen(false);
                   Alert.alert(
                     'Delete subtitles',
                     'Remove subtitles for this video?',
@@ -1161,10 +1176,12 @@ export default function TrimScreen({ navigation, route }: Props) {
                 onPress={() => {
                   const src = setupSource;
                   setSetupSource(null);
-                  if (src) handleContinue(src);
+                  if (src === 'ai' || src === 'local') handleContinue(src);
                 }}
               >
-                <Text style={styles.generateBtnText}>Generate</Text>
+                <Text style={styles.generateBtnText}>
+                  {setupSource === 'edit' ? 'Done' : 'Generate'}
+                </Text>
               </TouchableOpacity>
             </View>
           </Pressable>
