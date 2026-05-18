@@ -22,6 +22,7 @@ import {
   AdEventType,
 } from "react-native-google-mobile-ads";
 import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../../config/admob";
+import { Ionicons } from "@expo/vector-icons";
 import { DownloadTask } from "../../types";
 import { DownloadMediaType } from "../DownloadItem";
 
@@ -453,9 +454,15 @@ export default function PreviewModal({
                     onPress={() => setLandscape((l) => !l)}
                     hitSlop={8}
                   >
-                    <Text style={styles.iconBtnText}>
-                      {landscape ? "⟲" : "⟳"}
-                    </Text>
+                    <Ionicons
+                      name={
+                        landscape
+                          ? "phone-portrait-outline"
+                          : "phone-landscape-outline"
+                      }
+                      size={22}
+                      color="#FFF"
+                    />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.iconBtn}
