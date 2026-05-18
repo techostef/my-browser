@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -19,6 +19,8 @@ import { ProjectProvider } from './src/store/projectStore';
 import { AdProvider } from './src/store/adStore';
 import { AdController } from './src/components/AdController';
 import type { RootStackParamList } from './src/types/videoEditor';
+import { UpdateReadyBanner } from './src/components/UpdateReadyBanner';
+import { checkAndStartFlexibleUpdate } from './src/services/appUpdate';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -82,6 +84,16 @@ function MainTabs() {
   );
 }
 
+function UpdateChecker() {
+  const [updateReady, setUpdateReady] = useState(false);
+
+  useEffect(() => {
+    checkAndStartFlexibleUpdate(() => setUpdateReady(true)).catch(() => {});
+  }, []);
+
+  return <UpdateReadyBanner visible={updateReady} onDismiss={() => setUpdateReady(false)} />;
+}
+
 function AppNavigator() {
   const { resolvedScheme, themeColors } = useSettings();
   const isDark = resolvedScheme === 'dark';
@@ -111,6 +123,7 @@ export default function App() {
           <TabProvider>
             <DownloadProvider>
               <AdProvider>
+                <UpdateChecker />
                 <AppNavigator />
               </AdProvider>
             </DownloadProvider>

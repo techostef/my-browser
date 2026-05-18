@@ -9,6 +9,7 @@ import {
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Dimensions,
   Modal,
@@ -273,6 +274,9 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [subtitleSegments, setSubtitleSegments] = useState<SubtitleSegment[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  const [editStartDraft, setEditStartDraft] = useState('');
+  const [editEndDraft, setEditEndDraft] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [captionMenuOpen, setCaptionMenuOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [manualCaptionOpen, setManualCaptionOpen] = useState(false);
@@ -291,6 +295,15 @@ export default function TrimScreen({ navigation, route }: Props) {
 
   const durationRef = useRef(paramDuration > 0 ? paramDuration : 0);
   useEffect(() => { durationRef.current = duration; }, [duration]);
+
+  // ─── Track keyboard height so the inline edit bar can float above it ────────
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, e => setKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   // ─── Restore session on mount ────────────────────────────────────────────────
 
@@ -529,10 +542,44 @@ export default function TrimScreen({ navigation, route }: Props) {
   const handleChipPress = useCallback((seg: SubtitleSegment) => {
     setEditingId(seg.id);
     setEditDraft(seg.text);
+    setEditStartDraft(fmtCompact(seg.start));
+    setEditEndDraft(fmtCompact(seg.end));
     player.pause();
     player.currentTime = seg.start;
     chipRowRef.current?.scrollTo(seg.start * PX_PER_SEC, true);
   }, [player]);
+
+  const commitStartTime = useCallback(() => {
+    if (editingId === null) return;
+    const seg = subtitleSegments.find(s => s.id === editingId);
+    if (!seg) return;
+    const parsed = parseTimeSec(editStartDraft);
+    if (parsed === null || parsed < 0 || parsed >= seg.end) {
+      setEditStartDraft(fmtCompact(seg.start));
+      return;
+    }
+    if (Math.abs(parsed - seg.start) < 0.001) return;
+    setSubtitleSegments(prev =>
+      prev
+        .map(s => (s.id === editingId ? { ...s, start: parsed } : s))
+        .sort((a, b) => a.start - b.start),
+    );
+  }, [editingId, editStartDraft, subtitleSegments]);
+
+  const commitEndTime = useCallback(() => {
+    if (editingId === null) return;
+    const seg = subtitleSegments.find(s => s.id === editingId);
+    if (!seg) return;
+    const parsed = parseTimeSec(editEndDraft);
+    if (parsed === null || parsed <= seg.start) {
+      setEditEndDraft(fmtCompact(seg.end));
+      return;
+    }
+    if (Math.abs(parsed - seg.end) < 0.001) return;
+    setSubtitleSegments(prev =>
+      prev.map(s => (s.id === editingId ? { ...s, end: parsed } : s)),
+    );
+  }, [editingId, editEndDraft, subtitleSegments]);
 
   const handleChipDelete = useCallback((seg: SubtitleSegment) => {
     Alert.alert('Delete subtitle', `Remove "${seg.text}"?`, [
@@ -549,8 +596,10 @@ export default function TrimScreen({ navigation, route }: Props) {
   }, [editingId]);
 
   const handleEditDone = useCallback(() => {
+    commitStartTime();
+    commitEndTime();
     setEditingId(null);
-  }, []);
+  }, [commitStartTime, commitEndTime]);
 
   const handleDeleteSubtitle = useCallback(() => {
     if (editingId === null) return;
@@ -818,10 +867,41 @@ export default function TrimScreen({ navigation, route }: Props) {
 
       {/* ── Inline subtitle edit bar ── */}
       {editingSeg ? (
-        <View style={styles.editBar}>
-          <Text style={styles.editTimestamp}>
-            {fmtCompact(editingSeg.start)} → {fmtCompact(editingSeg.end)}
-          </Text>
+        <View style={[styles.editBar, { bottom: keyboardHeight }]}>
+          <View style={styles.editTimeRow}>
+            <TextInput
+              style={styles.editTimeInput}
+              value={editStartDraft}
+              onChangeText={setEditStartDraft}
+              onBlur={commitStartTime}
+              onSubmitEditing={commitStartTime}
+              keyboardType="numbers-and-punctuation"
+              returnKeyType="done"
+              selectionColor="#a89fff"
+              placeholder="0:00.00"
+              placeholderTextColor="#555"
+            />
+            <Text style={styles.editTimeArrow}>→</Text>
+            <TextInput
+              style={styles.editTimeInput}
+              value={editEndDraft}
+              onChangeText={setEditEndDraft}
+              onBlur={commitEndTime}
+              onSubmitEditing={commitEndTime}
+              keyboardType="numbers-and-punctuation"
+              returnKeyType="done"
+              selectionColor="#a89fff"
+              placeholder="0:00.00"
+              placeholderTextColor="#555"
+            />
+            <View style={styles.editTimeSpacer} />
+            <TouchableOpacity style={styles.editDeleteBtn} onPress={handleDeleteSubtitle}>
+              <Text style={styles.editDeleteText}>Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
+              <Text style={styles.editDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
           <TextInput
             style={styles.editInput}
             value={editDraft}
@@ -832,12 +912,6 @@ export default function TrimScreen({ navigation, route }: Props) {
             placeholderTextColor="#555"
             placeholder="Type subtitle text…"
           />
-          <TouchableOpacity style={styles.editDeleteBtn} onPress={handleDeleteSubtitle}>
-            <Text style={styles.editDeleteText}>Delete</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
-            <Text style={styles.editDoneText}>Done</Text>
-          </TouchableOpacity>
         </View>
       ) : null}
 
@@ -1367,33 +1441,55 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 
-  // Inline edit bar
+  // Inline edit bar (floats above keyboard)
   editBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     backgroundColor: '#1a1a2e',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#2a2250',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 8,
+    gap: 8,
+    minHeight: 60,
+    zIndex: 20,
+    elevation: 20,
+  },
+  editTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minHeight: 60,
+    gap: 8,
   },
-  editTimestamp: {
+  editTimeInput: {
+    width: 84,
     color: '#a89fff',
-    fontSize: 10,
+    fontSize: 12,
     fontVariant: ['tabular-nums'],
-    width: 80,
+    borderWidth: 1,
+    borderColor: '#3a2c70',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#0e0c20',
+  },
+  editTimeArrow: {
+    color: '#888',
+    fontSize: 12,
+  },
+  editTimeSpacer: {
+    flex: 1,
   },
   editInput: {
-    flex: 1,
     color: '#fff',
     fontSize: 14,
     borderBottomWidth: 1.5,
     borderBottomColor: '#6c63ff',
     paddingVertical: 4,
+    minHeight: 36,
     maxHeight: 80,
+    textAlignVertical: 'top',
   },
   editDeleteBtn: {
     paddingHorizontal: 10,
