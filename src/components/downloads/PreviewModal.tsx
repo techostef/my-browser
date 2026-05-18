@@ -39,6 +39,7 @@ type Props = {
 const SEEK_SECS = 10;
 const DOUBLE_TAP_MS = 280;
 const CONTROLS_HIDE_MS = 3000;
+const SEEK_THROTTLE_MS = 300;
 
 function formatTime(ms: number): string {
   const safe = !ms || ms < 0 ? 0 : ms;
@@ -75,6 +76,9 @@ export default function PreviewModal({
   const durationRef = useRef(0);
   const seekTargetMsRef = useRef<number | null>(null);
   const seekStartTimeRef = useRef(0);
+  const lastSeekAtRef = useRef(0);
+  const pendingSeekSecRef = useRef<number | null>(null);
+  const pendingSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [position, setPosition] = useState(0);
@@ -147,6 +151,7 @@ export default function PreviewModal({
       if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
       if (seekHintTimer.current) clearTimeout(seekHintTimer.current);
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      if (pendingSeekTimerRef.current) clearTimeout(pendingSeekTimerRef.current);
     };
   }, []);
 
@@ -260,16 +265,40 @@ export default function PreviewModal({
     seekBarWRef.current = e.nativeEvent.layout.width;
   };
 
+  const flushSeek = (newPosSec: number) => {
+    lastSeekAtRef.current = Date.now();
+    seekTargetMsRef.current = newPosSec * 1000;
+    seekStartTimeRef.current = Date.now();
+    player.currentTime = newPosSec;
+    pendingSeekSecRef.current = null;
+    if (pendingSeekTimerRef.current) {
+      clearTimeout(pendingSeekTimerRef.current);
+      pendingSeekTimerRef.current = null;
+    }
+  };
+
   const seekToX = (x: number) => {
     const w = seekBarWRef.current;
     const dur = durationRef.current;
     if (w <= 0 || dur <= 0) return;
     const ratio = Math.max(0, Math.min(1, x / w));
     const newPosSec = (ratio * dur) / 1000;
-    seekTargetMsRef.current = newPosSec * 1000;
-    seekStartTimeRef.current = Date.now();
     setPosition(newPosSec * 1000);
-    player.currentTime = newPosSec;
+
+    const elapsed = Date.now() - lastSeekAtRef.current;
+    if (elapsed >= SEEK_THROTTLE_MS) {
+      flushSeek(newPosSec);
+    } else {
+      pendingSeekSecRef.current = newPosSec;
+      if (!pendingSeekTimerRef.current) {
+        pendingSeekTimerRef.current = setTimeout(() => {
+          pendingSeekTimerRef.current = null;
+          if (pendingSeekSecRef.current !== null) {
+            flushSeek(pendingSeekSecRef.current);
+          }
+        }, SEEK_THROTTLE_MS - elapsed);
+      }
+    }
   };
 
   const onSeekGrant = (e: GestureResponderEvent) => {
@@ -281,6 +310,9 @@ export default function PreviewModal({
     seekToX(e.nativeEvent.locationX);
   };
   const onSeekRelease = () => {
+    if (pendingSeekSecRef.current !== null) {
+      flushSeek(pendingSeekSecRef.current);
+    }
     seekingRef.current = false;
     if (isPlaying) armHideControls();
   };

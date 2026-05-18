@@ -41,6 +41,7 @@ interface Props {
 
 const DOUBLE_TAP_MS = 300;
 const SEEK_SECS = 10;
+const SEEK_THROTTLE_MS = 300;
 
 // Stepped pseudo-gradients (top: dark→clear, bottom: clear→dark)
 const TOP_SCRIM    = [0.02];
@@ -72,6 +73,7 @@ export default function VideoPlayerController({
 
   const lastLeftTap  = useRef(0);
   const lastRightTap = useRef(0);
+  const lastSeekAt   = useRef(0);
   const leftOpacity  = useRef(new Animated.Value(0)).current;
   const rightOpacity = useRef(new Animated.Value(0)).current;
   const leftScale    = useRef(new Animated.Value(0.75)).current;
@@ -197,6 +199,9 @@ export default function VideoPlayerController({
 
   const handleSeekPress = (e: GestureResponderEvent) => {
     if (seekBarWidth <= 0 || duration <= 0) return;
+    const now = Date.now();
+    if (now - lastSeekAt.current < SEEK_THROTTLE_MS) return;
+    lastSeekAt.current = now;
     const ratio = e.nativeEvent.locationX / seekBarWidth;
     onSeek(Math.max(0, Math.min(duration, ratio * duration)));
     showControls();
