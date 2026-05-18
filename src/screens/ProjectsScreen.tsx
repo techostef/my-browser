@@ -232,7 +232,21 @@ export default function ProjectsScreen() {
           <TouchableOpacity style={styles.cancelSelBtn} onPress={() => setSelectedIds(new Set())}>
             <Text style={styles.cancelSelText}>✕</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: c.text }]}>{selectedIds.size} selected</Text>
+          <TouchableOpacity
+            style={styles.selectAllBtn}
+            onPress={() => {
+              if (selectedIds.size === projects.length) setSelectedIds(new Set());
+              else setSelectedIds(new Set(projects.map(p => p.id)));
+            }}
+          >
+            <View style={[styles.selectAllBox, selectedIds.size === projects.length && styles.checkboxSelected]}>
+              {selectedIds.size === projects.length && <Text style={styles.selectAllCheck}>✓</Text>}
+            </View>
+            <Text style={styles.selectAllText}>
+              {selectedIds.size === projects.length ? 'Deselect all' : 'Select all'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.selCount, { color: c.text }]}>{selectedIds.size} selected</Text>
           <TouchableOpacity style={styles.deleteSelBtn} onPress={handleBulkDelete}>
             <Text style={styles.deleteSelText}>Delete</Text>
           </TouchableOpacity>
@@ -381,4 +395,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   deleteSelText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  selCount: { fontSize: 15, fontWeight: '600' },
+  selectAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 4 },
+  selectAllBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#777',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectAllCheck: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  selectAllText: { color: '#aaa', fontSize: 14, fontWeight: '600' },
 });

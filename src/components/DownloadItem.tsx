@@ -31,6 +31,8 @@ interface Props {
   onSelect?: (task: DownloadTask) => void;
   labels?: string[];
   onLabel?: (task: DownloadTask) => void;
+  isHidden?: boolean;
+  onToggleHide?: (id: string) => void;
 }
 
 const videoThumbnailCache = new Map<string, string>();
@@ -89,6 +91,8 @@ const DownloadItem = memo(function DownloadItem({
   onSelect,
   labels,
   onLabel,
+  isHidden = false,
+  onToggleHide,
 }: Props) {
   const statusColor = getStatusColor(task.status);
   const isPlayableMedia =
@@ -172,8 +176,13 @@ const DownloadItem = memo(function DownloadItem({
           : undefined
       }
       delayLongPress={300}
-      style={[styles.container]}
+      style={[styles.container, isHidden && styles.containerHidden]}
     >
+      {isHidden && !isSelectionMode ? (
+        <View style={styles.hiddenBadge}>
+          <Text style={styles.hiddenBadgeText}>🚫</Text>
+        </View>
+      ) : null}
       {isSelectionMode && (
         <View
           style={[
@@ -356,6 +365,19 @@ const DownloadItem = memo(function DownloadItem({
                   }}
                 >
                   <Text style={styles.actionBtnText}>🏷 Label</Text>
+                </TouchableOpacity>
+              )}
+              {canManageCompletedFile && onToggleHide && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.hideBtn]}
+                  onPress={() => {
+                    onToggleHide(task.id);
+                    setActionsVisible(false);
+                  }}
+                >
+                  <Text style={styles.actionBtnText}>
+                    {isHidden ? "👁 Unhide" : "🚫 Hide"}
+                  </Text>
                 </TouchableOpacity>
               )}
               {canManageCompletedFile && onRemove && (
@@ -654,6 +676,32 @@ const styles = StyleSheet.create({
   },
   deletePermanentlyText: {
     color: "#C62828",
+  },
+  hideBtn: {
+    backgroundColor: "#ECEFF1",
+  },
+  containerHidden: {
+    opacity: 0.55,
+  },
+  hiddenBadge: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+  },
+  hiddenBadgeText: {
+    fontSize: 12,
   },
   selectionOverlay: {
     position: "absolute",

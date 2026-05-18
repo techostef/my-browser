@@ -25,6 +25,8 @@ type Props = {
   isDevicePath: boolean;
   isDeviceScanRunning: boolean;
   sortKey: SortKey;
+  showHidden: boolean;
+  onToggleShowHidden: () => void;
   onClose: () => void;
   onCreateFolder: () => void;
   onRescan: () => void;
@@ -38,6 +40,8 @@ export default function ActionsDropdown({
   isDevicePath,
   isDeviceScanRunning,
   sortKey,
+  showHidden,
+  onToggleShowHidden,
   onClose,
   onCreateFolder,
   onRescan,
@@ -107,6 +111,22 @@ export default function ActionsDropdown({
                 <Text style={styles.label}>Sort</Text>
                 <Text style={styles.chevron}>›</Text>
               </TouchableOpacity>
+              {!isDevicePath && (
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={() => {
+                    close();
+                    onToggleShowHidden();
+                  }}
+                >
+                  <Text style={styles.icon}>{showHidden ? "✓" : "👁"}</Text>
+                  <Text
+                    style={[styles.label, showHidden && styles.labelActive]}
+                  >
+                    Show hidden
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.row}
                 onPress={() => {

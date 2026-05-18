@@ -38,6 +38,7 @@ import DownloadsHeader from "../components/downloads/DownloadsHeader";
 import FilterBar from "../components/downloads/FilterBar";
 import DuplicateModePicker, { DuplicateMode } from "../components/downloads/DuplicateModePicker";
 import DuplicatesModal from "../components/downloads/DuplicatesModal";
+import DeleteConfirmModal from "../components/downloads/DeleteConfirmModal";
 import { AdBanner } from '../components/AdBanner';
 
 const DEVICE_ROOT_PATH = "__device_download__";
@@ -93,6 +94,11 @@ export default function DownloadsScreen() {
   const [duplicatePickerVisible, setDuplicatePickerVisible] = useState(false);
   const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>("both");
   const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
+  const [deletePermanent, setDeletePermanent] = useState(false);
+  const [hiddenFileIds, setHiddenFileIds] = useState<Set<string>>(new Set());
+  const [hiddenFolderPaths, setHiddenFolderPaths] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
 
   // ── refs ───────────────────────────────────────────────────────────────────
   const currentFolderPathRef = useRef(currentFolderPath);
@@ -100,6 +106,10 @@ export default function DownloadsScreen() {
   selectedIdsRef.current = selectedIds;
   const fileLabelsRef = useRef(fileLabels);
   fileLabelsRef.current = fileLabels;
+  const hiddenFileIdsRef = useRef(hiddenFileIds);
+  hiddenFileIdsRef.current = hiddenFileIds;
+  const hiddenFolderPathsRef = useRef(hiddenFolderPaths);
+  hiddenFolderPathsRef.current = hiddenFolderPaths;
   const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
   prefetchSizesRef.current = prefetchDeviceFileSizes;
 
@@ -121,6 +131,18 @@ export default function DownloadsScreen() {
     ]).then(([defs, labels]) => {
       if (defs) setLabelDefs(JSON.parse(defs));
       if (labels) setFileLabels(JSON.parse(labels));
+    });
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem("@hidden_files_v1"),
+      AsyncStorage.getItem("@hidden_folders_v1"),
+      AsyncStorage.getItem("@show_hidden_v1"),
+    ]).then(([files, folders, show]) => {
+      if (files) setHiddenFileIds(new Set(JSON.parse(files)));
+      if (folders) setHiddenFolderPaths(new Set(JSON.parse(folders)));
+      if (show === "1") setShowHidden(true);
     });
   }, []);
 
@@ -195,6 +217,107 @@ export default function DownloadsScreen() {
       delete updated[id];
       AsyncStorage.setItem("@file_labels_v1", JSON.stringify(updated));
       return updated;
+    });
+  }, []);
+
+  // ── hide helpers ───────────────────────────────────────────────────────────
+  const persistHiddenFiles = (next: Set<string>) => {
+    AsyncStorage.setItem("@hidden_files_v1", JSON.stringify(Array.from(next)));
+  };
+  const persistHiddenFolders = (next: Set<string>) => {
+    AsyncStorage.setItem("@hidden_folders_v1", JSON.stringify(Array.from(next)));
+  };
+
+  const toggleHideFile = useCallback((id: string) => {
+    setHiddenFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      persistHiddenFiles(next);
+      return next;
+    });
+  }, []);
+
+  const toggleHideFolder = useCallback((folderPath: string) => {
+    setHiddenFolderPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) next.delete(folderPath);
+      else next.add(folderPath);
+      persistHiddenFolders(next);
+      return next;
+    });
+  }, []);
+
+  const toggleShowHidden = useCallback(() => {
+    setShowHidden((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem("@show_hidden_v1", next ? "1" : "0");
+      return next;
+    });
+  }, []);
+
+  const migrateHidden = useCallback((idMapping: Record<string, string>) => {
+    setHiddenFileIds((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const [oldId, newId] of Object.entries(idMapping)) {
+        if (next.has(oldId)) {
+          next.delete(oldId);
+          next.add(newId);
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      persistHiddenFiles(next);
+      return next;
+    });
+  }, []);
+
+  const cleanupHidden = useCallback((id: string) => {
+    setHiddenFileIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      persistHiddenFiles(next);
+      return next;
+    });
+  }, []);
+
+  const renameHiddenFolder = useCallback((oldPath: string, newPath: string) => {
+    setHiddenFolderPaths((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const p of prev) {
+        if (p === oldPath) {
+          next.add(newPath);
+          changed = true;
+        } else if (p.startsWith(`${oldPath}/`)) {
+          next.add(`${newPath}${p.substring(oldPath.length)}`);
+          changed = true;
+        } else {
+          next.add(p);
+        }
+      }
+      if (!changed) return prev;
+      persistHiddenFolders(next);
+      return next;
+    });
+  }, []);
+
+  const removeHiddenFolder = useCallback((folderPath: string) => {
+    setHiddenFolderPaths((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const p of prev) {
+        if (p === folderPath || p.startsWith(`${folderPath}/`)) {
+          changed = true;
+        } else {
+          next.add(p);
+        }
+      }
+      if (!changed) return prev;
+      persistHiddenFolders(next);
+      return next;
     });
   }, []);
 
@@ -316,12 +439,26 @@ export default function DownloadsScreen() {
     if (!trimmed || !folderDialogMode) return;
 
     const nextPath = currentFolderPath ? `${currentFolderPath}/${trimmed}` : trimmed;
-    const action =
-      folderDialogMode === "create"
-        ? createFolder(nextPath)
-        : renameFolder(activeFolderPath, trimmed);
+    const isRename = folderDialogMode === "rename";
+    const renamedFrom = activeFolderPath;
+    const parentPath = renamedFrom.includes("/")
+      ? renamedFrom.substring(0, renamedFrom.lastIndexOf("/"))
+      : "";
+    const renamedTo = isRename
+      ? parentPath
+        ? `${parentPath}/${trimmed}`
+        : trimmed
+      : nextPath;
+    const action = isRename
+      ? renameFolder(renamedFrom, trimmed)
+      : createFolder(nextPath);
 
     action
+      .then(() => {
+        if (isRename && renamedFrom !== renamedTo) {
+          renameHiddenFolder(renamedFrom, renamedTo);
+        }
+      })
       .catch((err) => {
         Alert.alert(
           "Folder error",
@@ -329,27 +466,29 @@ export default function DownloadsScreen() {
         );
       })
       .finally(closeFolderDialog);
-  }, [activeFolderPath, closeFolderDialog, createFolder, currentFolderPath, folderDialogMode, folderNameText, renameFolder]);
+  }, [activeFolderPath, closeFolderDialog, createFolder, currentFolderPath, folderDialogMode, folderNameText, renameFolder, renameHiddenFolder]);
 
   const runDeleteFolder = useCallback(
     (folderPath: string, force = false) => {
-      deleteFolder(folderPath, force).catch((err) => {
-        const message = err instanceof Error ? err.message : "Unable to delete folder";
-        if (!force && message.toLowerCase().includes("not empty")) {
-          Alert.alert(
-            "Delete folder and all contents?",
-            "This folder contains files or subfolders. This action cannot be undone.",
-            [
-              { text: "Cancel", style: "cancel" },
-              { text: "Delete All", style: "destructive", onPress: () => runDeleteFolder(folderPath, true) },
-            ],
-          );
-          return;
-        }
-        Alert.alert("Folder error", message);
-      });
+      deleteFolder(folderPath, force)
+        .then(() => removeHiddenFolder(folderPath))
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : "Unable to delete folder";
+          if (!force && message.toLowerCase().includes("not empty")) {
+            Alert.alert(
+              "Delete folder and all contents?",
+              "This folder contains files or subfolders. This action cannot be undone.",
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Delete All", style: "destructive", onPress: () => runDeleteFolder(folderPath, true) },
+              ],
+            );
+            return;
+          }
+          Alert.alert("Folder error", message);
+        });
     },
-    [deleteFolder],
+    [deleteFolder, removeHiddenFolder],
   );
 
   const handleDeleteFolder = useCallback(
@@ -366,13 +505,18 @@ export default function DownloadsScreen() {
   const handleFolderAction = useCallback(
     (folderPath: string) => {
       const folderName = folderPath.split("/").pop() || folderPath;
+      const isHidden = hiddenFolderPaths.has(folderPath);
       Alert.alert(folderName, "Folder options", [
         { text: "Rename", onPress: () => openRenameFolder(folderPath) },
+        {
+          text: isHidden ? "Unhide" : "Hide",
+          onPress: () => toggleHideFolder(folderPath),
+        },
         { text: "Delete", style: "destructive", onPress: () => handleDeleteFolder(folderPath) },
         { text: "Cancel", style: "cancel" },
       ]);
     },
-    [handleDeleteFolder, openRenameFolder],
+    [handleDeleteFolder, openRenameFolder, hiddenFolderPaths, toggleHideFolder],
   );
 
   // ── rename file ────────────────────────────────────────────────────────────
@@ -394,29 +538,53 @@ export default function DownloadsScreen() {
     if (!trimmed) return;
     const oldId = renameTask.id;
     renameDownload(oldId, trimmed)
-      .then((newId) => { if (newId) migrateLabels({ [oldId]: newId }); })
+      .then((newId) => {
+        if (newId) {
+          migrateLabels({ [oldId]: newId });
+          migrateHidden({ [oldId]: newId });
+        }
+      })
       .catch((err) => { console.warn("Rename failed:", err); })
       .finally(closeRenameModal);
-  }, [closeRenameModal, renameDownload, renameTask, renameText, migrateLabels]);
+  }, [closeRenameModal, renameDownload, renameTask, renameText, migrateLabels, migrateHidden]);
 
   // ── remove / delete ────────────────────────────────────────────────────────
   const handleRemove = useCallback(
     (id: string) => {
-      Alert.alert("Move to Trash", "Move this file to the Trash folder?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Move to Trash",
-          style: "destructive",
-          onPress: () => {
-            removeDownload(id).then((newId) => {
-              if (newId) migrateLabels({ [id]: newId });
-            });
-          },
-        },
-      ]);
+      setDeletePermanent(false);
+      setDeleteConfirm({ ids: [id] });
     },
-    [removeDownload, migrateLabels],
+    [],
   );
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteConfirm) return;
+    const ids = deleteConfirm.ids;
+    const permanent = deletePermanent;
+    setDeleteConfirm(null);
+    setDeletePermanent(false);
+    setSelectedIds(new Set());
+
+    if (permanent) {
+      ids.forEach((id) => {
+        deleteFromTrash(id);
+        cleanupLabels(id);
+        cleanupHidden(id);
+      });
+    } else {
+      Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
+        const mapping: Record<string, string> = {};
+        for (let i = 0; i < ids.length; i++) {
+          const newId = results[i];
+          if (newId) mapping[ids[i]] = newId;
+        }
+        if (Object.keys(mapping).length > 0) {
+          migrateLabels(mapping);
+          migrateHidden(mapping);
+        }
+      });
+    }
+  }, [deleteConfirm, deletePermanent, deleteFromTrash, cleanupLabels, cleanupHidden, removeDownload, migrateLabels, migrateHidden]);
 
   const handleDeletePermanently = useCallback(
     (id: string) => {
@@ -431,12 +599,13 @@ export default function DownloadsScreen() {
             onPress: () => {
               deleteFromTrash(id);
               cleanupLabels(id);
+              cleanupHidden(id);
             },
           },
         ],
       );
     },
-    [deleteFromTrash, cleanupLabels],
+    [deleteFromTrash, cleanupLabels, cleanupHidden],
   );
 
   // ── preview ────────────────────────────────────────────────────────────────
@@ -480,12 +649,17 @@ export default function DownloadsScreen() {
       const taskId = moveTaskInPrivate.id;
       setMoveTaskInPrivate(null);
       moveDownloadToFolder(taskId, folderName)
-        .then((newId) => { if (newId) migrateLabels({ [taskId]: newId }); })
+        .then((newId) => {
+          if (newId) {
+            migrateLabels({ [taskId]: newId });
+            migrateHidden({ [taskId]: newId });
+          }
+        })
         .catch((err) => {
           Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move file");
         });
     },
-    [moveDownloadToFolder, moveTaskInPrivate, migrateLabels],
+    [moveDownloadToFolder, moveTaskInPrivate, migrateLabels, migrateHidden],
   );
 
   // ── selection ──────────────────────────────────────────────────────────────
@@ -509,31 +683,10 @@ export default function DownloadsScreen() {
   }, []);
 
   const handleBulkDelete = useCallback(() => {
-    const count = selectedIds.size;
-    Alert.alert(
-      `Delete ${count} item${count !== 1 ? "s" : ""}`,
-      "Remove selected downloads? This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            const ids = Array.from(selectedIds);
-            setSelectedIds(new Set());
-            Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
-              const mapping: Record<string, string> = {};
-              for (let i = 0; i < ids.length; i++) {
-                const newId = results[i];
-                if (newId) mapping[ids[i]] = newId;
-              }
-              if (Object.keys(mapping).length > 0) migrateLabels(mapping);
-            });
-          },
-        },
-      ],
-    );
-  }, [removeDownload, selectedIds, migrateLabels]);
+    if (selectedIds.size === 0) return;
+    setDeletePermanent(false);
+    setDeleteConfirm({ ids: Array.from(selectedIds) });
+  }, [selectedIds]);
 
   const selectedTasks = useMemo(
     () => downloads.filter((t) => selectedIds.has(t.id)),
@@ -555,13 +708,18 @@ export default function DownloadsScreen() {
       setSelectedIds(new Set());
       setMoveProgress({ total: ids.length, label: "Moving files..." });
       bulkMoveDownloadsToFolder(ids, folderPath)
-        .then((idMapping) => { if (Object.keys(idMapping).length > 0) migrateLabels(idMapping); })
+        .then((idMapping) => {
+          if (Object.keys(idMapping).length > 0) {
+            migrateLabels(idMapping);
+            migrateHidden(idMapping);
+          }
+        })
         .catch((err) => {
           Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
         })
         .finally(() => setMoveProgress(null));
     },
-    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels],
+    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden],
   );
 
   const handleBulkMoveToPrivate = useCallback(
@@ -571,13 +729,18 @@ export default function DownloadsScreen() {
       setSelectedIds(new Set());
       setMoveProgress({ total: ids.length, label: "Moving to private folder..." });
       bulkMoveDownloadsToFolder(ids, folderPath ?? null)
-        .then((idMapping) => { if (Object.keys(idMapping).length > 0) migrateLabels(idMapping); })
+        .then((idMapping) => {
+          if (Object.keys(idMapping).length > 0) {
+            migrateLabels(idMapping);
+            migrateHidden(idMapping);
+          }
+        })
         .catch((err) => {
           Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
         })
         .finally(() => setMoveProgress(null));
     },
-    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels],
+    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden],
   );
 
   // ── duplicates ─────────────────────────────────────────────────────────────
@@ -599,10 +762,13 @@ export default function DownloadsScreen() {
           const newId = results[i];
           if (newId) mapping[ids[i]] = newId;
         }
-        if (Object.keys(mapping).length > 0) migrateLabels(mapping);
+        if (Object.keys(mapping).length > 0) {
+          migrateLabels(mapping);
+          migrateHidden(mapping);
+        }
       });
     },
-    [removeDownload, migrateLabels],
+    [removeDownload, migrateLabels, migrateHidden],
   );
 
   // ── device rescan ──────────────────────────────────────────────────────────
@@ -667,6 +833,7 @@ export default function DownloadsScreen() {
             const parentPath = slashIndex >= 0 ? fp.substring(0, slashIndex) : "";
             return parentPath === currentFolderPath;
           })
+          .filter((fp) => showHidden || !hiddenFolderPaths.has(fp))
           .map((fp) => ({
             type: "folder" as const,
             path: fp,
@@ -698,7 +865,7 @@ export default function DownloadsScreen() {
     return [...privateFolders, ...deviceRoot, ...deviceFolderItems].sort((a, b) =>
       a.type === "folder" && b.type === "folder" ? a.name.localeCompare(b.name) : 0,
     );
-  }, [isDevicePath, folders, currentFolderPath, deviceFolders, currentDeviceFolderPath]);
+  }, [isDevicePath, folders, currentFolderPath, deviceFolders, currentDeviceFolderPath, showHidden, hiddenFolderPaths]);
 
   const visibleDownloads = useMemo(
     () =>
@@ -709,9 +876,10 @@ export default function DownloadsScreen() {
           return (task.folderPath || "") === currentDeviceFolderPath;
         }
         if (isDevicePath) return false;
+        if (!showHidden && hiddenFileIds.has(task.id)) return false;
         return (task.folderPath || "") === currentFolderPath;
       }),
-    [downloads, currentFolderPath, isDevicePath, currentDeviceFolderPath],
+    [downloads, currentFolderPath, isDevicePath, currentDeviceFolderPath, showHidden, hiddenFileIds],
   );
 
   const sortedFiles = useMemo(() => {
@@ -834,6 +1002,10 @@ export default function DownloadsScreen() {
               item={item}
               itemCount={getFolderItemCount(item)}
               isDeviceScanRunning={isDeviceScanRunning}
+              isHidden={
+                item.source === "private" &&
+                hiddenFolderPathsRef.current.has(item.path)
+              }
               onOpen={() => handleOpenFolder(item)}
               onAction={item.source === "private" ? () => handleFolderAction(item.path) : undefined}
             />
@@ -861,6 +1033,10 @@ export default function DownloadsScreen() {
             onSelect={handleToggleSelect}
             labels={fileLabelsRef.current[item.task.id]}
             onLabel={setLabelTaskTarget}
+            isHidden={hiddenFileIdsRef.current.has(item.task.id)}
+            onToggleHide={
+              item.task.source !== "device" ? toggleHideFile : undefined
+            }
           />
         </View>
       );
@@ -884,6 +1060,7 @@ export default function DownloadsScreen() {
       handleToggleSelect,
       isInTrash,
       handleDeletePermanently,
+      toggleHideFile,
     ],
   );
 
@@ -953,7 +1130,7 @@ export default function DownloadsScreen() {
           }
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.listRow}
-          extraData={isSelectionMode}
+          extraData={`${isSelectionMode}|${hiddenFileIds.size}|${hiddenFolderPaths.size}|${showHidden}`}
           renderItem={renderItem}
           viewabilityConfig={viewabilityConfigRef.current}
           onViewableItemsChanged={onViewableItemsChangedRef.current}
@@ -1032,6 +1209,8 @@ export default function DownloadsScreen() {
         isDevicePath={isDevicePath}
         isDeviceScanRunning={isDeviceScanRunning}
         sortKey={sortKey}
+        showHidden={showHidden}
+        onToggleShowHidden={toggleShowHidden}
         onClose={() => setActionsDialogVisible(false)}
         onCreateFolder={() => { setActionsDialogVisible(false); openCreateFolder(); }}
         onRescan={() => { setActionsDialogVisible(false); handleRescanDevice(); }}
@@ -1089,6 +1268,15 @@ export default function DownloadsScreen() {
         downloads={downloads}
         onClose={() => setDuplicatesOpen(false)}
         onDelete={handleDeleteDuplicates}
+      />
+
+      <DeleteConfirmModal
+        visible={!!deleteConfirm}
+        count={deleteConfirm?.ids.length ?? 0}
+        permanent={deletePermanent}
+        onTogglePermanent={() => setDeletePermanent((v) => !v)}
+        onCancel={() => { setDeleteConfirm(null); setDeletePermanent(false); }}
+        onConfirm={handleConfirmDelete}
       />
 
       <AdBanner />

@@ -6,6 +6,7 @@ type Props = {
   item: FolderGridItem;
   itemCount: number;
   isDeviceScanRunning: boolean;
+  isHidden?: boolean;
   onOpen: () => void;
   onAction?: () => void;
 };
@@ -14,11 +15,17 @@ export default function FolderCard({
   item,
   itemCount,
   isDeviceScanRunning,
+  isHidden = false,
   onOpen,
   onAction,
 }: Props) {
   return (
-    <View style={styles.folderCard}>
+    <View style={[styles.folderCard, isHidden && styles.cardHidden]}>
+      {isHidden ? (
+        <View style={styles.hiddenBadge}>
+          <Text style={styles.hiddenBadgeText}>🚫</Text>
+        </View>
+      ) : null}
       <TouchableOpacity style={styles.folderCardBody} onPress={onOpen}>
         <Text style={styles.folderIcon}>📁</Text>
         <Text style={styles.folderName} numberOfLines={1}>
@@ -94,5 +101,28 @@ const styles = StyleSheet.create({
     color: "#444",
     marginTop: -4,
     transform: [{ rotate: "90deg" }],
+  },
+  cardHidden: {
+    opacity: 0.55,
+  },
+  hiddenBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 5,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+  },
+  hiddenBadgeText: {
+    fontSize: 12,
   },
 });
