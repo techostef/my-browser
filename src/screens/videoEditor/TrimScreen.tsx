@@ -31,7 +31,13 @@ import { transcribeVideo } from '../../lib/videoEditor/whisper';
 import { translateSegments } from '../../lib/videoEditor/translate';
 import { loadSubtitles, saveSubtitles, clearSubtitles } from '../../lib/videoEditor/subtitleCache';
 import { getOpenAIKey } from '../../lib/openaiKey';
-import { loadSession, saveSession, clearSession } from '../../lib/videoEditor/editSession';
+import {
+  loadSession,
+  saveSession,
+  clearSession,
+  loadLastSubtitleStyle,
+  saveLastSubtitleStyle,
+} from '../../lib/videoEditor/editSession';
 import { ENABLE_AI_CAPTIONS } from '../../config';
 import {
   RewardedInterstitialAd,
@@ -349,6 +355,12 @@ export default function TrimScreen({ navigation, route }: Props) {
       }
       if (session?.subtitleStyle) {
         setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...session.subtitleStyle });
+      } else {
+        // No per-video style yet — fall back to the last-used global default so
+        // the user's preferred styling persists across export/session-clear and
+        // across new videos.
+        const last = await loadLastSubtitleStyle();
+        if (last) setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...last });
       }
       sessionReady.current = true;
     })();
@@ -367,6 +379,7 @@ export default function TrimScreen({ navigation, route }: Props) {
         subtitleStyle,
         updatedAt: Date.now(),
       });
+      saveLastSubtitleStyle(subtitleStyle);
     }, 600);
     return () => clearTimeout(t);
   }, [splitPoints, deletedSegments, subtitleSegments, subtitleStyle, videoUri]);

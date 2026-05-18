@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Segment, SubtitleStyle } from '../../types/videoEditor';
 
 const PREFIX = '@edit_session:';
+const LAST_STYLE_KEY = '@subtitle_style:last';
 
 export interface EditSession {
   videoUri: string;
@@ -37,4 +38,20 @@ export async function clearSession(videoUri: string): Promise<void> {
 export async function sessionExists(videoUri: string): Promise<boolean> {
   const raw = await AsyncStorage.getItem(key(videoUri));
   return raw !== null;
+}
+
+// Global last-used subtitle style — survives session clearing after export so
+// the same style is the default for the next video.
+
+export async function loadLastSubtitleStyle(): Promise<SubtitleStyle | null> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_STYLE_KEY);
+    return raw ? (JSON.parse(raw) as SubtitleStyle) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveLastSubtitleStyle(style: SubtitleStyle): Promise<void> {
+  await AsyncStorage.setItem(LAST_STYLE_KEY, JSON.stringify(style));
 }
