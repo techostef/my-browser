@@ -1,4 +1,18 @@
-import type { Segment } from '../../types/videoEditor';
+import type { Segment, SubtitleStyle } from '../../types/videoEditor';
+import {
+  DEFAULT_SUBTITLE_STYLE,
+  SUBTITLE_FONT_SCALE,
+  SUBTITLE_FONT_CSS,
+} from '../../types/videoEditor';
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
 
 /**
  * Returns an HTML page that renders each subtitle segment onto an HTML5 canvas
@@ -15,9 +29,18 @@ export function buildSubtitleRenderHtml(
   segments: Segment[],
   videoWidth: number,
   videoHeight: number,
+  style: SubtitleStyle = DEFAULT_SUBTITLE_STYLE,
 ): string {
-  const fontSize = Math.max(20, Math.round(videoHeight * 0.045));
+  // Merge with defaults so older saved sessions (missing newer fields) work.
+  style = { ...DEFAULT_SUBTITLE_STYLE, ...style };
+  const baseFontSize = Math.max(20, Math.round(videoHeight * 0.045));
+  const fontScale = SUBTITLE_FONT_SCALE[style.fontSize] ?? 1.0;
+  const fontSize = Math.max(16, Math.round(baseFontSize * fontScale));
+  const fontFamilyCss = SUBTITLE_FONT_CSS[style.fontFamily] ?? 'sans-serif';
   const segData = JSON.stringify(segments.map(s => ({ id: s.id, text: s.text })));
+  const { r, g, b } = hexToRgb(style.color);
+  const bgOpacity = Math.max(0, Math.min(1, style.opacity));
+  const textColor = style.textColor || '#FFFFFF';
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -27,6 +50,12 @@ export function buildSubtitleRenderHtml(
   var segs = ${segData};
   var W = ${videoWidth};
   var FS = ${fontSize};
+  var BG_R = ${r};
+  var BG_G = ${g};
+  var BG_B = ${b};
+  var BG_OPACITY = ${bgOpacity};
+  var TEXT_COLOR = ${JSON.stringify(textColor)};
+  var FONT_FAMILY = ${JSON.stringify(fontFamilyCss)};
   var PAD = 24;
   var LINE_H = FS * 1.35;
   // Wrap budget: ~75% of canvas width so subtitles never reach the edge.
@@ -117,7 +146,7 @@ export function buildSubtitleRenderHtml(
   // PNG shares the same height (concat demuxer needs uniform dimensions).
   function computeStripHeight() {
     var probe = document.createElement('canvas').getContext('2d');
-    probe.font = 'bold ' + FS + 'px sans-serif';
+    probe.font = 'bold ' + FS + 'px ' + FONT_FAMILY;
     probe.textAlign = 'center';
     probe.textBaseline = 'middle';
     var maxLines = 1;
@@ -136,7 +165,7 @@ export function buildSubtitleRenderHtml(
     var ctx = c.getContext('2d');
     ctx.clearRect(0, 0, W, SH);
 
-    ctx.font = 'bold ' + FS + 'px sans-serif';
+    ctx.font = 'bold ' + FS + 'px ' + FONT_FAMILY;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -149,14 +178,16 @@ export function buildSubtitleRenderHtml(
     var bx = (W - bw) / 2;
     var by = (SH - bh) / 2;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    if (ctx.roundRect) {
-      ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 8); ctx.fill();
-    } else {
-      ctx.fillRect(bx, by, bw, bh);
+    if (BG_OPACITY > 0) {
+      ctx.fillStyle = 'rgba(' + BG_R + ',' + BG_G + ',' + BG_B + ',' + BG_OPACITY + ')';
+      if (ctx.roundRect) {
+        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 8); ctx.fill();
+      } else {
+        ctx.fillRect(bx, by, bw, bh);
+      }
     }
 
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = TEXT_COLOR;
     var startY = by + 10 + LINE_H / 2;
     lines.forEach(function(line, i){
       ctx.fillText(line, W / 2, startY + i * LINE_H);

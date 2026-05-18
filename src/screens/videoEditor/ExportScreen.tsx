@@ -10,6 +10,7 @@ import WebView from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList, Segment } from '../../types/videoEditor';
+import { DEFAULT_SUBTITLE_STYLE } from '../../types/videoEditor';
 import { trimAndConcat, probeVideoSize, burnSubtitlesWithOverlay, transcodeVideo } from '../../lib/videoEditor/ffmpeg';
 import { clearSession } from '../../lib/videoEditor/editSession';
 import { preCacheMediaDuration } from '../../services/downloadManager';
@@ -33,7 +34,8 @@ const RESOLUTIONS: Resolution[] = [
 ];
 
 export default function ExportScreen({ navigation, route }: Props) {
-  const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt } = route.params;
+  const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt, subtitleStyle } = route.params;
+  const effectiveStyle = subtitleStyle ?? DEFAULT_SUBTITLE_STYLE;
   const [status, setStatus] = useState('Preparing…');
   const [hasStarted, setHasStarted] = useState(false);
   const [done, setDone] = useState(false);
@@ -74,7 +76,7 @@ export default function ExportScreen({ navigation, route }: Props) {
       pngBufferRef.current = [];
       pngResolveRef.current = resolve;
       pngRejectRef.current = reject;
-      const html = buildSubtitleRenderHtml(segs, videoWidth, videoHeight);
+      const html = buildSubtitleRenderHtml(segs, videoWidth, videoHeight, effectiveStyle);
       setWebViewHtml(html);
     });
   };

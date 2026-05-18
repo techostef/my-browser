@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Segment } from '../../types/videoEditor';
+import type { Segment, SubtitleStyle } from '../../types/videoEditor';
 
 const PREFIX = '@edit_session:';
 
@@ -8,6 +8,7 @@ export interface EditSession {
   splitPoints: number[];
   deletedSegments: number[];     // Set<number> serialised as array
   subtitleSegments?: Segment[];  // saved from SubtitleEditorScreen
+  subtitleStyle?: SubtitleStyle; // chosen before subtitle generation
   updatedAt: number;
 }
 

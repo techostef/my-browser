@@ -17,7 +17,10 @@ import {
 } from 'react-native';
 import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../types/videoEditor';
+import type { RootStackParamList, SubtitleStyle } from '../../types/videoEditor';
+import { DEFAULT_SUBTITLE_STYLE } from '../../types/videoEditor';
+import SubtitleStyleControls, { rgbaFromStyle, resolveFontFamily } from '../../components/videoEditor/SubtitleStyleControls';
+import { SUBTITLE_FONT_SCALE } from '../../types/videoEditor';
 import VideoTimeline from '../../components/videoEditor/VideoTimeline';
 import type { TimelineSegment } from '../../components/videoEditor/VideoTimeline';
 import { isFullVideo, filterSegments } from '../../utils/videoEditor/videoProcessor';
@@ -182,9 +185,15 @@ const chipRowStyles = StyleSheet.create({
 interface VideoWithSubtitleProps {
   player: VideoPlayer;
   subtitleText: string | null;
+  subtitleBg: string;
+  subtitleColor: string;
+  subtitleFontFamily: string | undefined;
+  subtitleFontSize: number;
 }
 
-const VideoWithSubtitle = React.memo(({ player, subtitleText }: VideoWithSubtitleProps) => (
+const VideoWithSubtitle = React.memo((
+  { player, subtitleText, subtitleBg, subtitleColor, subtitleFontFamily, subtitleFontSize }: VideoWithSubtitleProps,
+) => (
   <View style={videoStyles.container}>
     <VideoView
       player={player}
@@ -194,7 +203,19 @@ const VideoWithSubtitle = React.memo(({ player, subtitleText }: VideoWithSubtitl
     />
     {subtitleText ? (
       <View style={videoStyles.subtitleOverlay} pointerEvents="none">
-        <Text style={videoStyles.subtitleText}>{subtitleText}</Text>
+        <Text
+          style={[
+            videoStyles.subtitleText,
+            {
+              backgroundColor: subtitleBg,
+              color: subtitleColor,
+              fontFamily: subtitleFontFamily,
+              fontSize: subtitleFontSize,
+            },
+          ]}
+        >
+          {subtitleText}
+        </Text>
       </View>
     ) : null}
   </View>
@@ -283,6 +304,8 @@ export default function TrimScreen({ navigation, route }: Props) {
   const [manualStart, setManualStart] = useState('');
   const [manualEnd, setManualEnd] = useState('');
   const [manualText, setManualText] = useState('');
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
+  const [setupSource, setSetupSource] = useState<'ai' | 'local' | null>(null);
 
   // Split-based editing state
   const [splitPoints, setSplitPoints] = useState<number[]>([]);
@@ -324,6 +347,9 @@ export default function TrimScreen({ navigation, route }: Props) {
         const cached = await loadSubtitles(videoUri);
         if (cached) setSubtitleSegments(cached);
       }
+      if (session?.subtitleStyle) {
+        setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...session.subtitleStyle });
+      }
       sessionReady.current = true;
     })();
   }, [videoUri]);
@@ -338,11 +364,12 @@ export default function TrimScreen({ navigation, route }: Props) {
         splitPoints,
         deletedSegments: [...deletedSegments],
         subtitleSegments: subtitleSegments.length > 0 ? subtitleSegments : undefined,
+        subtitleStyle,
         updatedAt: Date.now(),
       });
     }, 600);
     return () => clearTimeout(t);
-  }, [splitPoints, deletedSegments, subtitleSegments, videoUri]);
+  }, [splitPoints, deletedSegments, subtitleSegments, subtitleStyle, videoUri]);
 
   // ─── Derive segments from split points ──────────────────────────────────────
 
@@ -660,6 +687,7 @@ export default function TrimScreen({ navigation, route }: Props) {
       videoUri,
       timelineSegments: segments,
       duration: durationRef.current,
+      subtitleStyle,
       ...(subtitleSegments.length > 0
         ? { segments: subtitleSegments, srt: segmentsToSrt(subtitleSegments) }
         : {}),
@@ -793,6 +821,10 @@ export default function TrimScreen({ navigation, route }: Props) {
       <VideoWithSubtitle
         player={player}
         subtitleText={currentSubtitle?.text ?? null}
+        subtitleBg={rgbaFromStyle(subtitleStyle)}
+        subtitleColor={subtitleStyle.textColor}
+        subtitleFontFamily={resolveFontFamily(subtitleStyle.fontFamily)}
+        subtitleFontSize={Math.round(16 * SUBTITLE_FONT_SCALE[subtitleStyle.fontSize])}
       />
 
       {/* ── Controls bar ── */}
@@ -1002,7 +1034,7 @@ export default function TrimScreen({ navigation, route }: Props) {
                 style={styles.menuItem}
                 onPress={() => {
                   setCaptionMenuOpen(false);
-                  handleContinue('ai');
+                  setSetupSource('ai');
                 }}
               >
                 <Text style={styles.menuItemIcon}>📝</Text>
@@ -1016,7 +1048,7 @@ export default function TrimScreen({ navigation, route }: Props) {
               style={styles.menuItem}
               onPress={() => {
                 setCaptionMenuOpen(false);
-                handleContinue('local');
+                setSetupSource('local');
               }}
             >
               <Text style={styles.menuItemIcon}>📱</Text>
@@ -1089,6 +1121,39 @@ export default function TrimScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Subtitle setup (style + generate) ── */}
+      <Modal
+        visible={setupSource !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSetupSource(null)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setSetupSource(null)}>
+          <Pressable style={styles.sheetCard} onPress={() => {}}>
+            <View style={styles.sheetGrabber} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Subtitle style</Text>
+              <TouchableOpacity onPress={() => setSetupSource(null)} hitSlop={10}>
+                <Text style={styles.sheetClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <SubtitleStyleControls value={subtitleStyle} onChange={setSubtitleStyle} />
+            <View style={styles.sheetFooter}>
+              <TouchableOpacity
+                style={styles.generateBtn}
+                onPress={() => {
+                  const src = setupSource;
+                  setSetupSource(null);
+                  if (src) handleContinue(src);
+                }}
+              >
+                <Text style={styles.generateBtnText}>Generate</Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1244,6 +1309,67 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#e3e3e8',
+    marginHorizontal: 16,
+    marginVertical: 4,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheetCard: {
+    backgroundColor: '#1a1a23',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingBottom: 24,
+    maxHeight: '90%',
+  },
+  sheetGrabber: {
+    width: 42,
+    height: 4,
+    backgroundColor: '#3a3a4a',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  sheetTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sheetClose: {
+    color: '#888',
+    fontSize: 18,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+  },
+  sheetFooter: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  generateBtn: {
+    backgroundColor: '#6c63ff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  generateBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   menuItem: {
     flexDirection: 'row',

@@ -13,10 +13,13 @@ import {
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList, Segment } from '../../types/videoEditor';
+import type { RootStackParamList, Segment, SubtitleStyle } from '../../types/videoEditor';
+import { DEFAULT_SUBTITLE_STYLE } from '../../types/videoEditor';
 import VideoTimeline from '../../components/videoEditor/VideoTimeline';
 import { segmentsToSrt } from '../../lib/videoEditor/srt';
 import { loadSession, saveSession } from '../../lib/videoEditor/editSession';
+import { rgbaFromStyle, resolveFontFamily } from '../../components/videoEditor/SubtitleStyleControls';
+import { SUBTITLE_FONT_SCALE } from '../../types/videoEditor';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubtitleEditor'>;
 
@@ -34,9 +37,12 @@ function fmtTime(secs: number): string {
 }
 
 export default function SubtitleEditorScreen({ navigation, route }: Props) {
-  const { videoUri, segments: initial, timelineSegments, duration } = route.params;
+  const { videoUri, segments: initial, timelineSegments, duration, subtitleStyle: initialStyle } = route.params;
 
   const [segments, setSegments] = useState<Segment[]>(initial);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(
+    initialStyle ?? DEFAULT_SUBTITLE_STYLE,
+  );
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -54,6 +60,9 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
       if (session?.subtitleSegments && session.subtitleSegments.length > 0) {
         setSegments(session.subtitleSegments);
       }
+      if (session?.subtitleStyle) {
+        setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...session.subtitleStyle });
+      }
       sessionReady.current = true;
     });
   }, [videoUri]);
@@ -69,12 +78,13 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
           splitPoints: existing?.splitPoints ?? [],
           deletedSegments: existing?.deletedSegments ?? [],
           subtitleSegments: segments,
+          subtitleStyle,
           updatedAt: Date.now(),
         });
       });
     }, 600);
     return () => clearTimeout(t);
-  }, [segments, videoUri]);
+  }, [segments, subtitleStyle, videoUri]);
 
   // ─── Current subtitle ──────────────────────────────────────────────────────
 
@@ -153,6 +163,7 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
       duration,
       segments,
       srt: segmentsToSrt(segments),
+      subtitleStyle,
     });
   };
 
@@ -179,7 +190,19 @@ export default function SubtitleEditorScreen({ navigation, route }: Props) {
           />
           {currentSubtitle ? (
             <View style={styles.subtitleOverlay} pointerEvents="none">
-              <Text style={styles.subtitleText}>{currentSubtitle.text}</Text>
+              <Text
+                style={[
+                  styles.subtitleText,
+                  {
+                    backgroundColor: rgbaFromStyle(subtitleStyle),
+                    color: subtitleStyle.textColor,
+                    fontFamily: resolveFontFamily(subtitleStyle.fontFamily),
+                    fontSize: Math.round(16 * SUBTITLE_FONT_SCALE[subtitleStyle.fontSize]),
+                  },
+                ]}
+              >
+                {currentSubtitle.text}
+              </Text>
             </View>
           ) : null}
         </View>
