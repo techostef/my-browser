@@ -31,8 +31,11 @@ export function buildSubtitleRenderHtml(
   var LINE_H = FS * 1.35;
   // Wrap budget: ~75% of canvas width so subtitles never reach the edge.
   var MAX_TEXT_W = Math.max(40, Math.round(W * 0.75) - PAD * 2);
+  // Char-width factor for bold sans-serif (empirically ~0.55-0.85 of font size
+  // depending on letter mix; use a pessimistic 0.75 so wrap engages eagerly).
+  var CHAR_W = FS * 0.75;
   // Hard char-count ceiling per line as a backup when measureText is broken.
-  var MAX_CHARS = Math.max(8, Math.floor(MAX_TEXT_W / (FS * 0.6)));
+  var MAX_CHARS = Math.max(8, Math.floor(MAX_TEXT_W / CHAR_W));
 
   function post(obj) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -55,7 +58,7 @@ export function buildSubtitleRenderHtml(
   function measureW(ctx, s) {
     if (!s) return 0;
     var m = ctx.measureText(s).width;
-    var estimate = s.length * FS * 0.6;
+    var estimate = s.length * CHAR_W;
     if (m > 0 && isFinite(m)) return Math.max(m, estimate);
     return estimate;
   }
