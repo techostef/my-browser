@@ -1,30 +1,78 @@
 diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
-index 251939e..1870f9f 100644
+index 251939e..0000000 100644
 --- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
 +++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
-@@ -94,6 +94,131 @@ public class RNCWebViewClient extends WebViewClient {
+@@ -94,6 +94,179 @@ public class RNCWebViewClient extends WebViewClient {
        reactWebView.callInjectedJavaScriptBeforeContentLoaded();
      }
- 
-+    // ── Patched: inject injectedJSBeforeContentLoaded into cross-origin iframe
-+    // HTML responses by intercepting WebViewClient.shouldInterceptRequest. Without
-+    // this, our injection only runs in the top frame (Android WebView limitation).
+
++    // ── Patched: (1) native ad-domain blocking, (2) inject JS into cross-origin
++    // iframe HTML responses. Without shouldInterceptRequest, injected JS only runs
++    // in the top frame on Android WebView.
++    private static final String[] AD_DOMAINS_NATIVE = {
++        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
++        "google-analytics.com", "googletagmanager.com", "adservice.google.",
++        "pagead2.googlesyndication.com", "ads.youtube.com", "ad.doubleclick.net",
++        "facebook.com/tr", "fbevents", "analytics.tiktok.com",
++        "ads-api.twitter.com", "static.ads-twitter.com", "amazon-adsystem.com",
++        "adnxs.com", "adsrvr.org", "criteo.com", "criteo.net", "outbrain.com",
++        "taboola.com", "moatads.com", "serving-sys.com", "adcolony.com",
++        "applovin.com", "mopub.com", "unity3d.com/ads", "unityads.unity3d.com",
++        "inmobi.com", "chartboost.com", "pubmatic.com", "openx.net",
++        "rubiconproject.com", "smartadserver.com", "indexww.com", "casalemedia.com",
++        "advertising.com", "adform.net", "popads.net", "popcash.net",
++        "propellerads.com", "mgid.com", "revcontent.com", "zergnet.com",
++        "adroll.com", "mediavine.com", "ezoic.net", "adhigh.net", "adsterra.com",
++        "trafficjunky.com", "exoclick.com", "juicyads.com", "clickadu.com",
++        "a-ads.com", "click.a-ads.com", "static.a-ads.com",
++        "bc.game", "bcgame", "jitu77", "traffic-media.co", "hilltopads.net",
++        "pushads.net", "yllix.com", "adcash.com", "coinis.com", "richpush.co",
++        "evadav.com", "adnetasia.com", "adsnet.asia", "iniads.com", "adgoi.com",
++    };
++
++    private static boolean isAdUrl(String url) {
++        String lower = url.toLowerCase();
++        for (String domain : AD_DOMAINS_NATIVE) {
++            if (lower.contains(domain)) return true;
++        }
++        return false;
++    }
++
 +    @Override
 +    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-+        if (request == null || request.isForMainFrame()) {
++        if (request == null) {
++            return super.shouldInterceptRequest(view, request);
++        }
++        RNCWebView reactWebView = (view instanceof RNCWebView) ? (RNCWebView) view : null;
++        String injectedJS = reactWebView != null ? reactWebView.injectedJSBeforeContentLoaded : null;
++
++        // ── 1. Native ad-domain blocking ──────────────────────────────────────
++        // Block sub-resource requests (scripts, images, iframes) to known ad
++        // networks at the network level when the ad blocker is active.
++        if (!request.isForMainFrame() && injectedJS != null && injectedJS.contains("__AD_BLOCKER_INSTALLED__")) {
++            String reqUrlStr = request.getUrl() != null ? request.getUrl().toString() : null;
++            if (reqUrlStr != null && isAdUrl(reqUrlStr)) {
++                return new WebResourceResponse("text/plain", "UTF-8", 200, "OK",
++                    new java.util.HashMap<String, String>(),
++                    new java.io.ByteArrayInputStream(new byte[0]));
++            }
++        }
++
++        // ── 2. Inject JS into cross-origin iframe HTML responses ──────────────
++        if (request.isForMainFrame()) {
 +            return super.shouldInterceptRequest(view, request);
 +        }
 +        if (!"GET".equalsIgnoreCase(request.getMethod())) {
 +            return super.shouldInterceptRequest(view, request);
 +        }
-+        java.util.Map<String, String> reqHeaders = request.getRequestHeaders();
-+        String accept = reqHeaders != null ? reqHeaders.get("Accept") : null;
-+        if (accept == null || !accept.contains("text/html")) {
++        if (injectedJS == null || injectedJS.isEmpty()) {
 +            return super.shouldInterceptRequest(view, request);
 +        }
-+        RNCWebView reactWebView = (view instanceof RNCWebView) ? (RNCWebView) view : null;
-+        String injectedJS = reactWebView != null ? reactWebView.injectedJSBeforeContentLoaded : null;
-+        if (injectedJS == null || injectedJS.isEmpty()) {
++        java.util.Map<String, String> reqHeaders = request.getRequestHeaders();
++        // Skip requests that clearly aren't HTML (images, fonts, scripts).
++        // Allow no-Accept or */* since some iframe loaders omit text/html.
++        String accept = reqHeaders != null ? reqHeaders.get("Accept") : null;
++        if (accept != null && !accept.contains("text/html") && !accept.contains("*/*")) {
 +            return super.shouldInterceptRequest(view, request);
 +        }
 +        java.net.HttpURLConnection conn = null;

@@ -46,7 +46,15 @@ export const POPUP_BLOCKER_JS = `
   } catch(e) {
   }
 
-  // ── 2. Intercept target="_blank" link clicks ───────────────────────────────
+  // ── 2. Suppress alert / confirm / prompt dialogs (ad scripts abuse these) ────
+
+  try {
+    window.alert   = function() {};
+    window.confirm = function() { return false; };
+    window.prompt  = function() { return null; };
+  } catch(e) {}
+
+  // ── 3. Intercept target="_blank" link clicks ───────────────────────────────
 
   try {
     document.addEventListener('click', function(e) {

@@ -71,6 +71,40 @@ export const AD_BLOCKER_JS = `
     'exoclick.com',
     'juicyads.com',
     'clickadu.com',
+    // Asian / gambling / crypto ad networks
+    'a-ads.com',
+    'ad.a-ads.com',
+    'click.a-ads.com',
+    'static.a-ads.com',
+    'bc.game',
+    'bcgame',
+    'jitu77',
+    'pokerlounge99',
+    'slotgacor',
+    'pragmaticplay',
+    'habanero',
+    'microgaming',
+    'betsson',
+    'bet365cdn',
+    'traffic-media.co',
+    'hilltopads.net',
+    'pushads.net',
+    'yllix.com',
+    'adcash.com',
+    'coinis.com',
+    'richpush.co',
+    'evadav.com',
+    'adnetasia.com',
+    'adsnet.asia',
+    'idadvert',
+    'bolalob',
+    'slotmachine',
+    'casinoads',
+    'gambleads',
+    'iniads.com',
+    'adgoi.com',
+    'advert-biz.com',
+    'newads.net',
   ];
 
   function isAdUrl(url) {
@@ -92,6 +126,8 @@ export const AD_BLOCKER_JS = `
     '.adsbygoogle',
     'iframe[src*="doubleclick.net"]',
     'iframe[src*="googlesyndication.com"]',
+    'iframe[src*="a-ads.com"]',
+    'iframe[data-aa]',
     // Generic ad containers
     '[class*="ad-banner"]',
     '[class*="ad-container"]',
@@ -120,6 +156,18 @@ export const AD_BLOCKER_JS = `
     '[class*="video-ad"]',
     '[class*="preroll"]',
     '[class*="midroll"]',
+    // Overlay / interstitial patterns
+    '[class*="overlay-ad"]',
+    '[class*="popup-overlay"]',
+    '[class*="modal-ad"]',
+    '[class*="ad-overlay"]',
+    '[class*="ad-modal"]',
+    '[id*="popup-overlay"]',
+    '[id*="ad-modal"]',
+    '[id*="interstitial"]',
+    // Push notification prompts
+    '[class*="push-notif"]',
+    '[id*="push-notif"]',
   ].join(',');
 
   try {
@@ -179,13 +227,29 @@ export const AD_BLOCKER_JS = `
         ads[i].style.setProperty('visibility', 'hidden', 'important');
         ads[i].style.setProperty('height', '0', 'important');
       }
-      // Also block ad iframes
+      // Block ad iframes by src domain
       var iframes = document.querySelectorAll('iframe');
       for (var j = 0; j < iframes.length; j++) {
         var src = iframes[j].src || '';
         if (isAdUrl(src)) {
           iframes[j].style.setProperty('display', 'none', 'important');
           iframes[j].style.setProperty('height', '0', 'important');
+        }
+      }
+      // Remove fixed/absolute high-z-index overlays injected by ad scripts.
+      // Targets the BC.GAME / interstitial style banners that float over content.
+      var allEls = document.querySelectorAll('body > div, body > section, body > aside');
+      for (var k = 0; k < allEls.length; k++) {
+        var el = allEls[k];
+        var cs = window.getComputedStyle(el);
+        var pos = cs.position;
+        var zIndex = parseInt(cs.zIndex, 10);
+        if ((pos === 'fixed' || pos === 'absolute') && zIndex >= 9999) {
+          // Preserve known page chrome (navigation bars etc.) by checking size
+          var rect = el.getBoundingClientRect();
+          if (rect.width > 100 && rect.height > 100) {
+            el.style.setProperty('display', 'none', 'important');
+          }
         }
       }
     } catch (e) {}
