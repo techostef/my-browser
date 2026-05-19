@@ -188,7 +188,6 @@ export default function BrowserScreen() {
   const { settings, pushHistory, setSetting } = useSettings();
   const injectedJavaScript = useMemo(() => {
     let js = VIDEO_DETECTOR_JS;
-    console.log("settings.popupBlockEnabled", settings.popupBlockEnabled)
     if (settings.adBlockEnabled) js = AD_BLOCKER_JS + js;
     if (settings.popupBlockEnabled) js = POPUP_BLOCKER_JS + js;
     return js;
@@ -667,7 +666,7 @@ export default function BrowserScreen() {
           const filterLogs = ['[FULLSCREEN]'];
           const log = message.payload;
           if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
-            console.log('[Detector]', log);
+            // console.log('[Detector]', log);
           }
           break;
         case 'PAGE_INFO':
