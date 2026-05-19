@@ -130,7 +130,6 @@ export const AD_BLOCKER_JS = `
     'iframe[data-aa]',
     // Generic ad containers
     '[class*="ad-banner"]',
-    '[class*="ad-container"]',
     '[class*="ad-wrapper"]',
     '[class*="ad-slot"]',
     '[class*="ad-unit"]',
