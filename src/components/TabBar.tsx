@@ -211,9 +211,7 @@ export default function TabBar({
               Close All
             </Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, isIncognito && styles.headerTitleIncognito]}>
-            {visibleTabs.length} {isIncognito ? "incognito" : ""} tab{visibleTabs.length !== 1 ? "s" : ""}
-          </Text>
+       
           <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
             <Text style={styles.doneBtnText}>Done</Text>
           </TouchableOpacity>
@@ -285,59 +283,6 @@ export default function TabBar({
     </Modal>
   );
 }
-
-// ─── Trigger button ───────────────────────────────────────────────────────────
-
-interface TriggerProps {
-  count: number;
-  isIncognito: boolean;
-  onPress: () => void;
-}
-
-export function TabCountTrigger({ count, isIncognito, onPress }: TriggerProps) {
-  return (
-    <TouchableOpacity
-      style={[trigger.btn, isIncognito && trigger.btnIncognito]}
-      onPress={onPress}
-      activeOpacity={0.7}>
-      {isIncognito ? (
-        <Text style={trigger.icon}>🕵️</Text>
-      ) : (
-        <Text style={[trigger.text, isIncognito && trigger.textIncognito]}>
-          {count > 99 ? "99+" : count}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-const trigger = StyleSheet.create({
-  btn: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: "#555",
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 2,
-  },
-  btnIncognito: {
-    borderColor: "#A78BFA",
-    backgroundColor: "#2D2040",
-  },
-  text: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#333",
-  },
-  textIncognito: {
-    color: "#E9D5FF",
-  },
-  icon: {
-    fontSize: 14,
-  },
-});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F2F2F7" },

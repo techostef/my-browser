@@ -1,45 +1,37 @@
-import React, { useState, useCallback } from "react";
-import TabBar, { TabCountTrigger } from "./TabBar";
+import React from "react";
+import TabBar from "./TabBar";
 import { useTabList, useActiveTabId, useTabActions } from "../store/tabStore";
 
-function TabBarContainerInner() {
-  const [visible, setVisible] = useState(false);
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+}
+
+function TabBarContainerInner({ visible, onClose }: Props) {
   const tabs = useTabList();
   const activeTabId = useActiveTabId();
   const { addTab, removeTab, removeMultipleTabs, setActiveTab } = useTabActions();
 
-  const open = useCallback(() => setVisible(true), []);
-  const close = useCallback(() => setVisible(false), []);
-
-  const visibleTabs = tabs.filter((t) => !t.hidden);
-  const activeTab = visibleTabs.find((t) => t.id === activeTabId);
-  const isActiveIncognito = !!activeTab?.incognito;
-
-  // Count shown on trigger reflects the current segment's tabs
-  const displayCount = isActiveIncognito
-    ? visibleTabs.filter((t) => t.incognito).length
-    : visibleTabs.filter((t) => !t.incognito).length;
-
   return (
-    <>
-      <TabCountTrigger
-        count={displayCount}
-        isIncognito={isActiveIncognito}
-        onPress={open}
-      />
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSwitchTab={setActiveTab}
-        onAddTab={() => addTab('about:home')}
-        onAddIncognitoTab={() => addTab('about:home', true)}
-        onRemoveTab={removeTab}
-        onCloseAllTabs={removeMultipleTabs}
-        visible={visible}
-        onClose={close}
-      />
-    </>
+    <TabBar
+      tabs={tabs}
+      activeTabId={activeTabId}
+      onSwitchTab={setActiveTab}
+      onAddTab={() => addTab('about:home')}
+      onAddIncognitoTab={() => addTab('about:home', true)}
+      onRemoveTab={removeTab}
+      onCloseAllTabs={removeMultipleTabs}
+      visible={visible}
+      onClose={onClose}
+    />
   );
+}
+
+export function useActiveIncognito() {
+  const tabs = useTabList();
+  const activeTabId = useActiveTabId();
+  const activeTab = tabs.find((t) => !t.hidden && t.id === activeTabId);
+  return !!activeTab?.incognito;
 }
 
 export default React.memo(TabBarContainerInner);

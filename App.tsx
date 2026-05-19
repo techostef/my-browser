@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import TabBarContainer from './src/components/TabBarContainer';
+import TabBarContainer, { useActiveIncognito } from './src/components/TabBarContainer';
 
 import BrowserScreen from './src/screens/BrowserScreen';
 import DownloadsScreen from './src/screens/DownloadsScreen';
@@ -39,68 +39,79 @@ function EmptyScreen() {
 
 function MainTabs() {
   const { themeColors } = useSettings();
+  const isActiveIncognito = useActiveIncognito();
+  const [tabSwitcherVisible, setTabSwitcherVisible] = useState(false);
 
   return (
-    <Tab.Navigator
-      detachInactiveScreens={false}
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: themeColors.tabBarActive,
-        tabBarInactiveTintColor: themeColors.tabBarInactive,
-        tabBarStyle: HIDE_NAVBAR_ROUTES.includes(route.name)
-          ? { display: 'none' }
-          : {
-              backgroundColor: themeColors.tabBar,
-              borderTopColor: themeColors.tabBarBorder,
+    <>
+      <Tab.Navigator
+        detachInactiveScreens={false}
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarActiveTintColor: themeColors.tabBarActive,
+          tabBarInactiveTintColor: themeColors.tabBarInactive,
+          tabBarStyle: HIDE_NAVBAR_ROUTES.includes(route.name)
+            ? { display: 'none' }
+            : {
+                backgroundColor: themeColors.tabBar,
+                borderTopColor: themeColors.tabBarBorder,
+              },
+          tabBarLabelStyle: {
+            display: 'none',
+          },
+        })}>
+        <Tab.Screen
+          name="Browser"
+          component={BrowserScreen}
+          options={{
+            tabBarLabel: '',
+            tabBarIcon: () => <TabIcon label="🌐" />,
+          }}
+        />
+        <Tab.Screen
+          name="Downloads"
+          component={DownloadsScreen}
+          options={{
+            tabBarLabel: '',
+            tabBarIcon: () => <TabIcon label="📥" />,
+          }}
+        />
+        <Tab.Screen
+          name="Projects"
+          component={ProjectsScreen}
+          options={{
+            tabBarLabel: '',
+            tabBarIcon: () => <TabIcon label="🎬" />,
+          }}
+        />
+        <Tab.Screen
+          name="BrowserTabs"
+          component={EmptyScreen}
+          options={{
+            tabBarLabel: '',
+            tabBarIcon: () => <TabIcon label={isActiveIncognito ? '🕵️' : '🗂️'} />,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              setTabSwitcherVisible(true);
             },
-        tabBarLabelStyle: {
-          display: 'none',
-        },
-      })}>
-      <Tab.Screen
-        name="Browser"
-        component={BrowserScreen}
-        options={{
-          tabBarLabel: '',
-          tabBarIcon: () => <TabIcon label="🌐" />,
-        }}
+          }}
+        />
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            tabBarLabel: '',
+            tabBarIcon: () => <TabIcon label="⚙️" />,
+          }}
+        />
+      </Tab.Navigator>
+      <TabBarContainer
+        visible={tabSwitcherVisible}
+        onClose={() => setTabSwitcherVisible(false)}
       />
-      <Tab.Screen
-        name="Downloads"
-        component={DownloadsScreen}
-        options={{
-          tabBarLabel: '',
-          tabBarIcon: () => <TabIcon label="📥" />,
-        }}
-      />
-      <Tab.Screen
-        name="Projects"
-        component={ProjectsScreen}
-        options={{
-          tabBarLabel: '',
-          tabBarIcon: () => <TabIcon label="🎬" />,
-        }}
-      />
-      <Tab.Screen
-        name="BrowserTabs"
-        component={EmptyScreen}
-        options={{
-          tabBarButton: () => (
-            <View style={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8, paddingRight:16 }}>
-              <TabBarContainer />
-            </View>
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          tabBarLabel: '',
-          tabBarIcon: () => <TabIcon label="⚙️" />,
-        }}
-      />
-    </Tab.Navigator>
+    </>
   );
 }
 
