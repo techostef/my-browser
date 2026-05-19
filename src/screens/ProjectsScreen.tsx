@@ -253,6 +253,13 @@ export default function ProjectsScreen() {
         </View>
       ) : (
         <View style={[styles.header, { borderBottomColor: c.border }]}>
+          <TouchableOpacity
+            onPress={() => (navigation as any).navigate('Browser')}
+            style={styles.backBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.backBtnText, { color: c.text }]}>{'‹'}</Text>
+          </TouchableOpacity>
           <Text style={[styles.title, { color: c.text }]}>Projects</Text>
           <TouchableOpacity
             style={styles.newBtn}
@@ -300,7 +307,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  title: { fontSize: 28, fontWeight: '700' },
+  title: { fontSize: 28, fontWeight: '700', flex: 1 },
+  backBtn: { paddingRight: 12, paddingVertical: 4 },
+  backBtnText: { fontSize: 32, fontWeight: '400', lineHeight: 32 },
   newBtn: {
     backgroundColor: '#6c63ff',
     paddingHorizontal: 14,

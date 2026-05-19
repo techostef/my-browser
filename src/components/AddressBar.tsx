@@ -20,7 +20,6 @@ interface Props {
   loading: boolean;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
-  tabTrigger?: React.ReactNode;
 }
 
 export default function AddressBar({
@@ -34,7 +33,6 @@ export default function AddressBar({
   loading,
   isBookmarked,
   onToggleBookmark,
-  tabTrigger,
 }: Props) {
   const { searchUrl, themeColors: c } = useSettings();
   const displayUrl = initialUrl === 'about:home' ? '' : initialUrl;
@@ -104,7 +102,6 @@ export default function AddressBar({
           </Text>
         </TouchableOpacity>
       )}
-      {tabTrigger}
     </View>
   );
 }

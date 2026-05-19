@@ -457,6 +457,7 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
 type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "aiSubtitles" | "whisperModel" | "about" | null;
 
 export default function SettingsScreen() {
+  const navigation = useNavigation();
   const { settings, setSetting } = useSettings();
   const c = useThemeColors();
   const [sub, setSub] = useState<SubScreen>(null);
@@ -556,6 +557,13 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
       <View style={s.mainHeader}>
+        <TouchableOpacity
+          onPress={() => (navigation as any).navigate('Browser')}
+          style={s.mainBackBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={[s.mainBackBtnText, { color: c.text }]}>{'‹'}</Text>
+        </TouchableOpacity>
         <Text style={[s.mainHeaderTitle, { color: c.text }]}>Settings</Text>
       </View>
       <SectionList
@@ -577,8 +585,10 @@ export default function SettingsScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  mainHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  mainHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', alignItems: 'center' },
   mainHeaderTitle: { fontSize: 28, fontWeight: "700" },
+  mainBackBtn: { paddingRight: 12, paddingVertical: 4 },
+  mainBackBtnText: { fontSize: 32, fontWeight: '400', lineHeight: 32 },
   screenHeader: {
     flexDirection: "row",
     alignItems: "center",

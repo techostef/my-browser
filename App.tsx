@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import TabBarContainer from './src/components/TabBarContainer';
 
 import BrowserScreen from './src/screens/BrowserScreen';
 import DownloadsScreen from './src/screens/DownloadsScreen';
@@ -30,30 +31,37 @@ function TabIcon({ label }: { label: string }) {
   return <Text style={{ fontSize: 20 }}>{label}</Text>;
 }
 
+const HIDE_NAVBAR_ROUTES = ['Downloads', 'Projects', 'Settings'];
+
+function EmptyScreen() {
+  return null;
+}
+
 function MainTabs() {
   const { themeColors } = useSettings();
 
   return (
     <Tab.Navigator
       detachInactiveScreens={false}
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: themeColors.tabBarActive,
         tabBarInactiveTintColor: themeColors.tabBarInactive,
-        tabBarStyle: {
-          backgroundColor: themeColors.tabBar,
-          borderTopColor: themeColors.tabBarBorder,
-        },
+        tabBarStyle: HIDE_NAVBAR_ROUTES.includes(route.name)
+          ? { display: 'none' }
+          : {
+              backgroundColor: themeColors.tabBar,
+              borderTopColor: themeColors.tabBarBorder,
+            },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
+          display: 'none',
         },
-      }}>
+      })}>
       <Tab.Screen
         name="Browser"
         component={BrowserScreen}
         options={{
-          tabBarLabel: 'Browse',
+          tabBarLabel: '',
           tabBarIcon: () => <TabIcon label="🌐" />,
         }}
       />
@@ -61,7 +69,7 @@ function MainTabs() {
         name="Downloads"
         component={DownloadsScreen}
         options={{
-          tabBarLabel: 'Downloads',
+          tabBarLabel: '',
           tabBarIcon: () => <TabIcon label="📥" />,
         }}
       />
@@ -69,15 +77,26 @@ function MainTabs() {
         name="Projects"
         component={ProjectsScreen}
         options={{
-          tabBarLabel: 'Projects',
+          tabBarLabel: '',
           tabBarIcon: () => <TabIcon label="🎬" />,
+        }}
+      />
+      <Tab.Screen
+        name="BrowserTabs"
+        component={EmptyScreen}
+        options={{
+          tabBarButton: () => (
+            <View style={{ justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8, paddingRight:16 }}>
+              <TabBarContainer />
+            </View>
+          ),
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
-          tabBarLabel: 'Settings',
+          tabBarLabel: '',
           tabBarIcon: () => <TabIcon label="⚙️" />,
         }}
       />

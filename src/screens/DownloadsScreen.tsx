@@ -12,6 +12,7 @@ import {
   FlatList,
   Alert,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -1067,6 +1068,17 @@ export default function DownloadsScreen() {
   // ── render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      {!isSelectionMode && !currentFolderPath && (
+        <View style={styles.screenBackRow}>
+          <TouchableOpacity
+            onPress={() => (navigation as any).navigate('Browser')}
+            style={styles.screenBackBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.screenBackText}>{'‹'} Browser</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <DownloadsHeader
         isSelectionMode={isSelectionMode}
         selectedCount={selectedIds.size}
@@ -1288,6 +1300,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F5F5",
+  },
+  screenBackRow: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    backgroundColor: "#FFF",
+  },
+  screenBackBtn: {
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  screenBackText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F4E79",
   },
   listContent: {
     flexGrow: 1,

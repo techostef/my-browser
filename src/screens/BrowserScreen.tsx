@@ -1100,7 +1100,6 @@ function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload 
       loading={false}
       isBookmarked={!!currentBookmark}
       onToggleBookmark={showBookmark ? handleToggleBookmark : undefined}
-      tabTrigger={<TabBarContainer />}
     />
   );
 }
