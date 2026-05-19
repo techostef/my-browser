@@ -217,7 +217,6 @@ export default function BrowserScreen() {
   const updateLoadState = useCallback((tabId: string, partial: Partial<LoadState>) => {
     setLoadStateMap(prev => {
       const current = prev[tabId] ?? { loading: false, progress: 0, error: null };
-      console.log("updateLoadState partial", partial);
       return { ...prev, [tabId]: { ...current, ...partial } };
     });
   }, []);
