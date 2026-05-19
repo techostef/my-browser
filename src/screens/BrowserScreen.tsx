@@ -867,13 +867,17 @@ export default function BrowserScreen() {
     (tabId: string) => (event: WebViewHttpErrorEvent) => {
       const { url, statusCode, description } = event.nativeEvent;
       if (statusCode < 400) return;
+      // Ignore sub-resource errors (ads, images, etc.) — only fail on the main
+      // frame URL so a loaded page isn't marked errored by a background request.
+      const tab = getTabsSnapshot().find(t => t.id === tabId);
+      if (tab && url !== tab.url && url !== tab.lastVisitedUrl) return;
       updateLoadState(tabId, {
         loading: false,
         progress: 0,
         error: { kind: 'http', url, code: statusCode, description },
       });
     },
-    [updateLoadState],
+    [updateLoadState, getTabsSnapshot],
   );
 
   const setWebViewRef = useCallback((tabId: string, ref: WebView | null) => {
