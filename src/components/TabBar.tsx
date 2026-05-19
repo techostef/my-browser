@@ -3,20 +3,130 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Modal,
   SafeAreaView,
   Dimensions,
   Alert,
 } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+  ScrollView,
+} from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  interpolate,
+  Extrapolation,
+  runOnJS,
+} from "react-native-reanimated";
 import { BrowserTab } from "../types";
 
 const CARD_GAP = 12;
+const SWIPE_THRESHOLD = 0.35; // fraction of card width
+const OUT_X = 500; // px to slide off screen
 const CARD_COLS = 2;
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_WIDTH = (SCREEN_WIDTH - CARD_GAP * (CARD_COLS + 1)) / CARD_COLS;
 const CARD_HEIGHT = CARD_WIDTH * 1.35;
+
+interface CardProps {
+  tab: BrowserTab;
+  isActive: boolean;
+  isIncognito: boolean;
+  canClose: boolean;
+  onSwitch: () => void;
+  onRemove: () => void;
+}
+
+function SwipeableTabCard({ tab, isActive, isIncognito, canClose, onSwitch, onRemove }: CardProps) {
+  const translateX = useSharedValue(0);
+  const opacity = useSharedValue(1);
+
+  const displayUrl = tab.url.replace(/^https?:\/\//, "").split("/")[0];
+
+  const canCloseShared = useSharedValue(canClose);
+  canCloseShared.value = canClose;
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-8, 8])
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      opacity.value = interpolate(
+        Math.abs(e.translationX),
+        [0, CARD_WIDTH * SWIPE_THRESHOLD],
+        [1, 0.3],
+        Extrapolation.CLAMP,
+      );
+    })
+    .onEnd((e) => {
+      const shouldDismiss =
+        canCloseShared.value && (
+          Math.abs(e.translationX) > CARD_WIDTH * SWIPE_THRESHOLD ||
+          Math.abs(e.velocityX) > 500
+        );
+      if (shouldDismiss) {
+        const dir = e.translationX >= 0 ? 1 : -1;
+        translateX.value = withTiming(dir * OUT_X, { duration: 220 }, (finished) => {
+          if (finished) runOnJS(onRemove)();
+        });
+        opacity.value = withTiming(0, { duration: 180 });
+      } else {
+        translateX.value = withSpring(0);
+        opacity.value = withSpring(1);
+      }
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <Animated.View
+        style={[
+          styles.card,
+          isIncognito && styles.cardIncognito,
+          isActive && (isIncognito ? styles.cardActiveIncognito : styles.cardActive),
+          animatedStyle,
+        ]}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={onSwitch} activeOpacity={0.85}>
+          <View style={[
+            styles.cardBar,
+            isIncognito && styles.cardBarIncognito,
+            isActive && (isIncognito ? styles.cardBarActiveIncognito : styles.cardBarActive),
+          ]}>
+            <Text style={[
+              styles.cardUrl,
+              isIncognito && styles.cardUrlIncognito,
+              isActive && styles.cardUrlActive,
+            ]} numberOfLines={1}>
+              {isIncognito && <Text>🕵️ </Text>}{displayUrl || "New Tab"}
+            </Text>
+            {canClose && (
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={onRemove}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.cardBody}>
+            <Text style={[styles.cardTitle, isIncognito && styles.cardTitleIncognito]} numberOfLines={3}>
+              {tab.title || "New Tab"}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
 
 interface Props {
   tabs: BrowserTab[];
@@ -89,6 +199,7 @@ export default function TabBar({
       animationType="slide"
       transparent={false}
       onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={[styles.root, isIncognito && styles.rootIncognito]}>
         {/* Header */}
         <View style={[styles.header, isIncognito && styles.headerIncognito]}>
@@ -147,48 +258,17 @@ export default function TabBar({
               </Text>
             </View>
           ) : (
-            visibleTabs.map((tab) => {
-              const isActive = tab.id === activeTabId;
-              const displayUrl = tab.url.replace(/^https?:\/\//, "").split("/")[0];
-              return (
-                <TouchableOpacity
-                  key={tab.id}
-                  style={[
-                    styles.card,
-                    isIncognito && styles.cardIncognito,
-                    isActive && (isIncognito ? styles.cardActiveIncognito : styles.cardActive),
-                  ]}
-                  onPress={() => handleSwitchTab(tab.id)}
-                  activeOpacity={0.85}>
-                  <View style={[
-                    styles.cardBar,
-                    isIncognito && styles.cardBarIncognito,
-                    isActive && (isIncognito ? styles.cardBarActiveIncognito : styles.cardBarActive),
-                  ]}>
-                    <Text style={[
-                      styles.cardUrl,
-                      isIncognito && styles.cardUrlIncognito,
-                      isActive && styles.cardUrlActive,
-                    ]} numberOfLines={1}>
-                      {isIncognito && <Text>🕵️ </Text>}{displayUrl || "New Tab"}
-                    </Text>
-                    {visibleTabs.length > 1 && (
-                      <TouchableOpacity
-                        style={styles.closeBtn}
-                        onPress={(e) => { e.stopPropagation?.(); onRemoveTab(tab.id); }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text style={styles.closeBtnText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  <View style={styles.cardBody}>
-                    <Text style={[styles.cardTitle, isIncognito && styles.cardTitleIncognito]} numberOfLines={3}>
-                      {tab.title || "New Tab"}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
+            visibleTabs.map((tab) => (
+              <SwipeableTabCard
+                key={tab.id}
+                tab={tab}
+                isActive={tab.id === activeTabId}
+                isIncognito={isIncognito}
+                canClose={visibleTabs.length > 1}
+                onSwitch={() => handleSwitchTab(tab.id)}
+                onRemove={() => onRemoveTab(tab.id)}
+              />
+            ))
           )}
         </ScrollView>
 
@@ -201,6 +281,7 @@ export default function TabBar({
           </Text>
         </TouchableOpacity>
       </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

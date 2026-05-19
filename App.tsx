@@ -4,6 +4,7 @@ import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import BrowserScreen from './src/screens/BrowserScreen';
 import DownloadsScreen from './src/screens/DownloadsScreen';
@@ -117,6 +118,7 @@ function AppNavigator() {
 
 export default function App() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <SettingsProvider>
         <ProjectProvider>
@@ -131,5 +133,6 @@ export default function App() {
         </ProjectProvider>
       </SettingsProvider>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
