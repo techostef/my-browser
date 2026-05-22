@@ -45,11 +45,20 @@ async function runFFmpeg(
 // re-encoding losses) and clamp by the per-resolution ceiling. Without this,
 // trimming a 1.6 Mbps source ends up at 5 Mbps — way bigger than the original.
 function chooseBitrate(targetHeight?: number | null, sourceKbps?: number): string {
-  const ceiling = !targetHeight ? 8000
-    : targetHeight <= 480 ? 600
-    : targetHeight <= 720 ? 1600
-    : targetHeight <= 1080 ? 3200
-    : 4800;
+  // "Original" (targetHeight === null): match source bitrate with no ceiling,
+  // so the output stays as close to the original quality as possible.
+  if (!targetHeight) {
+    if (sourceKbps && sourceKbps > 0) {
+      return `${Math.max(500, Math.round(sourceKbps * 1.15))}k`;
+    }
+    return '8000k'; // fallback when probe fails
+  }
+
+  const ceiling =
+      targetHeight <= 480 ? 1500
+    : targetHeight <= 720 ? 4000
+    : targetHeight <= 1080 ? 8000
+    : 12000;
 
   if (!sourceKbps || sourceKbps <= 0) {
     return `${ceiling}k`;

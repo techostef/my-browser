@@ -11,7 +11,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList, Segment } from '../../types/videoEditor';
 import { DEFAULT_SUBTITLE_STYLE } from '../../types/videoEditor';
-import { trimAndConcat, probeVideoSize, burnSubtitlesWithOverlay, transcodeVideo } from '../../lib/videoEditor/ffmpeg';
+import { trimAndConcat, probeVideoSize, probeVideoInfo, burnSubtitlesWithOverlay, transcodeVideo } from '../../lib/videoEditor/ffmpeg';
 import { clearSession } from '../../lib/videoEditor/editSession';
 import { preCacheMediaDuration } from '../../services/downloadManager';
 import { buildSubtitleRenderHtml } from '../../lib/videoEditor/subtitlePng';
@@ -26,13 +26,6 @@ type WebViewMessage =
 
 type Resolution = { label: string; detail: string; height: number | null };
 
-const RESOLUTIONS: Resolution[] = [
-  { label: 'Original', detail: 'Full source resolution', height: null },
-  { label: '1080p',    detail: 'Full HD',                height: 1080 },
-  { label: '720p',     detail: 'HD',                     height: 720 },
-  { label: '480p',     detail: 'Smaller file',           height: 480 },
-];
-
 export default function ExportScreen({ navigation, route }: Props) {
   const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt, subtitleStyle } = route.params;
   const effectiveStyle = subtitleStyle ?? DEFAULT_SUBTITLE_STYLE;
@@ -42,6 +35,7 @@ export default function ExportScreen({ navigation, route }: Props) {
   const [outputPath, setOutputPath] = useState('');
   const [error, setError] = useState('');
   const [webViewHtml, setWebViewHtml] = useState<string | null>(null);
+  const [sourceInfo, setSourceInfo] = useState<{ width: number; height: number; videoKbps: number; durationSec: number } | null>(null);
 
   const [displayPct, setDisplayPct] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -50,6 +44,48 @@ export default function ExportScreen({ navigation, route }: Props) {
   const pngBufferRef = useRef<PngResult[]>([]);
   const pngResolveRef = useRef<((pngs: PngResult[]) => void) | null>(null);
   const pngRejectRef = useRef<((err: Error) => void) | null>(null);
+
+  useEffect(() => {
+    probeVideoInfo(videoUri).then(setSourceInfo).catch(() => {});
+  }, [videoUri]);
+
+  const outputDurationEst = (() => {
+    const keptRanges = timelineSegments
+      .filter(s => s.kept)
+      .map(s => ({ start: s.startFrac * duration, end: s.endFrac * duration }));
+    return keptRanges.reduce((sum, r) => sum + (r.end - r.start), 0);
+  })();
+
+  const resolutions: Resolution[] = (() => {
+    if (!sourceInfo) {
+      return [
+        { label: 'Original', detail: 'Full source resolution', height: null },
+        { label: '1080p', detail: 'Full HD', height: 1080 },
+        { label: '720p', detail: 'HD', height: 720 },
+        { label: '480p', detail: 'Smaller file', height: 480 },
+      ];
+    }
+    const { width, height: srcH, videoKbps } = sourceInfo;
+    const formatSize = (kbps: number) => {
+      const bytes = (kbps * 1000 / 8) * outputDurationEst;
+      if (bytes >= 1024 * 1024 * 1024) return `~${(bytes / (1024 ** 3)).toFixed(1)} GB`;
+      return `~${(bytes / (1024 ** 2)).toFixed(0)} MB`;
+    };
+    const estKbps = (h: number) => {
+      const ratio = (h * h) / (srcH * srcH);
+      return Math.round(videoKbps * Math.min(1, ratio));
+    };
+    return [
+      {
+        label: 'Original',
+        detail: `${width}×${srcH} · ${videoKbps} kbps · ${formatSize(videoKbps)}`,
+        height: null,
+      },
+      { label: '1080p', detail: `Full HD · ${formatSize(estKbps(1080))}`, height: 1080 },
+      { label: '720p', detail: `HD · ${formatSize(estKbps(720))}`, height: 720 },
+      { label: '480p', detail: `Smaller file · ${formatSize(estKbps(480))}`, height: 480 },
+    ];
+  })();
 
   const setProgress = (pct: number) => {
     const clamped = Math.min(100, Math.max(0, pct));
@@ -284,7 +320,7 @@ export default function ExportScreen({ navigation, route }: Props) {
           <Text style={styles.pickerHint}>
             Higher resolution preserves quality. Lower resolution produces a smaller file.
           </Text>
-          {RESOLUTIONS.map(r => (
+          {resolutions.map(r => (
             <TouchableOpacity
               key={r.label}
               style={styles.resBtn}
