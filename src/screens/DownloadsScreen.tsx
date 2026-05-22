@@ -886,7 +886,7 @@ export default function DownloadsScreen() {
   const sortedFiles = useMemo(() => {
     const files = visibleDownloads
       .filter((task) => filterType === "all" || getMediaType(task) === filterType)
-      .filter((task) => labelFilter.length === 0 || labelFilter.some((lbl) => (fileLabels[task.id] || []).includes(lbl)))
+      .filter((task) => labelFilter.length === 0 || labelFilter.every((lbl) => (fileLabels[task.id] || []).includes(lbl)))
       .map((task) => ({ type: "file" as const, task }));
 
     return files.slice().sort((a, b) => {

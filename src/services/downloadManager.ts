@@ -252,6 +252,13 @@ interface ActiveTask {
   // Stall-watchdog: epoch ms of the last progress event. Used to detect
   // connection loss without depending on NetInfo.
   lastProgressAt?: number;
+  // Last on-disk file size observed by the stall watchdog. Used to detect
+  // growth even when expo-file-system stops firing progress events.
+  lastDiskSize?: number;
+  // Number of consecutive stall-watchdog ticks where no growth was detected.
+  // We require multiple consecutive stalls before auto-pausing to avoid
+  // false positives when getInfoAsync can't read the file size mid-write.
+  stallCount?: number;
   // Headers used for the original GET, preserved so a savable-based resume
   // (post app restart) can reconstruct the DownloadResumable.
   requestHeaders?: Record<string, string>;
@@ -275,8 +282,10 @@ interface DeviceFolderScanResult {
 
 // Auto-pause a download whose last progress event is older than this. Lets us
 // detect connection loss without depending on NetInfo.
-const STALL_THRESHOLD_MS = 15_000;
-const STALL_SCAN_INTERVAL_MS = 1_000;
+// NOTE: expo-file-system on Android may not fire progress events frequently for
+// large files (>40MB). A too-short threshold falsely pauses healthy downloads.
+const STALL_THRESHOLD_MS = 60_000;
+const STALL_SCAN_INTERVAL_MS = 5_000;
 // Debounce persisted-progress writes so we don't pound AsyncStorage on every
 // progress event.
 const PERSIST_PROGRESS_DEBOUNCE_MS = 2_000;
@@ -396,13 +405,77 @@ class DownloadManager {
   private async autoPauseStalled(id: string): Promise<void> {
     const active = this.activeTasks.get(id);
     if (!active || active.paused) { return; }
+
+    // For direct downloads, check if the file is still growing on disk before
+    // declaring it stalled. expo-file-system on Android may stop firing progress
+    // events for large files (>40MB) while the download is still healthy.
+    if (active.type === 'direct') {
+      try {
+        const info = await FileSystem.getInfoAsync(active.fileUri);
+        const diskSize = (info as any).size;
+        if (typeof diskSize === 'number' && diskSize > 0) {
+          const prevDiskSize = active.lastDiskSize ?? active.bytesDownloaded;
+          active.lastDiskSize = diskSize;
+          if (diskSize > prevDiskSize) {
+            // File is still growing — update tracking and skip the pause.
+            active.bytesDownloaded = diskSize;
+            active.lastProgressAt = Date.now();
+            active.stallCount = 0;
+            const reportedTotal = active.expectedTotalBytes || active.totalBytes || 0;
+            this.onProgress?.(id, diskSize, reportedTotal);
+            return;
+          }
+          // Disk size unchanged — increment stall counter but don't pause yet.
+          active.stallCount = (active.stallCount ?? 0) + 1;
+          if (active.stallCount < 3) {
+            return;
+          }
+        } else {
+          // getInfoAsync couldn't read the size (file locked mid-write) — skip.
+          return;
+        }
+      } catch {
+        // getInfoAsync threw (file locked or inaccessible mid-write) — skip.
+        return;
+      }
+    }
+
+    // For HLS downloads, also check if the output file is still growing
+    // before declaring it stalled. FFmpeg stats callbacks may stop firing
+    // while the download is still active.
+    if (active.type === 'hls') {
+      try {
+        const info = await FileSystem.getInfoAsync(active.fileUri);
+        const diskSize = (info as any).size;
+        if (typeof diskSize === 'number' && diskSize > 0) {
+          const prevDiskSize = active.lastDiskSize ?? active.bytesDownloaded;
+          active.lastDiskSize = diskSize;
+          if (diskSize > prevDiskSize) {
+            active.bytesDownloaded = diskSize;
+            active.lastProgressAt = Date.now();
+            active.stallCount = 0;
+            this.onProgress?.(id, diskSize, 0);
+            return;
+          }
+          active.stallCount = (active.stallCount ?? 0) + 1;
+          if (active.stallCount < 3) {
+            return;
+          }
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+
+    active.stallCount = 0;
     active.paused = true;
     if (active.type === 'hls') {
       if (active.ffmpegSessionId !== undefined) {
         const sessionId = active.ffmpegSessionId;
         active.ffmpegSessionId = undefined;
         FFmpegKit.cancel(sessionId);
-        await FileSystem.deleteAsync(active.fileUri, { idempotent: true }).catch(() => {});
       }
       this.onStatusChange?.(id, 'paused', undefined, 'Connection lost — tap Resume to continue');
       await this.persistFromActive(id);
@@ -1152,7 +1225,13 @@ class DownloadManager {
         },
         undefined,
         (stats) => {
-          this.onProgress?.(id, stats.getSize(), 0);
+          const size = stats.getSize();
+          const active = this.activeTasks.get(id);
+          if (active) {
+            active.bytesDownloaded = size;
+            active.lastProgressAt = Date.now();
+          }
+          this.onProgress?.(id, size, 0);
         },
       );
 
@@ -1256,12 +1335,58 @@ class DownloadManager {
     uri: string,
     expectedBytes: number,
     lastReceivedBytes: number,
+    autoResumeAttempt: number = 0,
   ): Promise<string> {
     const verification = await this.verifyDownloadComplete(uri, expectedBytes, lastReceivedBytes);
     if (!verification.ok) {
-      // Truncated post-fact (downloadAsync resolved but bytes are short).
-      // Keep the partial file and persist as paused so the user can resume.
       const active = this.activeTasks.get(id);
+
+      // Auto-resume up to 5 times when the download is truncated.
+      // expo-file-system on Android resolves downloadAsync early for large files;
+      // resuming picks up from the partial bytes already on disk.
+      if (active && autoResumeAttempt < 5) {
+        console.log(`[Download] Auto-resuming ${id}: got ${verification.actualBytes}/${verification.expectedBytes} bytes (attempt ${autoResumeAttempt + 1})`);
+        active.bytesDownloaded = verification.actualBytes;
+        active.lastProgressAt = Date.now();
+        active.stallCount = 0;
+        try { active.savable = active.task?.savable(); } catch { /* ignore */ }
+
+        // Reconstruct the resumable from the current state
+        const headers = active.requestHeaders ?? active.savable?.options?.headers ?? {};
+        const progressCb = this.makeProgressCallback(id, active.expectedTotalBytes ?? 0);
+        const resumeData = active.savable?.resumeData;
+        const reconstructed = FileSystem.createDownloadResumable(
+          active.url,
+          active.fileUri,
+          { headers },
+          progressCb,
+          resumeData,
+        );
+        active.task = reconstructed;
+        active.paused = false;
+
+        try {
+          const result = resumeData
+            ? await reconstructed.resumeAsync()
+            : await reconstructed.downloadAsync();
+          if (!result?.uri) {
+            throw new Error('Download was cancelled during auto-resume');
+          }
+          return await this.finalizeDownload(id, result.uri, expectedBytes, active.bytesDownloaded, autoResumeAttempt + 1);
+        } catch (resumeErr: any) {
+          if (active.paused) { return ''; }
+          if (resumeErr?.message?.includes('cancel')) {
+            this.activeTasks.delete(id);
+            this.clearPersistTimer(id);
+            void removePersistedDownload(id);
+            this.onStatusChange?.(id, 'cancelled');
+            return '';
+          }
+          // Fall through to pause if resume itself fails
+        }
+      }
+
+      // All auto-resume attempts exhausted or no active task — pause for manual retry.
       if (active) {
         active.paused = true;
         active.bytesDownloaded = verification.actualBytes;
