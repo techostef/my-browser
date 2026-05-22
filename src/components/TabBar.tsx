@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -157,10 +157,66 @@ export default function TabBar({
     activeTab?.incognito ? "incognito" : "normal"
   );
 
+  // ── Undo close state ─────────────────────────────────────────────────────
+  const [pendingClose, setPendingClose] = useState<{ id: string; title: string } | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressWidth = useSharedValue(1);
+
+  const commitClose = useCallback((id: string) => {
+    onRemoveTab(id);
+    setPendingClose(null);
+  }, [onRemoveTab]);
+
+  const handleRequestClose = useCallback((id: string) => {
+    const tab = tabs.find((t) => t.id === id);
+    const title = tab?.title || tab?.url?.replace(/^https?:\/\//, "").split("/")[0] || "Tab";
+    // If there's already a pending close, commit it immediately
+    if (pendingClose && pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      onRemoveTab(pendingClose.id);
+    }
+    setPendingClose({ id, title });
+    progressWidth.value = 1;
+    progressWidth.value = withTiming(0, { duration: 3000 });
+    pendingTimerRef.current = setTimeout(() => {
+      commitClose(id);
+    }, 3000);
+  }, [tabs, pendingClose, commitClose, onRemoveTab]);
+
+  const handleUndo = useCallback(() => {
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    progressWidth.value = 1;
+    setPendingClose(null);
+  }, []);
+
+  const progressStyle = useAnimatedStyle(() => ({
+    width: `${progressWidth.value * 100}%`,
+  }));
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
+  }, []);
+
+  // When modal closes, commit any pending close immediately
+  useEffect(() => {
+    if (!visible && pendingClose) {
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+      onRemoveTab(pendingClose.id);
+      setPendingClose(null);
+    }
+  }, [visible]);
+
   const isIncognito = segment === "incognito";
-  const visibleTabs = tabs.filter((t) => !t.hidden && !!t.incognito === isIncognito);
-  const normalCount = tabs.filter((t) => !t.hidden && !t.incognito).length;
-  const incognitoCount = tabs.filter((t) => !t.hidden && t.incognito).length;
+  const allVisibleTabs = tabs.filter((t) => !t.hidden && !!t.incognito === isIncognito);
+  // Hide the pending-close tab from the grid
+  const visibleTabs = pendingClose
+    ? allVisibleTabs.filter((t) => t.id !== pendingClose.id)
+    : allVisibleTabs;
+  const normalCount = tabs.filter((t) => !t.hidden && !t.incognito && t.id !== pendingClose?.id).length;
+  const incognitoCount = tabs.filter((t) => !t.hidden && t.incognito && t.id !== pendingClose?.id).length;
 
   const handleSwitchTab = (id: string) => {
     onSwitchTab(id);
@@ -264,11 +320,28 @@ export default function TabBar({
                 isIncognito={isIncognito}
                 canClose={visibleTabs.length > 1}
                 onSwitch={() => handleSwitchTab(tab.id)}
-                onRemove={() => onRemoveTab(tab.id)}
+                onRemove={() => handleRequestClose(tab.id)}
               />
             ))
           )}
         </ScrollView>
+
+        {/* Undo close toast */}
+        {pendingClose && (
+          <View style={[styles.undoToast, isIncognito && styles.undoToastIncognito]}>
+            <View style={styles.undoToastContent}>
+              <Text style={[styles.undoToastText, isIncognito && styles.undoToastTextIncognito]} numberOfLines={1}>
+                Closed "{pendingClose.title}"
+              </Text>
+              <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
+                <Text style={styles.undoBtnText}>Undo</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.progressTrack, isIncognito && styles.progressTrackIncognito]}>
+              <Animated.View style={[styles.progressBar, isIncognito && styles.progressBarIncognito, progressStyle]} />
+            </View>
+          </View>
+        )}
 
         {/* New tab button */}
         <TouchableOpacity
@@ -435,4 +508,56 @@ const styles = StyleSheet.create({
   newTabBtnIncognito: { backgroundColor: "#2D2040", borderWidth: 1, borderColor: "#4C3575" },
   newTabBtnText: { fontSize: 16, fontWeight: "600", color: "#4ECDC4" },
   newTabBtnTextIncognito: { color: "#C4B5FD" },
+
+  undoToast: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: "#333",
+    overflow: "hidden",
+  },
+  undoToastContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  progressTrack: {
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  progressTrackIncognito: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  progressBar: {
+    height: 3,
+    backgroundColor: "#4ECDC4",
+  },
+  progressBarIncognito: {
+    backgroundColor: "#A78BFA",
+  },
+  undoToastIncognito: {
+    backgroundColor: "#4C3575",
+  },
+  undoToastText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#FFF",
+  },
+  undoToastTextIncognito: {
+    color: "#E9D5FF",
+  },
+  undoBtn: {
+    marginLeft: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#4ECDC4",
+  },
+  undoBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFF",
+  },
 });
