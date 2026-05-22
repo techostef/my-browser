@@ -74,6 +74,8 @@ export default function VideoPlayerController({
   const lastLeftTap  = useRef(0);
   const lastRightTap = useRef(0);
   const lastSeekAt   = useRef(0);
+  const [seekingTime, setSeekingTime] = useState<number | null>(null);
+  const seekingSetAtRef = useRef(0);
   const leftOpacity  = useRef(new Animated.Value(0)).current;
   const rightOpacity = useRef(new Animated.Value(0)).current;
   const leftScale    = useRef(new Animated.Value(0.75)).current;
@@ -192,7 +194,21 @@ export default function VideoPlayerController({
     }
   };
 
-  const progress  = duration > 0 ? Math.min(Math.max(currentTime / duration, 0), 1) : 0;
+  // Clear the optimistic seek override once the polled currentTime converges.
+  // Require at least 500ms after seeking before accepting convergence — this
+  // avoids clearing on the optimistic value the parent set immediately.
+  useEffect(() => {
+    if (seekingTime !== null) {
+      const elapsed = Date.now() - seekingSetAtRef.current;
+      if (elapsed > 500 && Math.abs(currentTime - seekingTime) < 2) {
+        setSeekingTime(null);
+      }
+    }
+  }, [currentTime, seekingTime]);
+
+  const effectiveTime = seekingTime !== null ? seekingTime : currentTime;
+
+  const progress  = duration > 0 ? Math.min(Math.max(effectiveTime / duration, 0), 1) : 0;
   const fillWidth = seekBarWidth * progress;
   // 18 px thumb — keep center on fill position
   const thumbLeft = Math.max(0, Math.min(fillWidth - 9, seekBarWidth - 18));
@@ -203,7 +219,10 @@ export default function VideoPlayerController({
     if (now - lastSeekAt.current < SEEK_THROTTLE_MS) return;
     lastSeekAt.current = now;
     const ratio = e.nativeEvent.locationX / seekBarWidth;
-    onSeek(Math.max(0, Math.min(duration, ratio * duration)));
+    const seekTime = Math.max(0, Math.min(duration, ratio * duration));
+    setSeekingTime(seekTime);
+    seekingSetAtRef.current = Date.now();
+    onSeek(seekTime);
     showControls();
   };
 
@@ -349,7 +368,7 @@ export default function VideoPlayerController({
 
             {/* Time + mute */}
             <View style={styles.timeRow}>
-              <Text style={styles.timeCurrent}>{formatTime(currentTime)}</Text>
+              <Text style={styles.timeCurrent}>{formatTime(effectiveTime)}</Text>
               <Text style={styles.timeSep}> / </Text>
               <Text style={styles.timeDuration}>{formatTime(duration)}</Text>
               <View style={styles.timeFlex} />

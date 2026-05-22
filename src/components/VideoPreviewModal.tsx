@@ -426,6 +426,8 @@ export default function VideoPreviewModal({
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [videoIsPaused, setVideoIsPaused] = useState(true);
   const [videoIsMuted, setVideoIsMuted] = useState(false);
+  const seekTsRef = useRef(0);
+  const seekTargetRef = useRef(0);
 
   const injectTogglePlay = useCallback(() => {
     webViewRef.current?.injectJavaScript(
@@ -440,6 +442,9 @@ export default function VideoPreviewModal({
   }, []);
 
   const injectSeek = useCallback((time: number) => {
+    seekTsRef.current = Date.now();
+    seekTargetRef.current = time;
+    setVideoCurrentTime(time);
     webViewRef.current?.injectJavaScript(
       `(function(){var v=document.getElementById('player');if(v)v.currentTime=${time};})();true;`,
     );
@@ -470,10 +475,18 @@ export default function VideoPreviewModal({
         setIsLoading(false);
         setHasError(true);
       } else if (msg.type === 'VIDEO_STATE') {
-        setVideoCurrentTime(msg.currentTime);
-        setVideoDuration(msg.duration);
-        setVideoIsPaused(msg.paused);
-        setVideoIsMuted(msg.muted);
+        const seekAge = Date.now() - seekTsRef.current;
+        const diff = Math.abs(msg.currentTime - seekTargetRef.current);
+        if (seekAge < 1500 && diff > 2) {
+          setVideoDuration(msg.duration);
+          setVideoIsPaused(msg.paused);
+          setVideoIsMuted(msg.muted);
+        } else {
+          setVideoCurrentTime(msg.currentTime);
+          setVideoDuration(msg.duration);
+          setVideoIsPaused(msg.paused);
+          setVideoIsMuted(msg.muted);
+        }
       }
     } catch (e) {
       console.warn(`${TAG} Non-JSON message from player:`, event.nativeEvent.data);

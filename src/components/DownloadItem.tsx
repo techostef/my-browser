@@ -195,7 +195,7 @@ const DownloadItem = memo(function DownloadItem({
       )}
       <TouchableOpacity
         style={styles.thumbnailWrap}
-        disabled={!isPlayableMedia || isSelectionMode}
+        disabled={isSelectionMode && !onSelect}
         onPress={
           isSelectionMode
             ? () => {
@@ -205,7 +205,15 @@ const DownloadItem = memo(function DownloadItem({
                 }
                 onSelect?.(task);
               }
-            : () => onOpenMedia(task)
+            : task.status === "completed"
+              ? () => onOpenMedia(task)
+              : task.status === "downloading"
+                ? () => onPause(task.id)
+                : task.status === "paused"
+                  ? () => onResume(task.id)
+                  : task.status === "failed" || task.status === "cancelled"
+                    ? () => onResume(task.id)
+                    : undefined
         }
         onLongPress={
           !isSelectionMode
@@ -254,7 +262,13 @@ const DownloadItem = memo(function DownloadItem({
                         : "📄"}
             </Text>
             <Text style={[styles.statusOverlayLabel, { color: statusColor }]}>
-              {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+              {task.status === "downloading"
+                ? "Tap to Pause"
+                : task.status === "paused"
+                  ? "Tap to Resume"
+                  : task.status === "failed" || task.status === "cancelled"
+                    ? "Tap to Retry"
+                    : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
             </Text>
             {task.status === "downloading" && task.totalBytes > 0 && (
               <View style={styles.statusProgressWrap}>

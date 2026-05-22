@@ -380,6 +380,8 @@ export default function BrowserScreen() {
   const [liveDuration, setLiveDuration] = useState(0);
   const [liveIsPaused, setLiveIsPaused] = useState(false);
   const [liveIsMuted, setLiveIsMuted] = useState(false);
+  const liveSeekTsRef = useRef(0);
+  const liveSeekTargetRef = useRef(0);
 
   // For DASH/HLS streams, capture the browser's current playback position before
   // opening the preview so the modal can seek to the same spot.
@@ -425,6 +427,9 @@ export default function BrowserScreen() {
   }, [activeTabId]);
 
   const injectLiveSeek = useCallback((time: number) => {
+    liveSeekTsRef.current = Date.now();
+    liveSeekTargetRef.current = time;
+    setLiveCurrentTime(time);
     webViewRefs.current[activeTabId]?.injectJavaScript(
       `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=${time};return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SEEK',time:${time}},'*');}catch(_){}}})();true;`,
     );
@@ -656,10 +661,19 @@ export default function BrowserScreen() {
           break;
         }
         case 'VIDEO_STATE': {
-          setLiveCurrentTime(message.currentTime);
-          setLiveDuration(message.duration);
-          setLiveIsPaused(message.paused);
-          setLiveIsMuted(message.muted);
+          const seekAge = Date.now() - liveSeekTsRef.current;
+          if (seekAge < 1500 && Math.abs(message.currentTime - liveSeekTargetRef.current) > 2) {
+            // Suppress stale currentTime that arrives before the WebView
+            // has applied the seek — only update non-time fields.
+            setLiveDuration(message.duration);
+            setLiveIsPaused(message.paused);
+            setLiveIsMuted(message.muted);
+          } else {
+            setLiveCurrentTime(message.currentTime);
+            setLiveDuration(message.duration);
+            setLiveIsPaused(message.paused);
+            setLiveIsMuted(message.muted);
+          }
           break;
         }
         case 'DETECTOR_LOG':

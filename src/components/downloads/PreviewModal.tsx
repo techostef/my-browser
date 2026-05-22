@@ -72,7 +72,9 @@ export default function PreviewModal({
   const seekHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const seekBarRef = useRef<View>(null);
   const seekBarWRef = useRef(0);
+  const seekBarPageXRef = useRef(0);
   const seekingRef = useRef(false);
   const durationRef = useRef(0);
   const seekTargetMsRef = useRef<number | null>(null);
@@ -131,8 +133,11 @@ export default function PreviewModal({
         if (seekTargetMsRef.current !== null) {
           const elapsed = Date.now() - seekStartTimeRef.current;
           const diff = Math.abs(playerPosMs - seekTargetMsRef.current);
-          if (diff > 1500 && elapsed < 3000) return;
-          seekTargetMsRef.current = null;
+          if (diff < 500 || elapsed >= 3000) {
+            seekTargetMsRef.current = null;
+            setPosition(playerPosMs);
+          }
+          return;
         }
         setPosition(playerPosMs);
         if (player.duration > 0) setDuration(player.duration * 1000);
@@ -262,8 +267,18 @@ export default function PreviewModal({
     setShowControls((s) => !s);
   };
 
+  const measureSeekBar = () => {
+    seekBarRef.current?.measure(
+      (_x: number, _y: number, w: number, _h: number, pageX: number) => {
+        if (w > 0) seekBarWRef.current = w;
+        if (pageX != null) seekBarPageXRef.current = pageX;
+      },
+    );
+  };
+
   const onSeekBarLayout = (e: LayoutChangeEvent) => {
     seekBarWRef.current = e.nativeEvent.layout.width;
+    measureSeekBar();
   };
 
   const flushSeek = (newPosSec: number) => {
@@ -278,10 +293,11 @@ export default function PreviewModal({
     }
   };
 
-  const seekToX = (x: number) => {
+  const seekToX = (pageX: number) => {
     const w = seekBarWRef.current;
     const dur = durationRef.current;
     if (w <= 0 || dur <= 0) return;
+    const x = pageX - seekBarPageXRef.current;
     const ratio = Math.max(0, Math.min(1, x / w));
     const newPosSec = (ratio * dur) / 1000;
     setPosition(newPosSec * 1000);
@@ -305,10 +321,12 @@ export default function PreviewModal({
   const onSeekGrant = (e: GestureResponderEvent) => {
     seekingRef.current = true;
     if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
-    seekToX(e.nativeEvent.locationX);
+    // Re-measure in case of orientation/layout change
+    measureSeekBar();
+    seekToX(e.nativeEvent.pageX);
   };
   const onSeekMove = (e: GestureResponderEvent) => {
-    seekToX(e.nativeEvent.locationX);
+    seekToX(e.nativeEvent.pageX);
   };
   const onSeekRelease = () => {
     if (pendingSeekSecRef.current !== null) {
@@ -494,6 +512,8 @@ export default function PreviewModal({
                   <View style={styles.seekRow}>
                     <Text style={styles.timeText}>{formatTime(position)}</Text>
                     <View
+                      ref={seekBarRef}
+                      collapsable={false}
                       style={styles.seekBarTouchable}
                       onLayout={onSeekBarLayout}
                       onStartShouldSetResponder={() => true}
