@@ -216,25 +216,64 @@ const DownloadItem = memo(function DownloadItem({
             : undefined
         }
       >
-        {mediaType === "image" && task.filePath ? (
-          <Image
-            source={{ uri: task.filePath }}
-            style={styles.thumbnailImage}
-          />
-        ) : mediaType === "video" && videoThumbnailUri ? (
-          <Image
-            source={{ uri: videoThumbnailUri }}
-            style={styles.thumbnailImage}
-          />
+        {task.status === "completed" ? (
+          mediaType === "image" && task.filePath ? (
+            <Image
+              source={{ uri: task.filePath }}
+              style={styles.thumbnailImage}
+            />
+          ) : mediaType === "video" && videoThumbnailUri ? (
+            <Image
+              source={{ uri: videoThumbnailUri }}
+              style={styles.thumbnailImage}
+            />
+          ) : (
+            <View style={styles.thumbnailFallback}>
+              <Text style={styles.thumbnailIcon}>
+                {mediaType === "video"
+                  ? "🎬"
+                  : mediaType === "audio"
+                    ? "🎵"
+                    : "📄"}
+              </Text>
+            </View>
+          )
         ) : (
-          <View style={styles.thumbnailFallback}>
-            <Text style={styles.thumbnailIcon}>
-              {mediaType === "video"
-                ? "🎬"
-                : mediaType === "audio"
-                  ? "🎵"
-                  : "📄"}
+          <View style={[styles.thumbnailFallback, { backgroundColor: statusColor + "18" }]}>
+            <Text style={styles.statusOverlayIcon}>
+              {task.status === "downloading"
+                ? "⬇️"
+                : task.status === "paused"
+                  ? "⏸️"
+                  : task.status === "queued"
+                    ? "⏳"
+                    : task.status === "failed"
+                      ? "❌"
+                      : task.status === "cancelled"
+                        ? "🚫"
+                        : "📄"}
             </Text>
+            <Text style={[styles.statusOverlayLabel, { color: statusColor }]}>
+              {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+            </Text>
+            {task.status === "downloading" && task.totalBytes > 0 && (
+              <View style={styles.statusProgressWrap}>
+                <View style={styles.statusProgressBg}>
+                  <View
+                    style={[
+                      styles.statusProgressFill,
+                      {
+                        backgroundColor: statusColor,
+                        width: `${Math.round((task.bytesDownloaded / task.totalBytes) * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.statusProgressText}>
+                  {Math.round((task.bytesDownloaded / task.totalBytes) * 100)}%
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </TouchableOpacity>
@@ -779,5 +818,35 @@ const styles = StyleSheet.create({
   },
   labelBtn: {
     backgroundColor: "#FFF8E1",
+  },
+  statusOverlayIcon: {
+    fontSize: 28,
+  },
+  statusOverlayLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  statusProgressWrap: {
+    width: "70%",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  statusProgressBg: {
+    width: "100%",
+    height: 5,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  statusProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  statusProgressText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#666",
+    marginTop: 2,
   },
 });
