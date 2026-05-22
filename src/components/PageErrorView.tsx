@@ -122,6 +122,10 @@ export default function PageErrorView({ error, onRetry, onGoBack, canGoBack }: P
   const meta = useMemo(() => resolveErrorMeta(error, '#4ECDC4'), [error]);
   const domain = getDomain(error.url);
 
+  if (error?.description) {
+    return null
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
