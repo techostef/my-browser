@@ -253,6 +253,7 @@ export default function BrowserScreen() {
 
   // Background WebView state machine
   const [bgWebViewUrl, setBgWebViewUrl] = useState<string | null>(null);
+  const [bgWebViewKey, setBgWebViewKey] = useState(0);
   const bgPendingRef = useRef<{
     expectedUrl: string;
     script: string;
@@ -289,6 +290,7 @@ export default function BrowserScreen() {
         reject(new Error('Timeout loading manga page'));
       }, timeoutMs);
       bgPendingRef.current = { expectedUrl: url, script: extractorScript, resolve, reject, timer };
+      setBgWebViewKey(k => k + 1); // force remount so onLoadEnd always fires
       setBgWebViewUrl(url);
     });
   }, []);
@@ -1079,7 +1081,8 @@ export default function BrowserScreen() {
           updateTitle(mangaId, { coverImagePath: coverPath });
           coverSaved = true;
         }
-      } catch {
+      } catch (e) {
+        console.log("e", e)
         updateChapter(mangaId, ch.id, { status: 'failed' });
       }
     }
@@ -1089,10 +1092,12 @@ export default function BrowserScreen() {
   }, [mangaDetectedTitle, mangaIndexUrl, addTitle, updateTitle, updateChapter, getTitle, loadBgWebView]);
 
   const handleRetryChapterDownload = useCallback(async (mangaId: string, chapterId: string, chapterUrl: string) => {
+    
     const manga = getTitle(mangaId);
     const chapter = manga?.chapters.find(c => c.id === chapterId);
     if (!manga || !chapter) return;
-
+    console.log("manga", manga)
+    console.log("chapter", chapter)
     updateChapter(mangaId, chapterId, { status: 'downloading', progress: 0 });
     try {
       const imageUrls: string[] = await loadBgWebView(chapterUrl, MANGA_PAGE_IMAGES_EXTRACTOR_JS);
@@ -1109,6 +1114,8 @@ export default function BrowserScreen() {
         }),
       );
 
+      console.log("filePaths", filePaths)
+
       updateChapter(mangaId, chapterId, {
         status: 'completed', progress: 100,
         imageCount: filePaths.length, downloadedImages: filePaths.length,
@@ -1120,6 +1127,8 @@ export default function BrowserScreen() {
       }
     } catch {
       updateChapter(mangaId, chapterId, { status: 'failed', progress: 0 });
+    } finally {
+      setBgWebViewUrl(null);
     }
   }, [getTitle, updateChapter, updateTitle, loadBgWebView]);
 
@@ -1269,6 +1278,7 @@ export default function BrowserScreen() {
 
         {bgWebViewUrl && (
           <BackgroundWebView
+            key={bgWebViewKey}
             ref={bgWebViewRef}
             source={{ uri: bgWebViewUrl }}
             style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
