@@ -74,11 +74,35 @@ function MangaChapterListScreen() {
     ]);
   };
 
+  const failedChapters = manga.chapters.filter(ch => ch.status === 'failed');
+  const queuedChapters = manga.chapters.filter(ch => ch.status === 'queued');
+
+  const handleRetryAllFailed = () => {
+    if (failedChapters.length === 0) return;
+    Alert.alert(
+      `Retry ${failedChapters.length} failed chapter(s)?`,
+      'They will be queued and downloaded one by one.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Retry All', onPress: () => {
+          failedChapters.forEach(ch => {
+            DeviceEventEmitter.emit('MANGA_RETRY_CHAPTER', {
+              mangaId: manga.id, chapterId: ch.id, chapterUrl: ch.url,
+            });
+          });
+        }},
+      ],
+    );
+  };
+
   const handleMenuPress = () => {
-    Alert.alert(manga.title, undefined, [
-      { text: 'Delete All Chapters', style: 'destructive', onPress: handleDeleteManga },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    const options: { text: string; style?: 'destructive' | 'cancel'; onPress?: () => void }[] = [];
+    if (failedChapters.length > 0) {
+      options.push({ text: `Retry All Failed (${failedChapters.length})`, onPress: handleRetryAllFailed });
+    }
+    options.push({ text: 'Delete All Chapters', style: 'destructive', onPress: handleDeleteManga });
+    options.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert(manga.title, undefined, options);
   };
 
   const handleChapterPress = (chapterId: string) => {
@@ -179,6 +203,21 @@ function MangaChapterListScreen() {
         )}
       </View>
 
+      {!selectionMode && (failedChapters.length > 0 || queuedChapters.length > 0) && (
+        <View style={[styles.retryAllBar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+          {queuedChapters.length > 0 && (
+            <Text style={[styles.queueInfo, { color: c.textSecondary }]}>
+              ⏳ {queuedChapters.length} chapter(s) in queue
+            </Text>
+          )}
+          {failedChapters.length > 0 && (
+            <TouchableOpacity style={styles.retryAllBtn} onPress={handleRetryAllFailed}>
+              <Text style={styles.retryAllBtnText}>↻ Retry All Failed ({failedChapters.length})</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {!selectionMode && lastReadChapter && (
         <TouchableOpacity
           style={[styles.continueBar, { backgroundColor: c.surface, borderBottomColor: c.border }]}
@@ -269,6 +308,17 @@ const styles = StyleSheet.create({
   retryBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   deleteActionBtn: { backgroundColor: '#ef4444' },
   deleteBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  retryAllBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth, gap: 8,
+  },
+  queueInfo: { fontSize: 12, flex: 1 },
+  retryAllBtn: {
+    backgroundColor: '#3b82f6', borderRadius: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  retryAllBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   continueBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 10,

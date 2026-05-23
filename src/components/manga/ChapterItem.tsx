@@ -37,6 +37,7 @@ export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, s
     switch (chapter.status) {
       case 'completed': return <Text style={styles.iconDone}>✓</Text>;
       case 'downloading': return <ActivityIndicator size="small" color="#3b82f6" />;
+      case 'queued': return <Text style={styles.iconQueued}>⏳</Text>;
       case 'failed': return <Text style={styles.iconFail}>✗</Text>;
       default: return <Text style={[styles.iconPending, { color: c.textSecondary }]}>○</Text>;
     }
@@ -79,6 +80,9 @@ export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, s
             {chapter.downloadedAt ? `  ·  ${formatDate(chapter.downloadedAt)}` : ''}
           </Text>
         )}
+        {chapter.status === 'queued' && (
+          <Text style={styles.queuedText}>In queue — waiting to download</Text>
+        )}
         {chapter.status === 'failed' && (
           <Text style={styles.failText}>Failed — tap to retry</Text>
         )}
@@ -103,12 +107,14 @@ const styles = StyleSheet.create({
   iconWrap: { width: 28, alignItems: 'center' },
   iconDone: { fontSize: 16, color: '#34d399' },
   iconFail: { fontSize: 16, color: '#f87171' },
+  iconQueued: { fontSize: 14 },
   iconPending: { fontSize: 16 },
   content: { flex: 1, gap: 4 },
   chapterTitle: { fontSize: 14 },
   progressTrack: { height: 3, borderRadius: 2, flexDirection: 'row', overflow: 'hidden' },
   progressFill: { height: 3, backgroundColor: '#3b82f6' },
   meta: { fontSize: 11 },
+  queuedText: { fontSize: 11, color: '#3498db' },
   failText: { fontSize: 11, color: '#f87171' },
   checkbox: {
     width: 20, height: 20, borderRadius: 4,

@@ -1090,6 +1090,7 @@ function BrowserScreen() {
         updateTitle(mangaId, { coverImagePath: coverPath });
       }
     } catch (e) {
+      console.log("e", e)
       updateChapter(mangaId, chapterId, { status: 'failed', progress: 0 });
     } finally {
       clearBgWebView();
@@ -1111,11 +1112,12 @@ function BrowserScreen() {
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('MANGA_RETRY_CHAPTER', (data) => {
+      updateChapter(data.mangaId, data.chapterId, { status: 'queued', progress: 0 });
       retryQueueRef.current.push(data);
       processRetryQueue();
     });
     return () => sub.remove();
-  }, [processRetryQueue]);
+  }, [processRetryQueue, updateChapter]);
 
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {
