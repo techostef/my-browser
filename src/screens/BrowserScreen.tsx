@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler } from 'react-native';
+import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler, DeviceEventEmitter } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import {
   ShouldStartLoadRequest,
@@ -1087,6 +1087,48 @@ export default function BrowserScreen() {
     mangaDownloadActiveRef.current = false;
     setBgWebViewUrl(null);
   }, [mangaDetectedTitle, mangaIndexUrl, addTitle, updateTitle, updateChapter, getTitle, loadBgWebView]);
+
+  const handleRetryChapterDownload = useCallback(async (mangaId: string, chapterId: string, chapterUrl: string) => {
+    const manga = getTitle(mangaId);
+    const chapter = manga?.chapters.find(c => c.id === chapterId);
+    if (!manga || !chapter) return;
+
+    updateChapter(mangaId, chapterId, { status: 'downloading', progress: 0 });
+    try {
+      const imageUrls: string[] = await loadBgWebView(chapterUrl, MANGA_PAGE_IMAGES_EXTRACTOR_JS);
+      if (imageUrls.length === 0) { updateChapter(mangaId, chapterId, { status: 'failed' }); return; }
+
+      const filePaths = await downloadChapterImages(
+        chapter.folderPath,
+        imageUrls,
+        undefined,
+        (done, total) => updateChapter(mangaId, chapterId, {
+          progress: Math.round((done / total) * 100),
+          downloadedImages: done,
+          imageCount: total,
+        }),
+      );
+
+      updateChapter(mangaId, chapterId, {
+        status: 'completed', progress: 100,
+        imageCount: filePaths.length, downloadedImages: filePaths.length,
+      });
+
+      if (!manga.coverImagePath && filePaths.length > 0) {
+        const coverPath = await saveCoverImage(sanitizeMangaName(manga.title), filePaths[0]);
+        updateTitle(mangaId, { coverImagePath: coverPath });
+      }
+    } catch {
+      updateChapter(mangaId, chapterId, { status: 'failed', progress: 0 });
+    }
+  }, [getTitle, updateChapter, updateTitle, loadBgWebView]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('MANGA_RETRY_CHAPTER', ({ mangaId, chapterId, chapterUrl }) => {
+      handleRetryChapterDownload(mangaId, chapterId, chapterUrl);
+    });
+    return () => sub.remove();
+  }, [handleRetryChapterDownload]);
 
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {
