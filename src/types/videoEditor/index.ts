@@ -69,4 +69,6 @@ export type RootStackParamList = {
     srt?: string;
     subtitleStyle?: SubtitleStyle;
   };
+  MangaChapters: { mangaId: string };
+  MangaReader: { mangaId: string; chapterId: string };
 };

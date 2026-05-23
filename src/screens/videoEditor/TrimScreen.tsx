@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, useImperativeHandle } from 'react';
+import { withErrorBoundary } from '../../components/ErrorBoundary';
 import {
   View,
   Text,
@@ -284,7 +285,7 @@ function parseTimeSec(raw: string): number | null {
   return isNaN(v) ? null : v;
 }
 
-export default function TrimScreen({ navigation, route }: Props) {
+function TrimScreen({ navigation, route }: Props) {
   const { videoUri, duration: paramDuration } = route.params;
 
   const player = useVideoPlayer({ uri: videoUri }, p => {
@@ -1738,3 +1739,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default withErrorBoundary(TrimScreen);

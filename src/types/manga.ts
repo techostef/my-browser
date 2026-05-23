@@ -19,6 +19,9 @@ export interface MangaChapter {
   downloadedImages: number;
   folderPath: string;     // absolute local path to chapter folder
   readProgress: number;   // last viewed page index (0-based)
+  lastReadAt?: number;    // ms timestamp of last reading session
+  downloadedAt?: number;  // ms timestamp when download completed
+  sizeBytes?: number;     // total size of downloaded images in bytes
 }
 
 // Sent by background WebView after extracting chapter list

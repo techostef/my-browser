@@ -26,3 +26,5 @@ assets/whisper_model/*.bin
 *.swo
 
 *.env
+
+.superpowers

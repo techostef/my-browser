@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { withErrorBoundary } from '../components/ErrorBoundary';
 import {
   View,
   Text,
@@ -109,7 +110,7 @@ function ProjectCard({ project, hasSession, isSelectionMode, isSelected, onOpen,
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export default function ProjectsScreen() {
+function ProjectsScreen() {
   const { projects, removeProject } = useProjects();
   const navigation = useNavigation();
   const c = useThemeColors();
@@ -418,3 +419,5 @@ const styles = StyleSheet.create({
   selectAllCheck: { color: '#fff', fontSize: 10, fontWeight: '700' },
   selectAllText: { color: '#aaa', fontSize: 14, fontWeight: '600' },
 });
+
+export default withErrorBoundary(ProjectsScreen);

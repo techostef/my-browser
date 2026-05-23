@@ -1,3 +1,4 @@
+import { withErrorBoundary } from '../components/ErrorBoundary';
 import React, {
   useCallback,
   useEffect,
@@ -45,7 +46,7 @@ import { AdBanner } from '../components/AdBanner';
 const DEVICE_ROOT_PATH = "__device_download__";
 const TRASH_FOLDER_PATH = "__trash__";
 
-export default function DownloadsScreen() {
+function DownloadsScreen() {
   const navigation = useNavigation();
   const { addOrUpdateProject } = useProjects();
   const {
@@ -1361,3 +1362,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
+
+export default withErrorBoundary(DownloadsScreen);

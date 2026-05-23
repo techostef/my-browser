@@ -25,6 +25,7 @@ interface Props {
   loading: boolean;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
+  onMenuAction?: (action: 'downloadManga') => void;
 }
 
 export default function AddressBar({
@@ -38,12 +39,14 @@ export default function AddressBar({
   loading,
   isBookmarked,
   onToggleBookmark,
+  onMenuAction,
 }: Props) {
   const { searchUrl, themeColors: c } = useSettings();
   const displayUrl = initialUrl === 'about:home' ? '' : initialUrl;
   const [text, setText] = useState(displayUrl);
   const [history, setHistory] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -193,6 +196,26 @@ export default function AddressBar({
           </Text>
         </TouchableOpacity>
       )}
+      {onMenuAction && (
+        <View style={styles.menuWrap}>
+          <TouchableOpacity
+            onPress={() => setMenuOpen(v => !v)}
+            style={[styles.navBtn, { backgroundColor: c.navButton }]}
+          >
+            <Text style={[styles.navBtnText, { color: c.text }]}>⋮</Text>
+          </TouchableOpacity>
+          {menuOpen && (
+            <View style={[styles.menuDropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => { setMenuOpen(false); onMenuAction('downloadManga'); }}
+              >
+                <Text style={[styles.menuItemText, { color: c.text }]}>📥  Download Manga</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -275,5 +298,29 @@ const styles = StyleSheet.create({
   historyDeleteText: {
     fontSize: 13,
     color: '#999',
+  },
+  menuWrap: {
+    position: 'relative',
+  },
+  menuDropdown: {
+    position: 'absolute',
+    top: 36,
+    right: 0,
+    minWidth: 180,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    zIndex: 1000,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  menuItemText: {
+    fontSize: 14,
   },
 });

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { withErrorBoundary } from '../components/ErrorBoundary';
 import {
   View,
   Text,
@@ -456,7 +457,7 @@ function AboutScreen({ onBack }: { onBack: () => void }) {
 
 type SubScreen = "searchEngine" | "language" | "history" | "bookmarks" | "appearance" | "aiSubtitles" | "whisperModel" | "about" | null;
 
-export default function SettingsScreen() {
+function SettingsScreen() {
   const navigation = useNavigation();
   const { settings, setSetting } = useSettings();
   const c = useThemeColors();
@@ -698,3 +699,5 @@ const s = StyleSheet.create({
   wmBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   wmBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });
+
+export default withErrorBoundary(SettingsScreen);

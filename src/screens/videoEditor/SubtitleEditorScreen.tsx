@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { withErrorBoundary } from '../../components/ErrorBoundary';
 import {
   View,
   Text,
@@ -36,7 +37,7 @@ function fmtTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}.${ms}`;
 }
 
-export default function SubtitleEditorScreen({ navigation, route }: Props) {
+function SubtitleEditorScreen({ navigation, route }: Props) {
   const { videoUri, segments: initial, timelineSegments, duration, subtitleStyle: initialStyle } = route.params;
 
   const [segments, setSegments] = useState<Segment[]>(initial);
@@ -501,3 +502,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default withErrorBoundary(SubtitleEditorScreen);

@@ -14,12 +14,17 @@ import ProjectsScreen from './src/screens/ProjectsScreen';
 import TrimScreen from './src/screens/videoEditor/TrimScreen';
 import SubtitleEditorScreen from './src/screens/videoEditor/SubtitleEditorScreen';
 import ExportScreen from './src/screens/videoEditor/ExportScreen';
+import MangaScreen from './src/screens/MangaScreen';
+import MangaChapterListScreen from './src/screens/MangaChapterListScreen';
+import MangaReaderScreen from './src/screens/MangaReaderScreen';
 import { DownloadProvider } from './src/store/downloadStore';
+import { MangaProvider } from './src/store/mangaStore';
 import { TabProvider } from './src/store/tabStore';
 import { SettingsProvider, useSettings } from './src/store/settingsStore';
 import { ProjectProvider } from './src/store/projectStore';
 import { AdProvider } from './src/store/adStore';
 import { AdController } from './src/components/AdController';
+import { MangaBgWebViewProvider } from './src/context/MangaBgWebViewContext';
 import type { RootStackParamList } from './src/types/videoEditor';
 import { UpdateReadyBanner } from './src/components/UpdateReadyBanner';
 import { checkAndStartFlexibleUpdate } from './src/services/appUpdate';
@@ -31,7 +36,7 @@ function TabIcon({ label }: { label: string }) {
   return <Text style={{ fontSize: 20 }}>{label}</Text>;
 }
 
-const HIDE_NAVBAR_ROUTES = ['Downloads', 'Projects', 'Settings'];
+const HIDE_NAVBAR_ROUTES = ['Downloads', 'Projects', 'Settings', 'Manga'];
 
 function EmptyScreen() {
   return null;
@@ -74,6 +79,14 @@ function MainTabs() {
           options={{
             tabBarLabel: '',
             tabBarIcon: () => <TabIcon label="📥" />,
+          }}
+        />
+        <Tab.Screen
+          name="Manga"
+          component={MangaScreen}
+          options={{
+            tabBarLabel: '',
+            tabBarIcon: () => <TabIcon label="📚" />,
           }}
         />
         <Tab.Screen
@@ -141,6 +154,8 @@ function AppNavigator() {
         <Stack.Screen name="Trim" component={TrimScreen} />
         <Stack.Screen name="SubtitleEditor" component={SubtitleEditorScreen} />
         <Stack.Screen name="Export" component={ExportScreen} />
+        <Stack.Screen name="MangaChapters" component={MangaChapterListScreen} />
+        <Stack.Screen name="MangaReader" component={MangaReaderScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -154,10 +169,14 @@ export default function App() {
         <ProjectProvider>
           <TabProvider>
             <DownloadProvider>
-              <AdProvider>
-                <UpdateChecker />
-                <AppNavigator />
-              </AdProvider>
+              <MangaProvider>
+                <MangaBgWebViewProvider>
+                  <AdProvider>
+                    <UpdateChecker />
+                    <AppNavigator />
+                  </AdProvider>
+                </MangaBgWebViewProvider>
+              </MangaProvider>
             </DownloadProvider>
           </TabProvider>
         </ProjectProvider>

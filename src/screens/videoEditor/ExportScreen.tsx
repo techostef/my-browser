@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { withErrorBoundary } from '../../components/ErrorBoundary';
 import {
   View,
   Text,
@@ -26,7 +27,7 @@ type WebViewMessage =
 
 type Resolution = { label: string; detail: string; height: number | null };
 
-export default function ExportScreen({ navigation, route }: Props) {
+function ExportScreen({ navigation, route }: Props) {
   const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt, subtitleStyle } = route.params;
   const effectiveStyle = subtitleStyle ?? DEFAULT_SUBTITLE_STYLE;
   const [status, setStatus] = useState('Preparing…');
@@ -490,3 +491,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default withErrorBoundary(ExportScreen);

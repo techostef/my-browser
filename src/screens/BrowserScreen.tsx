@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { withErrorBoundary } from '../components/ErrorBoundary';
 import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler, DeviceEventEmitter } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import {
@@ -34,8 +35,6 @@ import { POPUP_BLOCKER_JS } from '../services/popupBlocker';
 import PageErrorView, { PageError } from '../components/PageErrorView';
 import PopupBlockedBanner from '../components/PopupBlockedBanner';
 import CookieManager from '@react-native-cookies/cookies';
-import { WebView as BackgroundWebView } from 'react-native-webview';
-import type { WebViewMessageEvent } from 'react-native-webview';
 import MangaDownloadModal from '../components/manga/MangaDownloadModal';
 import {
   MANGA_INDEX_DETECTOR_JS,
@@ -47,8 +46,10 @@ import {
   chapterFolderPath,
   downloadChapterImages,
   saveCoverImage,
+  getChapterSizeBytes,
 } from '../services/mangaDownloadService';
 import { useManga } from '../store/mangaStore';
+import { useMangaBgWebView } from '../context/MangaBgWebViewContext';
 import { MangaChapterInfo } from '../types/manga';
 
 // Injected into the browser WebView when the user taps Preview on a stream.
@@ -190,7 +191,7 @@ const TOGGLE_FULLSCREEN_JS = `(function(){
   }
 })(); true;`;
 
-export default function BrowserScreen() {
+function BrowserScreen() {
   // Subscribe ONLY to the narrow slices BrowserScreen itself needs. Heavy
   // state (tabs array, activeTab fields, download progress) is read inside
   // memoized child components below, so title updates and download-progress
@@ -251,17 +252,7 @@ export default function BrowserScreen() {
 
   const { addTitle, updateTitle, updateChapter, getTitle } = useManga();
 
-  // Background WebView state machine
-  const [bgWebViewUrl, setBgWebViewUrl] = useState<string | null>(null);
-  const [bgWebViewKey, setBgWebViewKey] = useState(0);
-  const bgPendingRef = useRef<{
-    expectedUrl: string;
-    script: string;
-    resolve: (data: any) => void;
-    reject: (err: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-  } | null>(null);
-  const bgWebViewRef = useRef<any>(null);
+  const { loadBgWebView, clearBgWebView } = useMangaBgWebView();
 
   // Manga download state
   const [mangaModalVisible, setMangaModalVisible] = useState(false);
@@ -269,8 +260,9 @@ export default function BrowserScreen() {
   const [mangaModalError, setMangaModalError] = useState<string | null>(null);
   const [mangaModalTitle, setMangaModalTitle] = useState('');
   const [mangaModalChapters, setMangaModalChapters] = useState<MangaChapterInfo[]>([]);
+  const [mangaModalLastUpdated, setMangaModalLastUpdated] = useState<number | undefined>(undefined);
+  const [mangaModalExistingSize, setMangaModalExistingSize] = useState<number | undefined>(undefined);
   const [mangaIndexUrl, setMangaIndexUrl] = useState('');
-  const [mangaDetectedTitle, setMangaDetectedTitle] = useState('');
   const mangaDownloadActiveRef = useRef(false);
 
   // Popup blocker state
@@ -279,43 +271,6 @@ export default function BrowserScreen() {
   // Set to true before any programmatic navigation (back/forward/address-bar) so
   // handleNavigationStateChange knows not to push the resulting URL to history again.
   const isHistoryNavRef = useRef<Record<string, boolean>>({});
-
-  const loadBgWebView = useCallback((url: string, extractorScript: string, timeoutMs = 30000): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      if (bgPendingRef.current) {
-        clearTimeout(bgPendingRef.current.timer);
-      }
-      const timer = setTimeout(() => {
-        bgPendingRef.current = null;
-        reject(new Error('Timeout loading manga page'));
-      }, timeoutMs);
-      bgPendingRef.current = { expectedUrl: url, script: extractorScript, resolve, reject, timer };
-      setBgWebViewKey(k => k + 1); // force remount so onLoadEnd always fires
-      setBgWebViewUrl(url);
-    });
-  }, []);
-
-  const handleBgWebViewLoadEnd = useCallback(() => {
-    const pending = bgPendingRef.current;
-    if (!pending) return;
-    bgWebViewRef.current?.injectJavaScript(pending.script);
-  }, []);
-
-  const handleBgWebViewMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      const pending = bgPendingRef.current;
-      if (!pending) return;
-      if (
-        data.type === 'MANGA_CHAPTER_LIST' ||
-        data.type === 'MANGA_PAGE_IMAGES'
-      ) {
-        clearTimeout(pending.timer);
-        bgPendingRef.current = null;
-        pending.resolve(data.payload);
-      }
-    } catch {}
-  }, []);
 
   const tabHasActiveExtraction = useCallback((tabId: string) => {
     for (const info of activeBlobMap.current.values()) {
@@ -769,22 +724,30 @@ export default function BrowserScreen() {
             return;
           }
           setMangaIndexUrl(result.indexUrl);
-          setMangaDetectedTitle(result.mangaTitle || 'Manga');
           setMangaModalTitle(result.mangaTitle || 'Manga');
           setMangaModalLoading(true);
           setMangaModalError(null);
           setMangaModalChapters([]);
+          setMangaModalLastUpdated(undefined);
+          setMangaModalExistingSize(undefined);
           setMangaModalVisible(true);
 
           loadBgWebView(result.chapterPageUrl || result.indexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
             .then((chapters: MangaChapterInfo[]) => {
               setMangaModalChapters(chapters);
+              setMangaModalLastUpdated(Date.now());
+              const safeName = sanitizeMangaName(result.mangaTitle || 'Manga');
+              const existing = getTitle(safeName.toLowerCase().replace(/\s+/g, '-'));
+              setMangaModalExistingSize(
+                existing ? existing.chapters.reduce((s, ch) => s + (ch.sizeBytes || 0), 0) : undefined,
+              );
             })
             .catch((err: any) => {
               setMangaModalError(err?.message || 'Failed to fetch chapter list');
             })
             .finally(() => {
               setMangaModalLoading(false);
+              clearBgWebView();
             });
           return;
         }
@@ -1004,11 +967,11 @@ export default function BrowserScreen() {
     webViewRefs.current[activeTabId]?.injectJavaScript(MANGA_INDEX_DETECTOR_JS);
   }, [activeTabId]);
 
-  const handleMangaDownloadConfirm = useCallback(async (selectedChapters: MangaChapterInfo[]) => {
+  const handleMangaDownloadConfirm = useCallback(async (selectedChapters: MangaChapterInfo[], confirmedTitle: string) => {
     setMangaModalVisible(false);
     mangaDownloadActiveRef.current = true;
 
-    const safeTitleName = sanitizeMangaName(mangaDetectedTitle);
+    const safeTitleName = sanitizeMangaName(confirmedTitle);
     const mangaId = safeTitleName.toLowerCase().replace(/\s+/g, '-');
 
     const chapters = selectedChapters.map(ch => ({
@@ -1029,7 +992,7 @@ export default function BrowserScreen() {
     if (!existing) {
       addTitle({
         id: mangaId,
-        title: mangaDetectedTitle,
+        title: confirmedTitle,
         coverImagePath: '',
         sourceUrl: mangaIndexUrl,
         chapters,
@@ -1069,11 +1032,14 @@ export default function BrowserScreen() {
           },
         );
 
+        const sizeBytes = await getChapterSizeBytes(ch.folderPath);
         updateChapter(mangaId, ch.id, {
           status: 'completed',
           progress: 100,
           imageCount: filePaths.length,
           downloadedImages: filePaths.length,
+          downloadedAt: Date.now(),
+          sizeBytes,
         });
 
         if (!coverSaved && filePaths.length > 0) {
@@ -1088,16 +1054,14 @@ export default function BrowserScreen() {
     }
 
     mangaDownloadActiveRef.current = false;
-    setBgWebViewUrl(null);
-  }, [mangaDetectedTitle, mangaIndexUrl, addTitle, updateTitle, updateChapter, getTitle, loadBgWebView]);
+    clearBgWebView();
+  }, [mangaIndexUrl, addTitle, updateTitle, updateChapter, getTitle, loadBgWebView, clearBgWebView]);
 
   const handleRetryChapterDownload = useCallback(async (mangaId: string, chapterId: string, chapterUrl: string) => {
     
     const manga = getTitle(mangaId);
     const chapter = manga?.chapters.find(c => c.id === chapterId);
     if (!manga || !chapter) return;
-    console.log("manga", manga)
-    console.log("chapter", chapter)
     updateChapter(mangaId, chapterId, { status: 'downloading', progress: 0 });
     try {
       const imageUrls: string[] = await loadBgWebView(chapterUrl, MANGA_PAGE_IMAGES_EXTRACTOR_JS);
@@ -1114,11 +1078,11 @@ export default function BrowserScreen() {
         }),
       );
 
-      console.log("filePaths", filePaths)
-
+      const sizeBytes = await getChapterSizeBytes(chapter.folderPath);
       updateChapter(mangaId, chapterId, {
         status: 'completed', progress: 100,
         imageCount: filePaths.length, downloadedImages: filePaths.length,
+        downloadedAt: Date.now(), sizeBytes,
       });
 
       if (!manga.coverImagePath && filePaths.length > 0) {
@@ -1126,29 +1090,32 @@ export default function BrowserScreen() {
         updateTitle(mangaId, { coverImagePath: coverPath });
       }
     } catch (e) {
-      console.log("error", e)
       updateChapter(mangaId, chapterId, { status: 'failed', progress: 0 });
     } finally {
-      setBgWebViewUrl(null);
+      clearBgWebView();
     }
-  }, [getTitle, updateChapter, updateTitle, loadBgWebView]);
+  }, [getTitle, updateChapter, updateTitle, loadBgWebView, clearBgWebView]);
 
-  const pendingRetryRef = useRef<{ mangaId: string; chapterId: string; chapterUrl: string } | null>(null);
+  const retryQueueRef = useRef<Array<{ mangaId: string; chapterId: string; chapterUrl: string }>>([]);
+  const isRetryingRef = useRef(false);
+
+  const processRetryQueue = useCallback(async () => {
+    if (isRetryingRef.current) return;
+    isRetryingRef.current = true;
+    while (retryQueueRef.current.length > 0) {
+      const next = retryQueueRef.current.shift()!;
+      await handleRetryChapterDownload(next.mangaId, next.chapterId, next.chapterUrl);
+    }
+    isRetryingRef.current = false;
+  }, [handleRetryChapterDownload]);
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener('MANGA_RETRY_CHAPTER', (data) => {
-      pendingRetryRef.current = data; // defer until BrowserScreen re-focuses (WebView needs to be foreground)
+      retryQueueRef.current.push(data);
+      processRetryQueue();
     });
     return () => sub.remove();
-  }, []);
-
-  useFocusEffect(useCallback(() => {
-    const pending = pendingRetryRef.current;
-    if (pending) {
-      pendingRetryRef.current = null;
-      handleRetryChapterDownload(pending.mangaId, pending.chapterId, pending.chapterUrl);
-    }
-  }, [handleRetryChapterDownload]));
+  }, [processRetryQueue]);
 
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {
@@ -1287,33 +1254,23 @@ export default function BrowserScreen() {
         onClose={handleClosePreview}
       />
 
-        {bgWebViewUrl && (
-          <BackgroundWebView
-            key={bgWebViewKey}
-            ref={bgWebViewRef}
-            source={{ uri: bgWebViewUrl }}
-            style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
-            onLoadEnd={handleBgWebViewLoadEnd}
-            onMessage={handleBgWebViewMessage}
-            javaScriptEnabled
-          />
-        )}
-
         <MangaDownloadModal
           visible={mangaModalVisible}
           loading={mangaModalLoading}
           error={mangaModalError}
           mangaTitle={mangaModalTitle}
           chapters={mangaModalChapters}
+          lastUpdated={mangaModalLastUpdated}
+          existingSizeBytes={mangaModalExistingSize}
           onConfirm={handleMangaDownloadConfirm}
-          onCancel={() => setMangaModalVisible(false)}
+          onCancel={() => { setMangaModalVisible(false); clearBgWebView(); }}
           onRetry={() => {
             setMangaModalError(null);
             setMangaModalLoading(true);
             loadBgWebView(mangaIndexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
               .then((chapters: MangaChapterInfo[]) => setMangaModalChapters(chapters))
               .catch((err: any) => setMangaModalError(err?.message || 'Failed to fetch chapter list'))
-              .finally(() => setMangaModalLoading(false));
+              .finally(() => { setMangaModalLoading(false); clearBgWebView(); });
           }}
         />
 
@@ -1616,3 +1573,5 @@ function WebViewListInner({
   );
 }
 const WebViewList = React.memo(WebViewListInner);
+
+export default withErrorBoundary(BrowserScreen);
