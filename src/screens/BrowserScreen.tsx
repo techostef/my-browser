@@ -1125,19 +1125,30 @@ export default function BrowserScreen() {
         const coverPath = await saveCoverImage(sanitizeMangaName(manga.title), filePaths[0]);
         updateTitle(mangaId, { coverImagePath: coverPath });
       }
-    } catch {
+    } catch (e) {
+      console.log("error", e)
       updateChapter(mangaId, chapterId, { status: 'failed', progress: 0 });
     } finally {
       setBgWebViewUrl(null);
     }
   }, [getTitle, updateChapter, updateTitle, loadBgWebView]);
 
+  const pendingRetryRef = useRef<{ mangaId: string; chapterId: string; chapterUrl: string } | null>(null);
+
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('MANGA_RETRY_CHAPTER', ({ mangaId, chapterId, chapterUrl }) => {
-      handleRetryChapterDownload(mangaId, chapterId, chapterUrl);
+    const sub = DeviceEventEmitter.addListener('MANGA_RETRY_CHAPTER', (data) => {
+      pendingRetryRef.current = data; // defer until BrowserScreen re-focuses (WebView needs to be foreground)
     });
     return () => sub.remove();
-  }, [handleRetryChapterDownload]);
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    const pending = pendingRetryRef.current;
+    if (pending) {
+      pendingRetryRef.current = null;
+      handleRetryChapterDownload(pending.mangaId, pending.chapterId, pending.chapterUrl);
+    }
+  }, [handleRetryChapterDownload]));
 
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {

@@ -62,6 +62,7 @@ export default function MangaChapterListScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Retry', onPress: () => {
           DeviceEventEmitter.emit('MANGA_RETRY_CHAPTER', { mangaId: manga.id, chapterId, chapterUrl: chapter.url });
+          navigation.goBack();
         }},
       ]);
     }
