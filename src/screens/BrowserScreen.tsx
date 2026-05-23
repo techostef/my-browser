@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { withErrorBoundary } from '../components/ErrorBoundary';
-import { View, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler, DeviceEventEmitter } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler, DeviceEventEmitter } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import {
   ShouldStartLoadRequest,
@@ -13,7 +13,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import AddressBar from '../components/AddressBar';
 import HomePage from '../components/HomePage';
-import TabBarContainer from '../components/TabBarContainer';
 import { useSettings, useThemeColors } from '../store/settingsStore';
 import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
@@ -51,6 +50,8 @@ import {
 import { useManga } from '../store/mangaStore';
 import { useMangaBgWebView } from '../context/MangaBgWebViewContext';
 import { MangaChapterInfo } from '../types/manga';
+
+const SUPPORTED_MANGA_DOMAINS = ['www.mangaread.org', 'mangaread.org'];
 
 // Injected into the browser WebView when the user taps Preview on a stream.
 // Posts the currentTime of the most-advanced playing video element.
@@ -264,6 +265,7 @@ function BrowserScreen() {
   const [mangaModalExistingSize, setMangaModalExistingSize] = useState<number | undefined>(undefined);
   const [mangaIndexUrl, setMangaIndexUrl] = useState('');
   const mangaDownloadActiveRef = useRef(false);
+  const [mangaUnsupportedModalVisible, setMangaUnsupportedModalVisible] = useState(false);
 
   // Popup blocker state
   const [blockedPopupUrl, setBlockedPopupUrl] = useState<string | null>(null);
@@ -963,9 +965,21 @@ function BrowserScreen() {
     webViewRefs.current[tabId] = ref;
   }, []);
 
+
   const handleMangaMenuAction = useCallback(() => {
+    const currentUrl = activeTab?.url || '';
+    try {
+      const domain = new URL(currentUrl).hostname;
+      if (!SUPPORTED_MANGA_DOMAINS.includes(domain)) {
+        setMangaUnsupportedModalVisible(true);
+        return;
+      }
+    } catch {
+      setMangaUnsupportedModalVisible(true);
+      return;
+    }
     webViewRefs.current[activeTabId]?.injectJavaScript(MANGA_INDEX_DETECTOR_JS);
-  }, [activeTabId]);
+  }, [activeTabId, activeTab?.url]);
 
   const handleMangaDownloadConfirm = useCallback(async (selectedChapters: MangaChapterInfo[], confirmedTitle: string) => {
     setMangaModalVisible(false);
@@ -1274,6 +1288,43 @@ function BrowserScreen() {
           }}
         />
 
+        {/* Unsupported manga site modal */}
+        <Modal
+          visible={mangaUnsupportedModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMangaUnsupportedModalVisible(false)}
+        >
+          <View style={styles.unsupportedOverlay}>
+            <View style={styles.unsupportedBox}>
+              <Text style={styles.unsupportedTitle}>Unsupported Website</Text>
+              <Text style={styles.unsupportedDesc}>
+                Manga download is not supported on this site.{'\n'}Tap a supported site below to navigate there:
+              </Text>
+              <ScrollView style={styles.unsupportedList}>
+                {SUPPORTED_MANGA_DOMAINS.filter(d => d.startsWith('www.')).map(domain => (
+                  <TouchableOpacity
+                    key={domain}
+                    style={styles.unsupportedItem}
+                    onPress={() => {
+                      setMangaUnsupportedModalVisible(false);
+                      handleNavigate(`https://${domain}`);
+                    }}
+                  >
+                    <Text style={styles.unsupportedLink}>{domain}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.unsupportedCloseBtn}
+                onPress={() => setMangaUnsupportedModalVisible(false)}
+              >
+                <Text style={styles.unsupportedCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
     </View>
   );
 }
@@ -1314,6 +1365,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  unsupportedOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  unsupportedBox: {
+    width: '85%', maxHeight: '60%', backgroundColor: '#1e293b',
+    borderRadius: 14, padding: 20, gap: 12,
+  },
+  unsupportedTitle: { fontSize: 17, fontWeight: '700', color: '#fff', textAlign: 'center' },
+  unsupportedDesc: { fontSize: 13, color: '#94a3b8', textAlign: 'center', lineHeight: 19 },
+  unsupportedList: { maxHeight: 200 },
+  unsupportedItem: {
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 8, backgroundColor: '#334155', marginBottom: 8,
+  },
+  unsupportedLink: { fontSize: 14, color: '#60a5fa', fontWeight: '600' },
+  unsupportedCloseBtn: {
+    alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 24,
+    borderRadius: 8, backgroundColor: '#475569', marginTop: 4,
+  },
+  unsupportedCloseText: { fontSize: 14, color: '#fff', fontWeight: '600' },
 });
 
 // ----------------------------------------------------------------------------
