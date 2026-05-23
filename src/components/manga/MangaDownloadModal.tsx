@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
   StyleSheet,
   SafeAreaView,
@@ -15,52 +15,110 @@ import { useSettings } from '../../store/settingsStore';
 
 interface Props {
   visible: boolean;
-  loading: boolean;         // true while chapter list is being fetched
-  error: string | null;     // non-null if chapter list fetch failed
+  loading: boolean;
+  error: string | null;
   mangaTitle: string;
   chapters: MangaChapterInfo[];
-  lastUpdated?: number;     // ms timestamp when chapter list was last fetched
-  existingSizeBytes?: number; // total bytes already downloaded for this manga
   onConfirm: (selected: MangaChapterInfo[], title: string) => void;
   onCancel: () => void;
   onRetry: () => void;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
+/** Parse range string like "1-50, 55, 60-100" into a Set of chapter numbers */
+function parseRange(input: string, allNumbers: string[]): Set<string> {
+  const result = new Set<string>();
+  const parts = input.split(',').map(s => s.trim()).filter(Boolean);
+  for (const part of parts) {
+    const rangeParts = part.split('-').map(s => s.trim());
+    if (rangeParts.length === 2) {
+      const start = parseFloat(rangeParts[0]);
+      const end = parseFloat(rangeParts[1]);
+      if (!isNaN(start) && !isNaN(end)) {
+        for (const num of allNumbers) {
+          const n = parseFloat(num);
+          if (n >= Math.min(start, end) && n <= Math.max(start, end)) {
+            result.add(num);
+          }
+        }
+      }
+    } else {
+      const n = rangeParts[0];
+      if (allNumbers.includes(n)) result.add(n);
+    }
+  }
+  return result;
 }
 
 export default function MangaDownloadModal({
-  visible, loading, error, mangaTitle, chapters, lastUpdated, existingSizeBytes,
+  visible, loading, error, mangaTitle, chapters,
   onConfirm, onCancel, onRetry,
 }: Props) {
   const { themeColors: c } = useSettings();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editedTitle, setEditedTitle] = useState(mangaTitle);
+  const [rangeText, setRangeText] = useState('');
 
   useEffect(() => { setEditedTitle(mangaTitle); }, [mangaTitle]);
+
+  const allChapterNumbers = useMemo(() => chapters.map(ch => ch.chapterNumber), [chapters]);
 
   // Pre-select all chapters when list loads
   useEffect(() => {
     if (chapters.length > 0) {
       setSelected(new Set(chapters.map(ch => ch.url)));
+      setRangeText('');
     }
   }, [chapters]);
 
-  const toggle = (url: string) => {
+  const toggle = useCallback((url: string) => {
     setSelected(prev => {
       const next = new Set(prev);
       next.has(url) ? next.delete(url) : next.add(url);
       return next;
     });
+  }, []);
+
+  const selectAll = () => {
+    setSelected(new Set(chapters.map(ch => ch.url)));
+    setRangeText('');
+  };
+  const deselectAll = () => {
+    setSelected(new Set());
+    setRangeText('');
   };
 
-  const selectAll = () => setSelected(new Set(chapters.map(ch => ch.url)));
-  const deselectAll = () => setSelected(new Set());
+  const applyRange = () => {
+    if (!rangeText.trim()) return;
+    const nums = parseRange(rangeText, allChapterNumbers);
+    const urls = new Set(
+      chapters.filter(ch => nums.has(ch.chapterNumber)).map(ch => ch.url),
+    );
+    setSelected(urls);
+  };
 
-  const selectedChapters = chapters.filter(ch => selected.has(ch.url));
+  const selectedChapters = useMemo(
+    () => chapters.filter(ch => selected.has(ch.url)),
+    [chapters, selected],
+  );
+
+  const renderChapter = useCallback(({ item }: { item: MangaChapterInfo }) => {
+    const isSelected = selected.has(item.url);
+    return (
+      <TouchableOpacity
+        style={[styles.chapterRow, { borderBottomColor: c.border }]}
+        onPress={() => toggle(item.url)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.checkbox, { borderColor: c.border }, isSelected && styles.checkboxSelected]}>
+          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+        </View>
+        <Text style={[styles.chapterText, { color: c.text }]} numberOfLines={1}>
+          Ch. {item.chapterNumber}
+          {item.title ? ` — ${item.title}` : ''}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selected, c, toggle]);
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onCancel}>
@@ -100,7 +158,65 @@ export default function MangaDownloadModal({
         )}
 
         {/* Chapter list */}
-        0
+        {!loading && !error && chapters.length > 0 && (
+          <>
+            {/* Range input */}
+            <View style={[styles.rangeBar, { borderBottomColor: c.border }]}>
+              <TextInput
+                style={[styles.rangeInput, { color: c.text, borderColor: c.border }]}
+                value={rangeText}
+                onChangeText={setRangeText}
+                placeholder="e.g. 1-50, 55, 60-100"
+                placeholderTextColor={c.textSecondary}
+                keyboardType="default"
+                returnKeyType="done"
+                onSubmitEditing={applyRange}
+              />
+              <TouchableOpacity style={styles.applyBtn} onPress={applyRange}>
+                <Text style={styles.applyBtnText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Select bar */}
+            <View style={[styles.selectBar, { borderBottomColor: c.border }]}>
+              <View style={styles.selectBarLeft}>
+                <Text style={[styles.countText, { color: c.text }]}>
+                  {selectedChapters.length} / {chapters.length} chapters
+                </Text>
+              </View>
+              <TouchableOpacity onPress={selected.size === chapters.length ? deselectAll : selectAll}>
+                <Text style={styles.selectAllText}>
+                  {selected.size === chapters.length ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Chapter list (FlatList for performance) */}
+            <FlatList
+              data={chapters}
+              keyExtractor={item => item.url}
+              renderItem={renderChapter}
+              extraData={selected}
+              style={styles.list}
+              initialNumToRender={30}
+              maxToRenderPerBatch={20}
+              windowSize={10}
+            />
+
+            {/* Footer */}
+            <View style={[styles.footer, { borderTopColor: c.border }]}>
+              <TouchableOpacity
+                style={[styles.downloadBtn, selectedChapters.length === 0 && { opacity: 0.4 }]}
+                onPress={() => selectedChapters.length > 0 && onConfirm(selectedChapters, editedTitle.trim() || mangaTitle)}
+                disabled={selectedChapters.length === 0}
+              >
+                <Text style={styles.downloadBtnText}>
+                  Download {selectedChapters.length} Chapter{selectedChapters.length !== 1 ? 's' : ''}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         {!loading && !error && chapters.length === 0 && (
           <View style={styles.center}>
@@ -131,13 +247,26 @@ const styles = StyleSheet.create({
   retryBtn: { backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 },
   retryText: { color: '#fff', fontWeight: '600' },
   emptyText: { fontSize: 14, textAlign: 'center' },
+  rangeBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rangeInput: {
+    flex: 1, fontSize: 13, paddingHorizontal: 10, paddingVertical: 7,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 6,
+  },
+  applyBtn: {
+    backgroundColor: '#3b82f6', borderRadius: 6,
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  applyBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   selectBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth,
   },
   selectBarLeft: { flex: 1, gap: 2 },
   countText: { fontSize: 13 },
-  metaText: { fontSize: 11 },
   selectAllText: { fontSize: 13, color: '#3b82f6', fontWeight: '600' },
   list: { flex: 1 },
   chapterRow: {

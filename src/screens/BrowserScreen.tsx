@@ -1262,8 +1262,6 @@ function BrowserScreen() {
           error={mangaModalError}
           mangaTitle={mangaModalTitle}
           chapters={mangaModalChapters}
-          lastUpdated={mangaModalLastUpdated}
-          existingSizeBytes={mangaModalExistingSize}
           onConfirm={handleMangaDownloadConfirm}
           onCancel={() => { setMangaModalVisible(false); clearBgWebView(); }}
           onRetry={() => {
