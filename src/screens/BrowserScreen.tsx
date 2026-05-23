@@ -34,6 +34,22 @@ import { POPUP_BLOCKER_JS } from '../services/popupBlocker';
 import PageErrorView, { PageError } from '../components/PageErrorView';
 import PopupBlockedBanner from '../components/PopupBlockedBanner';
 import CookieManager from '@react-native-cookies/cookies';
+import { WebView as BackgroundWebView } from 'react-native-webview';
+import type { WebViewMessageEvent } from 'react-native-webview';
+import MangaDownloadModal from '../components/manga/MangaDownloadModal';
+import {
+  MANGA_INDEX_DETECTOR_JS,
+  MANGA_CHAPTER_LIST_EXTRACTOR_JS,
+  MANGA_PAGE_IMAGES_EXTRACTOR_JS,
+} from '../services/mangaDetector';
+import {
+  sanitizeMangaName,
+  chapterFolderPath,
+  downloadChapterImages,
+  saveCoverImage,
+} from '../services/mangaDownloadService';
+import { useManga } from '../store/mangaStore';
+import { MangaChapterInfo } from '../types/manga';
 
 // Injected into the browser WebView when the user taps Preview on a stream.
 // Posts the currentTime of the most-advanced playing video element.
@@ -233,12 +249,71 @@ export default function BrowserScreen() {
   >(new Map());
   const previewTempFileRef = useRef<string | null>(null);
 
+  const { addTitle, updateTitle, updateChapter, getTitle } = useManga();
+
+  // Background WebView state machine
+  const [bgWebViewUrl, setBgWebViewUrl] = useState<string | null>(null);
+  const bgPendingRef = useRef<{
+    expectedUrl: string;
+    script: string;
+    resolve: (data: any) => void;
+    reject: (err: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  const bgWebViewRef = useRef<any>(null);
+
+  // Manga download state
+  const [mangaModalVisible, setMangaModalVisible] = useState(false);
+  const [mangaModalLoading, setMangaModalLoading] = useState(false);
+  const [mangaModalError, setMangaModalError] = useState<string | null>(null);
+  const [mangaModalTitle, setMangaModalTitle] = useState('');
+  const [mangaModalChapters, setMangaModalChapters] = useState<MangaChapterInfo[]>([]);
+  const [mangaIndexUrl, setMangaIndexUrl] = useState('');
+  const [mangaDetectedTitle, setMangaDetectedTitle] = useState('');
+  const mangaDownloadActiveRef = useRef(false);
+
   // Popup blocker state
   const [blockedPopupUrl, setBlockedPopupUrl] = useState<string | null>(null);
 
   // Set to true before any programmatic navigation (back/forward/address-bar) so
   // handleNavigationStateChange knows not to push the resulting URL to history again.
   const isHistoryNavRef = useRef<Record<string, boolean>>({});
+
+  const loadBgWebView = useCallback((url: string, extractorScript: string, timeoutMs = 30000): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (bgPendingRef.current) {
+        clearTimeout(bgPendingRef.current.timer);
+      }
+      const timer = setTimeout(() => {
+        bgPendingRef.current = null;
+        reject(new Error('Timeout loading manga page'));
+      }, timeoutMs);
+      bgPendingRef.current = { expectedUrl: url, script: extractorScript, resolve, reject, timer };
+      setBgWebViewUrl(url);
+    });
+  }, []);
+
+  const handleBgWebViewLoadEnd = useCallback(() => {
+    const pending = bgPendingRef.current;
+    if (!pending) return;
+    bgWebViewRef.current?.injectJavaScript(pending.script);
+  }, []);
+
+  const handleBgWebViewMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      const pending = bgPendingRef.current;
+      if (!pending) return;
+      if (
+        data.type === 'MANGA_CHAPTER_LIST' ||
+        data.type === 'MANGA_PAGE_IMAGES'
+      ) {
+        clearTimeout(pending.timer);
+        bgPendingRef.current = null;
+        pending.resolve(data.payload);
+      }
+    } catch {}
+  }, []);
 
   const tabHasActiveExtraction = useCallback((tabId: string) => {
     for (const info of activeBlobMap.current.values()) {
@@ -685,6 +760,32 @@ export default function BrowserScreen() {
           break;
         case 'PAGE_INFO':
           break;
+        case 'MANGA_DETECTION': {
+          const result = message.payload;
+          if (!result.found || !result.indexUrl) {
+            Alert.alert('Not a manga page', 'No manga was detected on this page.');
+            return;
+          }
+          setMangaIndexUrl(result.indexUrl);
+          setMangaDetectedTitle(result.mangaTitle || 'Manga');
+          setMangaModalTitle(result.mangaTitle || 'Manga');
+          setMangaModalLoading(true);
+          setMangaModalError(null);
+          setMangaModalChapters([]);
+          setMangaModalVisible(true);
+
+          loadBgWebView(result.chapterPageUrl || result.indexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
+            .then((chapters: MangaChapterInfo[]) => {
+              setMangaModalChapters(chapters);
+            })
+            .catch((err: any) => {
+              setMangaModalError(err?.message || 'Failed to fetch chapter list');
+            })
+            .finally(() => {
+              setMangaModalLoading(false);
+            });
+          return;
+        }
         case 'EXTRACTION_LINK_CLICK': {
           const { href } = message.payload;
           // console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
@@ -897,6 +998,96 @@ export default function BrowserScreen() {
     webViewRefs.current[tabId] = ref;
   }, []);
 
+  const handleMangaMenuAction = useCallback(() => {
+    webViewRefs.current[activeTabId]?.injectJavaScript(MANGA_INDEX_DETECTOR_JS);
+  }, [activeTabId]);
+
+  const handleMangaDownloadConfirm = useCallback(async (selectedChapters: MangaChapterInfo[]) => {
+    setMangaModalVisible(false);
+    mangaDownloadActiveRef.current = true;
+
+    const safeTitleName = sanitizeMangaName(mangaDetectedTitle);
+    const mangaId = safeTitleName.toLowerCase().replace(/\s+/g, '-');
+
+    const chapters = selectedChapters.map(ch => ({
+      id: `${mangaId}-chapter-${ch.chapterNumber}`,
+      mangaId,
+      chapterNumber: ch.chapterNumber,
+      title: ch.title,
+      url: ch.url,
+      status: 'queued' as const,
+      progress: 0,
+      imageCount: 0,
+      downloadedImages: 0,
+      folderPath: chapterFolderPath(safeTitleName, ch.chapterNumber),
+      readProgress: 0,
+    }));
+
+    const existing = getTitle(mangaId);
+    if (!existing) {
+      addTitle({
+        id: mangaId,
+        title: mangaDetectedTitle,
+        coverImagePath: '',
+        sourceUrl: mangaIndexUrl,
+        chapters,
+        createdAt: Date.now(),
+      });
+    } else {
+      const newChapters = chapters.filter(ch => !existing.chapters.find(ec => ec.id === ch.id));
+      if (newChapters.length > 0) {
+        updateTitle(mangaId, { chapters: [...existing.chapters, ...newChapters] });
+      }
+    }
+
+    let coverSaved = !!(getTitle(mangaId)?.coverImagePath);
+    for (const ch of chapters) {
+      if (!mangaDownloadActiveRef.current) break;
+
+      updateChapter(mangaId, ch.id, { status: 'downloading', progress: 0 });
+
+      try {
+        const imageUrls: string[] = await loadBgWebView(ch.url, MANGA_PAGE_IMAGES_EXTRACTOR_JS);
+
+        if (imageUrls.length === 0) {
+          updateChapter(mangaId, ch.id, { status: 'failed' });
+          continue;
+        }
+
+        const filePaths = await downloadChapterImages(
+          ch.folderPath,
+          imageUrls,
+          undefined,
+          (done, total) => {
+            updateChapter(mangaId, ch.id, {
+              progress: Math.round((done / total) * 100),
+              downloadedImages: done,
+              imageCount: total,
+            });
+          },
+        );
+
+        updateChapter(mangaId, ch.id, {
+          status: 'completed',
+          progress: 100,
+          imageCount: filePaths.length,
+          downloadedImages: filePaths.length,
+        });
+
+        if (!coverSaved && filePaths.length > 0) {
+          const coverPath = await saveCoverImage(safeTitleName, filePaths[0]);
+          updateTitle(mangaId, { coverImagePath: coverPath });
+          coverSaved = true;
+        }
+      } catch {
+        updateChapter(mangaId, ch.id, { status: 'failed' });
+      }
+    }
+
+    mangaDownloadActiveRef.current = false;
+    setBgWebViewUrl(null);
+  }, [mangaDetectedTitle, mangaIndexUrl, addTitle, updateTitle, updateChapter, getTitle, loadBgWebView]);
+
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {
     const tabIds = new Set(tabs.map(t => t.id));
@@ -932,12 +1123,15 @@ export default function BrowserScreen() {
     <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top, marginBottom: -15 }]}>
       <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
 
-      {!isVideoPlaying && 
+      {!isVideoPlaying &&
           <AddressBarContainer
             onNavigate={handleNavigate}
             onGoBack={handleGoBackActive}
             onGoForward={handleGoForwardActive}
             onReload={handleReloadActive}
+            onMenuAction={(action) => {
+              if (action === 'downloadManga') handleMangaMenuAction();
+            }}
           />}
 
       <View style={styles.webviewArea}>
@@ -1031,6 +1225,35 @@ export default function BrowserScreen() {
         onClose={handleClosePreview}
       />
 
+        {bgWebViewUrl && (
+          <BackgroundWebView
+            ref={bgWebViewRef}
+            source={{ uri: bgWebViewUrl }}
+            style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+            onLoadEnd={handleBgWebViewLoadEnd}
+            onMessage={handleBgWebViewMessage}
+            javaScriptEnabled
+          />
+        )}
+
+        <MangaDownloadModal
+          visible={mangaModalVisible}
+          loading={mangaModalLoading}
+          error={mangaModalError}
+          mangaTitle={mangaModalTitle}
+          chapters={mangaModalChapters}
+          onConfirm={handleMangaDownloadConfirm}
+          onCancel={() => setMangaModalVisible(false)}
+          onRetry={() => {
+            setMangaModalError(null);
+            setMangaModalLoading(true);
+            loadBgWebView(mangaIndexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
+              .then((chapters: MangaChapterInfo[]) => setMangaModalChapters(chapters))
+              .catch((err: any) => setMangaModalError(err?.message || 'Failed to fetch chapter list'))
+              .finally(() => setMangaModalLoading(false));
+          }}
+        />
+
     </View>
   );
 }
@@ -1084,9 +1307,10 @@ interface AddressBarContainerProps {
   onGoBack: () => void;
   onGoForward: () => void;
   onReload: () => void;
+  onMenuAction?: (action: 'downloadManga') => void;
 }
 
-function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload }: AddressBarContainerProps) {
+function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload, onMenuAction }: AddressBarContainerProps) {
   const activeTab = useActiveTab();
   const { bookmarks, addBookmark, removeBookmark } = useSettings();
 
@@ -1114,6 +1338,7 @@ function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload 
       loading={false}
       isBookmarked={!!currentBookmark}
       onToggleBookmark={showBookmark ? handleToggleBookmark : undefined}
+      onMenuAction={onMenuAction}
     />
   );
 }
