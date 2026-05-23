@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
 import {
-  View, Text, FlatList, Alert, TouchableOpacity, StyleSheet, SafeAreaView, DeviceEventEmitter,
+  View, Text, FlatList, Alert, TouchableOpacity, StyleSheet, DeviceEventEmitter,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useManga } from '../store/mangaStore';
@@ -62,7 +63,7 @@ export default function MangaChapterListScreen() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Retry', onPress: () => {
           DeviceEventEmitter.emit('MANGA_RETRY_CHAPTER', { mangaId: manga.id, chapterId, chapterUrl: chapter.url });
-          navigation.goBack();
+          navigation.navigate('MainTabs' as any, { screen: 'Browser' } as any);
         }},
       ]);
     }
