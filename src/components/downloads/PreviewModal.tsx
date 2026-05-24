@@ -574,21 +574,6 @@ export default function PreviewModal({
                   )}
                   <TouchableOpacity
                     style={styles.iconBtn}
-                    onPress={() => setLandscape((l) => !l)}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name={
-                        landscape
-                          ? "phone-portrait-outline"
-                          : "phone-landscape-outline"
-                      }
-                      size={22}
-                      color="#FFF"
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
                     onPress={() => {
                       ScreenOrientation.unlockAsync();
                       onClose();
@@ -646,8 +631,23 @@ export default function PreviewModal({
                     <Text style={styles.timeText}>{formatTime(duration)}</Text>
                   </View>
 
-                  {(onPrev || onNext) && (
-                    <View style={styles.navRow}>
+                  <View style={styles.navRow}>
+                    <TouchableOpacity
+                      style={styles.orientationBtn}
+                      onPress={() => setLandscape((l) => !l)}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name={
+                          landscape
+                            ? "phone-portrait-outline"
+                            : "phone-landscape-outline"
+                        }
+                        size={22}
+                        color="#FFF"
+                      />
+                    </TouchableOpacity>
+                    {onPrev && (
                       <TouchableOpacity
                         style={[
                           styles.navBtn,
@@ -666,6 +666,8 @@ export default function PreviewModal({
                           ⏮  Previous
                         </Text>
                       </TouchableOpacity>
+                    )}
+                    {onNext && (
                       <TouchableOpacity
                         style={[
                           styles.navBtn,
@@ -684,8 +686,9 @@ export default function PreviewModal({
                           Next  ⏭
                         </Text>
                       </TouchableOpacity>
-                    </View>
-                  )}
+                    )}
+                    
+                  </View>
                 </View>
               </SafeAreaView>
             )}
@@ -908,5 +911,10 @@ const styles = StyleSheet.create({
   },
   navBtnTextDisabled: {
     color: "#555",
+  },
+  orientationBtn: {
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
