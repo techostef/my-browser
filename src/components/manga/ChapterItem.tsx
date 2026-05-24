@@ -8,6 +8,7 @@ interface Props {
   onPress: () => void;
   onLongPress?: () => void;
   onDelete: () => void;
+  onRedownload?: () => void;
   selected?: boolean;
   selectionMode?: boolean;
 }
@@ -23,7 +24,7 @@ function formatDate(ts: number): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, selected, selectionMode }: Props) {
+export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, onRedownload, selected, selectionMode }: Props) {
   const { themeColors: c } = useSettings();
 
   const statusIcon = () => {
@@ -88,9 +89,16 @@ export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, s
         )}
       </TouchableOpacity>
       {!selectionMode && chapter.status === 'completed' && (
-        <TouchableOpacity onPress={onDelete} style={styles.deleteBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.deleteText}>✕</Text>
-        </TouchableOpacity>
+        <View style={styles.actionsWrap}>
+          {onRedownload && (
+            <TouchableOpacity onPress={onRedownload} style={styles.redownloadBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.redownloadText}>↻</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={onDelete} style={styles.deleteBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.deleteText}>✕</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -125,6 +133,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#3b82f6', borderColor: '#3b82f6',
   },
   checkmark: { fontSize: 12, color: '#fff', fontWeight: '700' },
+  actionsWrap: { flexDirection: 'row', alignItems: 'center' },
+  redownloadBtn: { paddingLeft: 12 },
+  redownloadText: { fontSize: 16, color: '#3b82f6' },
   deleteBtn: { paddingLeft: 12 },
   deleteText: { fontSize: 14, color: '#94a3b8' },
 });

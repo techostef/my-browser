@@ -596,10 +596,12 @@ class DownloadManager {
       }, STAT_CONCURRENCY);
       files.push(...rawTasks.filter((t): t is DownloadTask => t !== null));
 
-      await Promise.all(subDirs.map(({ entry, entryPath }) => {
-        const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
-        return walk(`${entryPath}/`, childFolderPath);
-      }));
+      await Promise.all(subDirs
+        .filter(({ entry }) => !(folderPath === '' && entry === 'Manga'))
+        .map(({ entry, entryPath }) => {
+          const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
+          return walk(`${entryPath}/`, childFolderPath);
+        }));
     };
 
     await walk(privateDir, '');
@@ -744,7 +746,7 @@ class DownloadManager {
     await walk(privateDir, '');
 
     folders.sort((a, b) => a.localeCompare(b));
-    return folders;
+    return folders.filter(f => f !== 'Manga' && !f.startsWith('Manga/'));
   }
 
   async createPrivateFolder(folderPath: string): Promise<string> {

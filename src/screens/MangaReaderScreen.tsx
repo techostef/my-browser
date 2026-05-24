@@ -38,7 +38,7 @@ function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
       <Image
         source={{ uri }}
         style={{ width: SCREEN_WIDTH, height }}
-        resizeMode="cover"
+        resizeMode="contain"
       />
     </TouchableOpacity>
   );

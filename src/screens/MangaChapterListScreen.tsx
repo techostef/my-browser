@@ -56,6 +56,20 @@ function MangaChapterListScreen() {
     ]);
   }, [manga, removeChapter]);
 
+  const handleRedownloadChapter = useCallback((chapterId: string, chapterNumber: string) => {
+    if (!manga) return;
+    const chapter = manga.chapters.find(ch => ch.id === chapterId);
+    if (!chapter) return;
+    Alert.alert('Redownload chapter?', `Re-download Ch. ${chapterNumber}? Existing files will be replaced.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Redownload', onPress: () => {
+        DeviceEventEmitter.emit('MANGA_REDOWNLOAD_CHAPTER', {
+          mangaId: manga.id, chapterId, chapterUrl: chapter.url,
+        });
+      }},
+    ]);
+  }, [manga]);
+
   if (!manga) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
@@ -145,6 +159,31 @@ function MangaChapterListScreen() {
         { text: 'Retry', onPress: () => {
           failedSelected.forEach(ch => {
             DeviceEventEmitter.emit('MANGA_RETRY_CHAPTER', {
+              mangaId: manga.id, chapterId: ch.id, chapterUrl: ch.url,
+            });
+          });
+          clearSelection();
+        }},
+      ],
+    );
+  };
+
+  const handleBulkRedownload = () => {
+    const completedSelected = manga.chapters.filter(
+      ch => selectedIds.has(ch.id) && ch.status === 'completed',
+    );
+    if (completedSelected.length === 0) {
+      Alert.alert('No completed chapters', 'Only completed chapters can be redownloaded.');
+      return;
+    }
+    Alert.alert(
+      `Redownload ${completedSelected.length} chapter(s)?`,
+      'Existing files will be deleted and chapters re-downloaded.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Redownload', onPress: () => {
+          completedSelected.forEach(ch => {
+            DeviceEventEmitter.emit('MANGA_REDOWNLOAD_CHAPTER', {
               mangaId: manga.id, chapterId: ch.id, chapterUrl: ch.url,
             });
           });
@@ -257,6 +296,7 @@ function MangaChapterListScreen() {
               onPress={() => handleChapterPress(item.id)}
               onLongPress={() => handleLongPress(item.id)}
               onDelete={() => handleDeleteChapter(item.id, `Ch. ${item.chapterNumber}`)}
+              onRedownload={() => handleRedownloadChapter(item.id, item.chapterNumber)}
               selected={selectedIds.has(item.id)}
               selectionMode={selectionMode}
             />
@@ -266,6 +306,9 @@ function MangaChapterListScreen() {
 
       {selectionMode && (
         <View style={[styles.actionBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
+          <TouchableOpacity style={[styles.actionBtn, styles.redownloadActionBtn]} onPress={handleBulkRedownload}>
+            <Text style={styles.redownloadBtnText}>↻ Redownload</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.retryBtn]} onPress={handleBulkRetry}>
             <Text style={styles.retryBtnText}>↻ Retry</Text>
           </TouchableOpacity>
@@ -304,6 +347,8 @@ const styles = StyleSheet.create({
     flex: 1, paddingVertical: 10, borderRadius: 8,
     alignItems: 'center', justifyContent: 'center',
   },
+  redownloadActionBtn: { backgroundColor: '#f59e0b' },
+  redownloadBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   retryBtn: { backgroundColor: '#3b82f6' },
   retryBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   deleteActionBtn: { backgroundColor: '#ef4444' },

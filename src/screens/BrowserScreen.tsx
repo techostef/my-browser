@@ -1133,6 +1133,20 @@ function BrowserScreen() {
     return () => sub.remove();
   }, [processRetryQueue, updateChapter]);
 
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('MANGA_REDOWNLOAD_CHAPTER', async (data) => {
+      const manga = getTitle(data.mangaId);
+      const chapter = manga?.chapters.find(c => c.id === data.chapterId);
+      if (chapter?.folderPath) {
+        await FileSystem.deleteAsync(chapter.folderPath, { idempotent: true }).catch(() => {});
+      }
+      updateChapter(data.mangaId, data.chapterId, { status: 'queued', progress: 0, downloadedImages: 0, imageCount: 0, sizeBytes: 0, downloadedAt: undefined });
+      retryQueueRef.current.push(data);
+      processRetryQueue();
+    });
+    return () => sub.remove();
+  }, [processRetryQueue, updateChapter, getTitle]);
+
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {
     const tabIds = new Set(tabs.map(t => t.id));
