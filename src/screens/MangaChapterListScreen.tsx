@@ -257,30 +257,6 @@ function MangaChapterListScreen() {
         </View>
       )}
 
-      {!selectionMode && lastReadChapter && (
-        <TouchableOpacity
-          style={[styles.continueBar, { backgroundColor: c.surface, borderBottomColor: c.border }]}
-          onPress={() => navigation.navigate('MangaReader', { mangaId: manga.id, chapterId: lastReadChapter.id })}
-          activeOpacity={0.7}
-        >
-          <View style={styles.continueInfo}>
-            <Text style={[styles.continueLabel, { color: c.textSecondary }]}>Continue Reading</Text>
-            <Text style={[styles.continueChapter, { color: c.text }]} numberOfLines={1}>
-              Ch. {lastReadChapter.chapterNumber}
-              {lastReadChapter.title && lastReadChapter.title !== `Chapter ${lastReadChapter.chapterNumber}`
-                ? ` — ${lastReadChapter.title}` : ''}
-            </Text>
-            <Text style={[styles.continueMeta, { color: c.textSecondary }]}>
-              Page {lastReadChapter.readProgress + 1}
-              {lastReadChapter.imageCount > 0 ? ` of ${lastReadChapter.imageCount}` : ''}
-              {lastReadChapter.lastReadAt
-                ? `  ·  ${new Date(lastReadChapter.lastReadAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
-            </Text>
-          </View>
-          <Text style={[styles.continueArrow, { color: '#3b82f6' }]}>▶</Text>
-        </TouchableOpacity>
-      )}
-
       {manga.chapters.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: c.textSecondary }]}>No chapters downloaded yet.</Text>
@@ -290,6 +266,7 @@ function MangaChapterListScreen() {
           data={manga.chapters}
           keyExtractor={item => item.id}
           extraData={selectedIds}
+          contentContainerStyle={!selectionMode && lastReadChapter ? { paddingBottom: 70 } : undefined}
           renderItem={({ item }) => (
             <ChapterItem
               chapter={item}
@@ -316,6 +293,30 @@ function MangaChapterListScreen() {
             <Text style={styles.deleteBtnText}>🗑 Delete</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {!selectionMode && lastReadChapter && (
+        <TouchableOpacity
+          style={[styles.continueBar, { backgroundColor: c.surface, borderTopColor: c.border }]}
+          onPress={() => navigation.navigate('MangaReader', { mangaId: manga.id, chapterId: lastReadChapter.id })}
+          activeOpacity={0.7}
+        >
+          <View style={styles.continueInfo}>
+            <Text style={[styles.continueLabel, { color: c.textSecondary }]}>Continue Reading</Text>
+            <Text style={[styles.continueChapter, { color: c.text }]} numberOfLines={1}>
+              Ch. {lastReadChapter.chapterNumber}
+              {lastReadChapter.title && lastReadChapter.title !== `Chapter ${lastReadChapter.chapterNumber}`
+                ? ` — ${lastReadChapter.title}` : ''}
+            </Text>
+            <Text style={[styles.continueMeta, { color: c.textSecondary }]}>
+              Page {lastReadChapter.readProgress + 1}
+              {lastReadChapter.imageCount > 0 ? ` of ${lastReadChapter.imageCount}` : ''}
+              {lastReadChapter.lastReadAt
+                ? `  ·  ${new Date(lastReadChapter.lastReadAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+            </Text>
+          </View>
+          <Text style={[styles.continueArrow, { color: '#3b82f6' }]}>▶</Text>
+        </TouchableOpacity>
       )}
     </SafeAreaView>
   );
@@ -365,9 +366,10 @@ const styles = StyleSheet.create({
   },
   retryAllBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   continueBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   continueInfo: { flex: 1, gap: 1 },
   continueLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },

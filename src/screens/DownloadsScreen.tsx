@@ -38,6 +38,7 @@ import ManageLabelsModal from "../components/downloads/ManageLabelsModal";
 import MoveProgressModal from "../components/downloads/MoveProgressModal";
 import DownloadsHeader from "../components/downloads/DownloadsHeader";
 import FilterBar from "../components/downloads/FilterBar";
+import BulkActionsDialog from "../components/downloads/BulkActionsDialog";
 import DuplicateModePicker, { DuplicateMode } from "../components/downloads/DuplicateModePicker";
 import DuplicatesModal from "../components/downloads/DuplicatesModal";
 import DeleteConfirmModal from "../components/downloads/DeleteConfirmModal";
@@ -82,6 +83,8 @@ function DownloadsScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMoveModalVisible, setBulkMoveModalVisible] = useState(false);
   const [bulkMoveToPrivateModalVisible, setBulkMoveToPrivateModalVisible] = useState(false);
+  const [bulkMoveToDeviceModalVisible, setBulkMoveToDeviceModalVisible] = useState(false);
+  const [bulkActionsDialogVisible, setBulkActionsDialogVisible] = useState(false);
   const [actionsDialogVisible, setActionsDialogVisible] = useState(false);
   const [filterDialogVisible, setFilterDialogVisible] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("name_asc");
@@ -745,6 +748,27 @@ function DownloadsScreen() {
     [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden],
   );
 
+  const handleBulkMoveToDevice = useCallback(
+    () => {
+      const ids = Array.from(selectedIds);
+      setBulkMoveToDeviceModalVisible(false);
+      setSelectedIds(new Set());
+      setMoveProgress({ total: ids.length, label: "Moving to device download..." });
+      bulkMoveDownloadsToFolder(ids, DEVICE_DOWNLOAD_MOVE_TARGET)
+        .then((idMapping) => {
+          if (Object.keys(idMapping).length > 0) {
+            migrateLabels(idMapping);
+            migrateHidden(idMapping);
+          }
+        })
+        .catch((err) => {
+          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
+        })
+        .finally(() => setMoveProgress(null));
+    },
+    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden],
+  );
+
   // ── duplicates ─────────────────────────────────────────────────────────────
   const handleOpenDuplicatePicker = useCallback(() => {
     setDuplicatePickerVisible(true);
@@ -1084,15 +1108,11 @@ function DownloadsScreen() {
         isSelectionMode={isSelectionMode}
         selectedCount={selectedIds.size}
         allSelected={allSelected}
-        canBulkMove={canBulkMove}
-        canBulkMoveToPrivate={canBulkMoveToPrivate}
         currentFolderPath={currentFolderPath}
         gridDataLength={gridData.length}
         onCancelSelection={handleCancelSelection}
         onSelectAll={handleSelectAll}
-        onBulkMove={() => setBulkMoveModalVisible(true)}
-        onBulkMoveToPrivate={() => setBulkMoveToPrivateModalVisible(true)}
-        onBulkDelete={handleBulkDelete}
+        onBulkActionsMenu={() => setBulkActionsDialogVisible(true)}
         onBack={handleBackFolder}
         onActionsMenu={() => setActionsDialogVisible(true)}
       />
@@ -1198,6 +1218,13 @@ function DownloadsScreen() {
         onClose={() => setBulkMoveToPrivateModalVisible(false)}
       />
 
+      <FolderPickerModal
+        visible={bulkMoveToDeviceModalVisible}
+        title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to device download`}
+        options={[{ label: "Device Download", onPress: handleBulkMoveToDevice }]}
+        onClose={() => setBulkMoveToDeviceModalVisible(false)}
+      />
+
       <PreviewModal
         task={previewTask}
         mediaType={previewTask ? getMediaType(previewTask) : "other"}
@@ -1290,6 +1317,17 @@ function DownloadsScreen() {
         onTogglePermanent={() => setDeletePermanent((v) => !v)}
         onCancel={() => { setDeleteConfirm(null); setDeletePermanent(false); }}
         onConfirm={handleConfirmDelete}
+      />
+
+      <BulkActionsDialog
+        visible={bulkActionsDialogVisible}
+        canBulkMove={canBulkMove}
+        canBulkMoveToPrivate={canBulkMoveToPrivate}
+        onClose={() => setBulkActionsDialogVisible(false)}
+        onBulkMove={() => setBulkMoveModalVisible(true)}
+        onBulkMoveToDevice={() => setBulkMoveToDeviceModalVisible(true)}
+        onBulkMoveToPrivate={() => setBulkMoveToPrivateModalVisible(true)}
+        onBulkDelete={handleBulkDelete}
       />
 
       <AdBanner />

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { withErrorBoundary } from '../components/ErrorBoundary';
 import {
   View, Text, FlatList, Image as RNImage, TouchableOpacity,
-  Dimensions, StyleSheet, StatusBar,
+  Dimensions, StyleSheet, StatusBar, PixelRatio,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ type Route = RouteProp<RootStackParamList, 'MangaReader'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const PIXEL_RATIO = PixelRatio.get();
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
@@ -37,9 +38,11 @@ function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
   return (
     <TouchableOpacity activeOpacity={1} onPress={onPress}>
       <Image
-        source={{ uri }}
+        source={{ uri, width: Math.round(SCREEN_WIDTH * PIXEL_RATIO), height: Math.round(height * PIXEL_RATIO) }}
         style={{ width: SCREEN_WIDTH, height }}
         contentFit="contain"
+        cachePolicy="memory-disk"
+        recyclingKey={uri}
       />
     </TouchableOpacity>
   );

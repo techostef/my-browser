@@ -7,15 +7,11 @@ type Props = {
   isSelectionMode: boolean;
   selectedCount: number;
   allSelected: boolean;
-  canBulkMove: boolean;
-  canBulkMoveToPrivate: boolean;
   currentFolderPath: string;
   gridDataLength: number;
   onCancelSelection: () => void;
   onSelectAll: () => void;
-  onBulkMove: () => void;
-  onBulkMoveToPrivate: () => void;
-  onBulkDelete: () => void;
+  onBulkActionsMenu: () => void;
   onBack: () => void;
   onActionsMenu: () => void;
 };
@@ -24,15 +20,11 @@ export default function DownloadsHeader({
   isSelectionMode,
   selectedCount,
   allSelected,
-  canBulkMove,
-  canBulkMoveToPrivate,
   currentFolderPath,
   gridDataLength,
   onCancelSelection,
   onSelectAll,
-  onBulkMove,
-  onBulkMoveToPrivate,
-  onBulkDelete,
+  onBulkActionsMenu,
   onBack,
   onActionsMenu,
 }: Props) {
@@ -59,21 +51,8 @@ export default function DownloadsHeader({
         <View style={{ marginRight: "auto", marginLeft: 8 }}>
           <Text style={styles.title}>{selectedCount} selected</Text>
         </View>
-        {canBulkMove && (
-          <TouchableOpacity style={styles.pill} onPress={onBulkMove}>
-            <Text style={styles.pillText}>Move</Text>
-          </TouchableOpacity>
-        )}
-        {canBulkMoveToPrivate && (
-          <TouchableOpacity style={styles.pill} onPress={onBulkMoveToPrivate}>
-            <Text style={styles.pillText}>→ Private</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={[styles.pill, styles.pillDelete]}
-          onPress={onBulkDelete}
-        >
-          <Text style={[styles.pillText, styles.pillDeleteText]}>Delete</Text>
+        <TouchableOpacity style={styles.actionsBtn} onPress={onBulkActionsMenu}>
+          <Text style={styles.actionsBtnText}>⋯</Text>
         </TouchableOpacity>
       </View>
     );
