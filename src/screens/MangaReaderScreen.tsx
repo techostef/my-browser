@@ -23,13 +23,13 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
 function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
-  const [height, setHeight] = useState(SCREEN_WIDTH * 1.4);
+  const [height, setHeight] = useState(SCREEN_WIDTH * 1.5);
 
   useEffect(() => {
     Image.getSize(
       uri,
       (w, h) => { if (w > 0) setHeight((h / w) * SCREEN_WIDTH); },
-      () => {},
+      () => { setHeight(SCREEN_WIDTH * 1.5); },
     );
   }, [uri]);
 
@@ -39,6 +39,7 @@ function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
         source={{ uri }}
         style={{ width: SCREEN_WIDTH, height }}
         resizeMode="contain"
+        resizeMethod="resize"
       />
     </TouchableOpacity>
   );

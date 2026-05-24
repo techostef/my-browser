@@ -11,6 +11,8 @@ const VIDEO_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp']);
 const DURATION_CACHE_KEY = '@media_duration_cache_v1';
 let durationCache: Record<string, number> | null = null;
 let durationCacheDirty = false;
+const IS_SHOW_MANGA_FOLDER = true;
+
 
 // ---- Persistent download state -------------------------------------------
 // Stored as a JSON-serialized record keyed by download id under a single
@@ -596,12 +598,20 @@ class DownloadManager {
       }, STAT_CONCURRENCY);
       files.push(...rawTasks.filter((t): t is DownloadTask => t !== null));
 
-      await Promise.all(subDirs
-        .filter(({ entry }) => !(folderPath === '' && entry === 'Manga'))
-        .map(({ entry, entryPath }) => {
-          const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
-          return walk(`${entryPath}/`, childFolderPath);
-        }));
+      if (IS_SHOW_MANGA_FOLDER) {
+        await Promise.all(subDirs
+          .map(({ entry, entryPath }) => {
+            const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
+            return walk(`${entryPath}/`, childFolderPath);
+          }));
+      } else {
+        await Promise.all(subDirs
+          .filter(({ entry }) => !(folderPath === '' && entry === 'Manga'))
+          .map(({ entry, entryPath }) => {
+            const childFolderPath = folderPath ? `${folderPath}/${entry}` : entry;
+            return walk(`${entryPath}/`, childFolderPath);
+          }));
+      }
     };
 
     await walk(privateDir, '');
@@ -746,6 +756,7 @@ class DownloadManager {
     await walk(privateDir, '');
 
     folders.sort((a, b) => a.localeCompare(b));
+    if (IS_SHOW_MANGA_FOLDER) return folders;
     return folders.filter(f => f !== 'Manga' && !f.startsWith('Manga/'));
   }
 
