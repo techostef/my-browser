@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { withErrorBoundary } from '../components/ErrorBoundary';
 import {
-  View, Text, FlatList, Image, TouchableOpacity,
+  View, Text, FlatList, Image as RNImage, TouchableOpacity,
   Dimensions, StyleSheet, StatusBar,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,9 +27,9 @@ function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
   const [height, setHeight] = useState(SCREEN_WIDTH * 1.5);
 
   useEffect(() => {
-    Image.getSize(
+    RNImage.getSize(
       uri,
-      (w, h) => { if (w > 0) setHeight((h / w) * SCREEN_WIDTH); },
+      (w: number, h: number) => { if (w > 0) setHeight((h / w) * SCREEN_WIDTH); },
       () => { setHeight(SCREEN_WIDTH * 1.5); },
     );
   }, [uri]);
@@ -38,8 +39,7 @@ function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
       <Image
         source={{ uri }}
         style={{ width: SCREEN_WIDTH, height }}
-        resizeMode="contain"
-        resizeMethod="resize"
+        contentFit="contain"
       />
     </TouchableOpacity>
   );

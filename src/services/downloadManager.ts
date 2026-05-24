@@ -11,7 +11,7 @@ const VIDEO_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp']);
 const DURATION_CACHE_KEY = '@media_duration_cache_v1';
 let durationCache: Record<string, number> | null = null;
 let durationCacheDirty = false;
-const IS_SHOW_MANGA_FOLDER = true;
+const IS_SHOW_MANGA_FOLDER = false;
 
 
 // ---- Persistent download state -------------------------------------------

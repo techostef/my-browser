@@ -4,9 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
+  Image as RNImage,
   Modal,
 } from "react-native";
+import { Image } from "expo-image";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { Ionicons } from "@expo/vector-icons";
 import { DownloadTask } from "../types";
@@ -110,6 +111,7 @@ const DownloadItem = memo(function DownloadItem({
   );
   const [actionsVisible, setActionsVisible] = useState(false);
   const [infoVisible, setInfoVisible] = useState(false);
+  const [imgDimensions, setImgDimensions] = useState<{ width: number; height: number } | null>(null);
   const justEnteredSelectionRef = useRef(false);
   const sizeBytes =
     task.totalBytes > 0 ? task.totalBytes : task.bytesDownloaded;
@@ -152,6 +154,18 @@ const DownloadItem = memo(function DownloadItem({
       isMounted = false;
     };
   }, [mediaType, task.filePath, task.status]);
+
+  useEffect(() => {
+    if (!infoVisible || mediaType !== "image" || !task.filePath) {
+      setImgDimensions(null);
+      return;
+    }
+    RNImage.getSize(
+      task.filePath,
+      (w: number, h: number) => setImgDimensions({ width: w, height: h }),
+      () => setImgDimensions(null),
+    );
+  }, [infoVisible, mediaType, task.filePath]);
 
   return (
     <TouchableOpacity
@@ -506,6 +520,14 @@ const DownloadItem = memo(function DownloadItem({
                       : "—"}
                 </Text>
               </View>
+              {mediaType === "image" && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Dimensions</Text>
+                  <Text style={styles.infoValue}>
+                    {imgDimensions ? `${imgDimensions.width} × ${imgDimensions.height} px` : "—"}
+                  </Text>
+                </View>
+              )}
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Source</Text>
                 <Text style={styles.infoValue}>{task.source ?? "private"}</Text>
@@ -802,7 +824,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#888",
-    width: 56,
+    width: 76,
     paddingTop: 1,
   },
   infoValue: {

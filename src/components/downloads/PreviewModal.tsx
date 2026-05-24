@@ -1,18 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
   Text,
   TouchableOpacity,
   Pressable,
-  Image,
   StyleSheet,
   ActivityIndicator,
   StatusBar,
+  Dimensions,
   LayoutChangeEvent,
   GestureResponderEvent,
   BackHandler,
 } from "react-native";
+import { Image } from "expo-image";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VideoView, useVideoPlayer } from "expo-video";
@@ -36,6 +39,8 @@ type Props = {
   hasPrev?: boolean;
   hasNext?: boolean;
 };
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const SEEK_SECS = 10;
 const DOUBLE_TAP_MS = 280;
@@ -91,6 +96,95 @@ export default function PreviewModal({
   const [seekHint, setSeekHint] = useState<"left" | "right" | null>(null);
   const [landscape, setLandscape] = useState(false);
 
+  // Image zoom/pan
+  const imgScale = useSharedValue(1);
+  const imgSavedScale = useSharedValue(1);
+  const imgTransX = useSharedValue(0);
+  const imgTransY = useSharedValue(0);
+  const imgSavedTransX = useSharedValue(0);
+  const imgSavedTransY = useSharedValue(0);
+
+  const clampImg = (tx: number, ty: number, s: number) => {
+    "worklet";
+    const maxX = ((s - 1) * SCREEN_WIDTH) / 2;
+    const maxY = ((s - 1) * SCREEN_HEIGHT) / 2;
+    return { x: Math.min(maxX, Math.max(-maxX, tx)), y: Math.min(maxY, Math.max(-maxY, ty)) };
+  };
+
+  const imgPinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      imgScale.value = Math.min(4, Math.max(1, imgSavedScale.value * e.scale));
+    })
+    .onEnd(() => {
+      if (imgScale.value <= 1) {
+        imgScale.value = withTiming(1);
+        imgTransX.value = withTiming(0);
+        imgTransY.value = withTiming(0);
+        imgSavedScale.value = 1;
+        imgSavedTransX.value = 0;
+        imgSavedTransY.value = 0;
+      } else {
+        imgSavedScale.value = imgScale.value;
+        const clamped = clampImg(imgTransX.value, imgTransY.value, imgScale.value);
+        imgTransX.value = clamped.x;
+        imgTransY.value = clamped.y;
+        imgSavedTransX.value = clamped.x;
+        imgSavedTransY.value = clamped.y;
+      }
+    });
+
+  const imgPanGesture = Gesture.Pan()
+    .minPointers(1)
+    .onUpdate((e) => {
+      if (imgScale.value <= 1) return;
+      const clamped = clampImg(
+        imgSavedTransX.value + e.translationX,
+        imgSavedTransY.value + e.translationY,
+        imgScale.value,
+      );
+      imgTransX.value = clamped.x;
+      imgTransY.value = clamped.y;
+    })
+    .onEnd(() => {
+      imgSavedTransX.value = imgTransX.value;
+      imgSavedTransY.value = imgTransY.value;
+    });
+
+  const imgDoubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd((e) => {
+      if (imgScale.value > 1) {
+        imgScale.value = withTiming(1);
+        imgTransX.value = withTiming(0);
+        imgTransY.value = withTiming(0);
+        imgSavedScale.value = 1;
+        imgSavedTransX.value = 0;
+        imgSavedTransY.value = 0;
+      } else {
+        const s = 2.5;
+        const clamped = clampImg((SCREEN_WIDTH / 2 - e.x) * (s - 1), (SCREEN_HEIGHT / 2 - e.y) * (s - 1), s);
+        imgScale.value = withTiming(s);
+        imgTransX.value = withTiming(clamped.x);
+        imgTransY.value = withTiming(clamped.y);
+        imgSavedScale.value = s;
+        imgSavedTransX.value = clamped.x;
+        imgSavedTransY.value = clamped.y;
+      }
+    });
+
+  const imgGesture = useMemo(
+    () => Gesture.Simultaneous(imgPinchGesture, imgPanGesture, imgDoubleTapGesture),
+    [],
+  );
+
+  const imgAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: imgTransX.value },
+      { translateY: imgTransY.value },
+      { scale: imgScale.value },
+    ],
+  }));
+
   useEffect(() => {
     durationRef.current = duration;
   }, [duration]);
@@ -105,6 +199,12 @@ export default function PreviewModal({
     setShowControls(true);
     setLandscape(false);
     ScreenOrientation.unlockAsync();
+    imgScale.value = 1;
+    imgSavedScale.value = 1;
+    imgTransX.value = 0;
+    imgTransY.value = 0;
+    imgSavedTransX.value = 0;
+    imgSavedTransY.value = 0;
     if (task?.filePath) {
       player.replace({ uri: task.filePath });
       player.play();
@@ -350,16 +450,21 @@ export default function PreviewModal({
       statusBarTranslucent
       transparent={false}
     >
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar hidden />
       <View style={styles.root}>
         {/* ── Image preview ── */}
         {task?.filePath && mediaType === "image" && (
           <>
-            <Image
-              source={{ uri: task.filePath }}
-              style={StyleSheet.absoluteFill}
-              resizeMode="contain"
-            />
+            <GestureDetector gesture={imgGesture}>
+              <Animated.View style={[StyleSheet.absoluteFill, imgAnimStyle]}>
+                <Image
+                  source={{ uri: task.filePath }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="contain"
+                />
+              </Animated.View>
+            </GestureDetector>
             <SafeAreaView
               style={StyleSheet.absoluteFill}
               edges={["top"]}
@@ -587,6 +692,7 @@ export default function PreviewModal({
           </>
         )}
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
