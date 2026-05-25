@@ -24,7 +24,7 @@ const PIXEL_RATIO = PixelRatio.get();
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
-function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
+function MangaPage({ uri, onPress, onHeightMeasured }: { uri: string; onPress: () => void; onHeightMeasured?: (h: number) => void }) {
   const [height, setHeight] = useState(SCREEN_WIDTH * 1.5);
 
   useEffect(() => {
@@ -36,7 +36,11 @@ function MangaPage({ uri, onPress }: { uri: string; onPress: () => void }) {
   }, [uri]);
 
   return (
-    <TouchableOpacity activeOpacity={1} onPress={onPress}>
+    <TouchableOpacity
+      activeOpacity={1}
+      onPress={onPress}
+      onLayout={(e) => onHeightMeasured?.(e.nativeEvent.layout.height)}
+    >
       <Image
         source={{ uri, width: Math.round(SCREEN_WIDTH * PIXEL_RATIO), height: Math.round(height * PIXEL_RATIO) }}
         style={{ width: SCREEN_WIDTH, height }}
@@ -63,6 +67,9 @@ function MangaReaderScreen() {
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextChapterIdRef = useRef<string | null>(null);
+  const prevChapterIdRef = useRef<string | null>(null);
+  const pageHeightsRef = useRef<number[]>([]);
 
   // Zoom & pan shared values
   const scale = useSharedValue(1);
@@ -85,6 +92,11 @@ function MangaReaderScreen() {
   };
 
   const enableScroll = (enabled: boolean) => { setScrollEnabled(enabled); };
+
+  const navigateToAdjacentChapter = useCallback((direction: 'next' | 'prev') => {
+    const targetId = direction === 'next' ? nextChapterIdRef.current : prevChapterIdRef.current;
+    if (targetId) navigation.replace('MangaReader', { mangaId, chapterId: targetId });
+  }, [navigation, mangaId]);
 
   const pinchGesture = Gesture.Pinch()
     .onStart((e) => {
@@ -168,8 +180,23 @@ function MangaReaderScreen() {
       }
     });
 
+  const chapterSwipeGesture = Gesture.Pan()
+    .minPointers(1)
+    .maxPointers(1)
+    .activeOffsetX([-40, 40])
+    .failOffsetY([-20, 20])
+    .onEnd((e) => {
+      'worklet';
+      if (scale.value > 1) return;
+      if (e.translationX < -80) {
+        runOnJS(navigateToAdjacentChapter)('next');
+      } else if (e.translationX > 80) {
+        runOnJS(navigateToAdjacentChapter)('prev');
+      }
+    });
+
   const composed = useMemo(
-    () => Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture),
+    () => Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture, chapterSwipeGesture),
     [],
   );
 
@@ -201,15 +228,21 @@ function MangaReaderScreen() {
     }
   }, [pages.length]);
 
-  const handleViewableItemsChanged = useCallback(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      const idx = viewableItems[viewableItems.length - 1].index ?? 0;
-      setCurrentPage(idx);
-      // Debounce saving read progress
-      if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
-      saveProgressTimer.current = setTimeout(() => {
-        updateChapter(mangaId, chapterId, { readProgress: idx, lastReadAt: Date.now() });
-      }, 1000);
+  const handleScroll = useCallback((e: any) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    let accumulated = 0;
+    const heights = pageHeightsRef.current;
+    for (let i = 0; i < heights.length; i++) {
+      const h = heights[i] ?? SCREEN_WIDTH * 1.5;
+      if (accumulated + h > offsetY + SCREEN_HEIGHT * 0.4) {
+        setCurrentPage(i);
+        if (saveProgressTimer.current) clearTimeout(saveProgressTimer.current);
+        saveProgressTimer.current = setTimeout(() => {
+          updateChapter(mangaId, chapterId, { readProgress: i, lastReadAt: Date.now() });
+        }, 1000);
+        break;
+      }
+      accumulated += h;
     }
   }, [mangaId, chapterId, updateChapter]);
 
@@ -218,6 +251,9 @@ function MangaReaderScreen() {
   const prevChapter = chapterIndex > 0 ? manga?.chapters[chapterIndex - 1] : undefined;
   const nextChapter = manga && chapterIndex >= 0 && chapterIndex < manga.chapters.length - 1
     ? manga.chapters[chapterIndex + 1] : undefined;
+
+  nextChapterIdRef.current = nextChapter?.status === 'completed' ? nextChapter.id : null;
+  prevChapterIdRef.current = prevChapter?.status === 'completed' ? prevChapter.id : null;
 
   const goToChapter = (targetChapterId: string) => {
     navigation.replace('MangaReader', { mangaId, chapterId: targetChapterId });
@@ -242,6 +278,15 @@ function MangaReaderScreen() {
         </SafeAreaView>
       )}
 
+      {currentPage > 0 && (
+        <TouchableOpacity
+          style={styles.scrollTopBtn}
+          onPress={() => flatListRef.current?.scrollToIndex({ index: 0, animated: true })}
+        >
+          <Text style={styles.scrollTopText}>↑</Text>
+        </TouchableOpacity>
+      )}
+
       <GestureDetector gesture={composed}>
         <Animated.View style={[styles.zoomContainer, animatedStyle]}>
           <FlatList
@@ -249,11 +294,15 @@ function MangaReaderScreen() {
             data={pages}
             keyExtractor={item => item}
             scrollEnabled={scrollEnabled}
-            renderItem={({ item }) => (
-              <MangaPage uri={item} onPress={() => setHeaderVisible(v => !v)} />
+            renderItem={({ item, index }) => (
+              <MangaPage
+                uri={item}
+                onPress={() => setHeaderVisible(v => !v)}
+                onHeightMeasured={(h) => { pageHeightsRef.current[index] = h; }}
+              />
             )}
-            onViewableItemsChanged={handleViewableItemsChanged}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+            onScroll={handleScroll}
+            scrollEventThrottle={100}
             onScrollToIndexFailed={(info) => {
               setTimeout(() => {
                 flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
@@ -302,6 +351,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12, alignItems: 'center',
   },
   navBtnText: { color: '#60a5fa', fontSize: 14, fontWeight: '600' },
+  scrollTopBtn: {
+    position: 'absolute', bottom: 32, right: 16, zIndex: 20,
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: 'rgba(30,41,59,0.85)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scrollTopText: { color: '#f1f5f9', fontSize: 18, fontWeight: '700' },
 });
 
 export default withErrorBoundary(MangaReaderScreen);
