@@ -65,11 +65,13 @@ function MangaReaderScreen() {
   const [currentPage, setCurrentPage] = useState(0);
   const [headerVisible, setHeaderVisible] = useState(true);
   const [scrollEnabled, setScrollEnabled] = useState(true);
+  const [scrollDirection, setScrollDirection] = useState<'up' | 'down'>('down');
   const flatListRef = useRef<FlatList>(null);
   const saveProgressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextChapterIdRef = useRef<string | null>(null);
   const prevChapterIdRef = useRef<string | null>(null);
   const pageHeightsRef = useRef<number[]>([]);
+  const lastScrollYRef = useRef(0);
 
   // Zoom & pan shared values
   const scale = useSharedValue(1);
@@ -230,6 +232,12 @@ function MangaReaderScreen() {
 
   const handleScroll = useCallback((e: any) => {
     const offsetY = e.nativeEvent.contentOffset.y;
+
+    if (Math.abs(offsetY - lastScrollYRef.current) > 5) {
+      setScrollDirection(offsetY > lastScrollYRef.current ? 'down' : 'up');
+    }
+    lastScrollYRef.current = offsetY;
+
     let accumulated = 0;
     const heights = pageHeightsRef.current;
     for (let i = 0; i < heights.length; i++) {
@@ -278,12 +286,15 @@ function MangaReaderScreen() {
         </SafeAreaView>
       )}
 
-      {currentPage > 0 && (
+      {(scrollDirection === 'up' ? currentPage > 0 : currentPage < pages.length - 1) && (
         <TouchableOpacity
           style={styles.scrollTopBtn}
-          onPress={() => flatListRef.current?.scrollToIndex({ index: 0, animated: true })}
+          onPress={() => scrollDirection === 'up'
+            ? flatListRef.current?.scrollToIndex({ index: 0, animated: true })
+            : flatListRef.current?.scrollToEnd({ animated: true })
+          }
         >
-          <Text style={styles.scrollTopText}>↑</Text>
+          <Text style={styles.scrollTopText}>{scrollDirection === 'up' ? '↑' : '↓'}</Text>
         </TouchableOpacity>
       )}
 
