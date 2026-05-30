@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
+/** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
 import React, { useEffect, useRef } from "react";
 import {
   Modal,
@@ -194,14 +196,6 @@ export default function VideoDetectedBanner({
     onChangePosition(positions[nextIndex]);
   };
 
-  const getPositionIcon = () => {
-    switch (position) {
-      case 'top': return '⬆️';
-      case 'left': return '⬅️';
-      case 'right': return '➡️';
-    }
-  };
-
   const containerStyle = [
     styles.overlay,
     position === 'top' && { justifyContent: 'flex-start' as const },
@@ -248,7 +242,7 @@ export default function VideoDetectedBanner({
               style={[styles.actionBtn, styles.actionBtnGhost]}
             >
               <Text style={[styles.actionBtnText, styles.actionBtnTextMuted]}>
-                ☰
+                ⬇️
               </Text>
             </TouchableOpacity>
 
@@ -256,9 +250,9 @@ export default function VideoDetectedBanner({
             {onChangePosition && (
               <TouchableOpacity
                 onPress={cyclePosition}
-                style={[styles.actionBtn, styles.actionBtnGhost]}
+                style={[styles.actionBtn]}
               >
-                <Text style={styles.positionIcon}>{getPositionIcon()}</Text>
+                <Text style={styles.positionIcon}>🔁</Text>
               </TouchableOpacity>
             )}
 
