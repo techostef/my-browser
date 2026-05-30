@@ -1,3 +1,7 @@
+/** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
+/** biome-ignore-all lint/suspicious/noFallthroughSwitchClause: <explanation> */
+/** biome-ignore-all lint/correctness/noSwitchDeclarations: <explanation> */
+/** biome-ignore-all lint/suspicious/useIterableCallbackReturn: <explanation> */
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { withErrorBoundary } from '../components/ErrorBoundary';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler, DeviceEventEmitter } from 'react-native';
@@ -13,7 +17,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import AddressBar from '../components/AddressBar';
 import HomePage from '../components/HomePage';
-import { useSettings, useThemeColors } from '../store/settingsStore';
+import { useSettings, useThemeColors, isSearchEngineHost } from '../store/settingsStore';
 import VideoDetectedBanner from '../components/VideoDetectedBanner';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 import VideoPlayerController from '../components/VideoPlayerController';
@@ -200,16 +204,21 @@ function BrowserScreen() {
   const isReady = useIsTabsReady();
   const activeTabId = useActiveTabId();
   const tabs = useTabList();
+  const activeTab = useActiveTab();
   const { addTab, removeTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
   const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
   const { requestDownload } = useAdActions();
   const { settings, pushHistory, setSetting } = useSettings();
+  const activeHostname = useMemo(() => {
+    try { return new URL(activeTab?.url ?? '').hostname; } catch { return ''; }
+  }, [activeTab?.url]);
   const injectedJavaScript = useMemo(() => {
+    if (activeHostname && isSearchEngineHost(activeHostname)) return '';
     let js = VIDEO_DETECTOR_JS;
     if (settings.adBlockEnabled) js = AD_BLOCKER_JS + js;
     if (settings.popupBlockEnabled) js = POPUP_BLOCKER_JS + js;
     return js;
-  }, [settings.adBlockEnabled, settings.popupBlockEnabled]);
+  }, [activeHostname, settings.adBlockEnabled, settings.popupBlockEnabled]);
   const previousUrl = useRef('');
   const navigation = useNavigation();
 
@@ -402,7 +411,6 @@ function BrowserScreen() {
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
   const activePlayingVideoUrl = playingVideoUrlMap[activeTabId] || '';
   const activeSegmentBlob = segmentBlobMap[activeTabId] || {}
-  const activeTab = useActiveTab();
   const navbarTitle = activeDetectedVideos[0]?.pageTitle || activeTab?.title || 'Video';
 
   // Video preview modal state

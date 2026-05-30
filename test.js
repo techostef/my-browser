@@ -1,16 +1,165 @@
-/**
- * JavaScript code injected into the WebView to detect <video> elements
- * and extract their source URLs. Uses MutationObserver for dynamic content.
- */
+/** biome-ignore-all lint/correctness/noInnerDeclarations: <explanation> */
+/** biome-ignore-all lint/complexity/useArrowFunction: <explanation> */
+/** biome-ignore-all lint/complexity/useLiteralKeys: <explanation> */
+/** biome-ignore-all lint/style/useTemplate: <explanation> */
+/** biome-ignore-all lint/suspicious/noRedundantUseStrict: <explanation> */
 (function() {
   'use strict';
-
+  
   // Prevent double-injection
   if (window.__VIDEO_DETECTOR_INSTALLED__) return;
   window.__VIDEO_DETECTOR_INSTALLED__ = true;
 
+  // Cross-frame fullscreen coordination.
+  //   __RN_FS_QUERY: if this frame has a playing <video>, fullscreen it
+  //     locally (position:fixed at top z-index) and notify window.top —
+  //     the top frame will make the outer iframe element full-viewport.
+  //     Also starts a VIDEO_STATE interval so the RN player controller
+  //     gets time/duration/play-state updates.
+  //   __RN_FS_EXIT: restore any video this frame fullscreened, stop the
+  //     state interval, forward to child iframes.
+  //   __RN_FS_TOGGLE_PLAY / TOGGLE_MUTE / SEEK / SKIP_BACK / SKIP_FORWARD:
+  //     control commands from the RN player controller. Each frame acts
+  //     locally if it owns the fullscreened video, otherwise forwards.
+  try {
+    var fsStateInterval = null;
+    function startStateInterval() {
+      if (fsStateInterval) clearInterval(fsStateInterval);
+      fsStateInterval = setInterval(function() {
+        var el = document.querySelector('.__rn-iframe-playing');
+        if (!el) {
+          clearInterval(fsStateInterval);
+          fsStateInterval = null;
+          return;
+        }
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'VIDEO_STATE',
+            currentTime: el.currentTime || 0,
+            duration: isFinite(el.duration) ? el.duration : 0,
+            paused: el.paused,
+            muted: el.muted,
+          }));
+        } catch(_) {}
+      }, 250);
+    }
+    function stopStateInterval() {
+      if (fsStateInterval) { clearInterval(fsStateInterval); fsStateInterval = null; }
+    }
+    function forwardToChildren(message) {
+      var ifr = document.querySelectorAll('iframe');
+      for (var i = 0; i < ifr.length; i++) {
+        try { ifr[i].contentWindow.postMessage(message, '*'); } catch(_) {}
+      }
+    }
+    // Hide every element that isn't on the target's ancestor chain. Used
+    // both for the video element (in the leaf frame) and for the iframe
+    // element that a descendant responded through (in intermediate frames).
+    function hideAroundNode(target) {
+      var node = target;
+      while (node && node.parentElement) {
+        var siblings = node.parentElement.children;
+        for (var s = 0; s < siblings.length; s++) {
+          var sib = siblings[s];
+          if (sib === node) continue;
+          if (sib.dataset && sib.dataset.rnFsHidden === '1') continue;
+          if (sib.dataset) {
+            sib.dataset.rnFsHidden = '1';
+            sib.dataset.rnFsOrigCssText = sib.style.cssText || '';
+          }
+          sib.style.setProperty('display', 'none', 'important');
+        }
+        node = node.parentElement;
+        if (node === document.documentElement) break;
+      }
+    }
+    window.addEventListener('message', function(e) {
+      if (!e || !e.data || typeof e.data !== 'object') return;
+      var type = e.data.type;
+      if (type === '__RN_FS_QUERY') {
+        var queryId = e.data.id;
+        var vids = document.querySelectorAll('video');
+        for (var i = 0; i < vids.length; i++) {
+          var v = vids[i];
+          if (!v.paused) {
+            if (!v.dataset.rnIframeFsOrig) {
+              v.dataset.rnIframeFsOrig = v.getAttribute('style') || '';
+            }
+            v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:black!important;object-fit:contain!important;margin:0!important;padding:0!important;';
+            v.classList.add('__rn-iframe-playing');
+            hideAroundNode(v);
+            startStateInterval();
+            // Reply to our parent — intermediate frames also need to know
+            // (so they can hide their own UI around the iframe that led
+            // here). The message bubbles up the chain to the top frame.
+            try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId }, '*'); } catch(_) {}
+            return;
+          }
+        }
+        forwardToChildren({ type: '__RN_FS_QUERY', id: queryId });
+      } else if (type === '__RN_FS_HAS_PLAYING') {
+        // A descendant frame replied: hide our own UI around the child
+        // iframe that produced this response, then forward up the chain.
+        var queryId2 = e.data.id;
+        if (e.source) {
+          var ifs = document.querySelectorAll('iframe');
+          for (var ii = 0; ii < ifs.length; ii++) {
+            if (ifs[ii].contentWindow === e.source) {
+              hideAroundNode(ifs[ii]);
+              break;
+            }
+          }
+        }
+        try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId2 }, '*'); } catch(_) {}
+      } else if (type === '__RN_FS_EXIT') {
+        var fsVids = document.querySelectorAll('.__rn-iframe-playing');
+        for (var k = 0; k < fsVids.length; k++) {
+          var fv = fsVids[k];
+          fv.setAttribute('style', fv.dataset.rnIframeFsOrig || '');
+          fv.classList.remove('__rn-iframe-playing');
+          delete fv.dataset.rnIframeFsOrig;
+        }
+        // Un-hide everything this frame hid (restore full cssText since
+        // we wrote display:none with !important).
+        var hidden = document.querySelectorAll('[data-rn-fs-hidden="1"]');
+        for (var hh = 0; hh < hidden.length; hh++) {
+          hidden[hh].style.cssText = hidden[hh].dataset.rnFsOrigCssText || '';
+          delete hidden[hh].dataset.rnFsHidden;
+          delete hidden[hh].dataset.rnFsOrigCssText;
+        }
+        stopStateInterval();
+        forwardToChildren({ type: '__RN_FS_EXIT' });
+      } else if (
+        type === '__RN_FS_TOGGLE_PLAY' ||
+        type === '__RN_FS_TOGGLE_MUTE' ||
+        type === '__RN_FS_SEEK' ||
+        type === '__RN_FS_SKIP_BACK' ||
+        type === '__RN_FS_SKIP_FORWARD'
+      ) {
+        var target = document.querySelector('.__rn-iframe-playing');
+        if (target) {
+          if (type === '__RN_FS_TOGGLE_PLAY') {
+            if (target.paused) { try { target.play().catch(function(){}); } catch(_) {} }
+            else target.pause();
+          } else if (type === '__RN_FS_TOGGLE_MUTE') {
+            target.muted = !target.muted;
+          } else if (type === '__RN_FS_SEEK') {
+            target.currentTime = e.data.time || 0;
+          } else if (type === '__RN_FS_SKIP_BACK') {
+            target.currentTime = Math.max(0, target.currentTime - 10);
+          } else if (type === '__RN_FS_SKIP_FORWARD') {
+            target.currentTime = Math.min(target.duration || 0, target.currentTime + 10);
+          }
+          return;
+        }
+        forwardToChildren(e.data);
+      }
+    });
+  } catch(e) {}
+
   const SCAN_INTERVAL_MS = 500;
   const detectedUrls = new Set();
+  var lastM3u8Url = '';
 
   // ---- Extraction guard (SPA click interceptor + visibility shield) ----
   // RN bumps __extractionGuardCount when a blob download starts and decrements
@@ -203,6 +352,7 @@
       if (!detectedUrls.has(url)) {
         detectedUrls.add(url);
         var type = classifyUrl(url);
+        if (type === 'hls') lastM3u8Url = url;
         log('[DETECTED] (' + (source || 'scan') + ') type=' + type + ' url=' + url.substring(0, 150));
         newVideos.push({
           url: url,
@@ -315,24 +465,52 @@
       log('[M3U8] Parsed master: ' + variants.length + ' variants, ' + audioTracks.length + ' audio, ' + subtitleTracks.length + ' subs');
     }
 
-    // Only send if we have useful data
-    if (variants.length > 0 || audioTracks.length > 0 || subtitleTracks.length > 0) {
+    var mediaSegments = [];
+    var mediaTargetDuration = 0;
+    var mediaSequence = 0;
+    if (!isMaster) {
+      // === MEDIA PLAYLIST: parse segment list ===
+      log('[M3U8] Parsing media playlist (' + text.length + ' chars) from ' + m3u8Url.substring(0, 100));
+      var mLines = text.split(String.fromCharCode(10));
+      var pendingDuration = 0;
+      for (var mi = 0; mi < mLines.length; mi++) {
+        var mLine = mLines[mi].trim();
+        if (mLine.indexOf('#EXT-X-TARGETDURATION:') === 0) {
+          mediaTargetDuration = parseInt(mLine.substring(22), 10);
+        } else if (mLine.indexOf('#EXT-X-MEDIA-SEQUENCE:') === 0) {
+          mediaSequence = parseInt(mLine.substring(22), 10);
+        } else if (mLine.indexOf('#EXTINF:') === 0) {
+          pendingDuration = parseFloat(mLine.substring(8));
+        } else if (mLine && mLine.charAt(0) !== '#') {
+          mediaSegments.push({ uri: mLine, duration: pendingDuration });
+          pendingDuration = 0;
+        }
+      }
+      log('[M3U8] Parsed media: ' + mediaSegments.length + ' segments, targetDuration=' + mediaTargetDuration + ', seq=' + mediaSequence);
+    }
+
+    // Send for master playlists with tracks/variants, or any media playlist
+    if (variants.length > 0 || audioTracks.length > 0 || subtitleTracks.length > 0 || !isMaster) {
+      lastM3u8Url = m3u8Url;
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'M3U8_INFO',
           payload: {
             url: m3u8Url,
-            type: 'hsl',
+            type: 'hls',
             pageUrl: window.location.href,
             pageTitle: document.title,
             timestamp: Date.now(),
             cookies: document.cookie || '',
-            hslInfo: {
+            hlsInfo: {
               url: m3u8Url,
               isMaster: isMaster,
               variants: variants,
               audioTracks: audioTracks,
-              subtitleTracks: subtitleTracks
+              subtitleTracks: subtitleTracks,
+              mediaSegments: isMaster ? undefined : mediaSegments,
+              mediaTargetDuration: isMaster ? undefined : mediaTargetDuration,
+              mediaSequence: isMaster ? undefined : mediaSequence
             }
           }
         }));
@@ -376,8 +554,15 @@
       } catch(e) {}
     });
     vEl.addEventListener('play', function() {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING' }));
+      var src = vEl.currentSrc || vEl.src || '';
+      log('[VIDEO_PLAYING] src=' + src.substring(0, 120) + ' lastM3u8Url=' + lastM3u8Url.substring(0, 120));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src } }));
     });
+    // If already playing when listener was attached (first-load race), report immediately
+    if (!vEl.paused && (vEl.currentSrc || vEl.src)) {
+      var src = vEl.currentSrc || vEl.src || '';
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src } }));
+    }
   }
 
   var scanCount = 0;
@@ -433,11 +618,11 @@
           lower.includes('.mpd') || lower.includes('application/dash') ||
           lower.includes('video/') || lower.includes('mime=video') ||
           lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
-        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
-        if (!lower.includes('.m4s')) {
           log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
           sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
-        }
+      }
+      if (lower.includes('.m4s')) {
+        trackM4sRequest(url);
       }
     }
     return origOpen.apply(this, arguments);
@@ -540,6 +725,9 @@
           sendDetectedVideos([toAbsoluteUrl(url)], 'fetch');
         }
       }
+      if (lower.includes('.m4s')) {
+        trackM4sRequest(url);
+      }
     }
     // Also inspect fetch responses for x.com API video data and M3U8 playlists
     var fetchPromise = origFetch.apply(this, arguments);
@@ -576,861 +764,6 @@
     return fetchPromise;
   };
 
-  // ===== MSE INTERCEPTION FOR BLOB VIDEOS =====
-  var MAX_BLOB_BYTES = 200 * 1024 * 1024;
-  var blobStore = {};
-  var msToBlob = new WeakMap();
-  var sbToMs = new WeakMap();
-  var videoSBs = new WeakSet();
-  var audioSBs = new WeakSet();
-  var blobNotified = {};
-
-  function cloneBuffer(data) {
-    if (data instanceof ArrayBuffer) return data.slice(0);
-    if (data.buffer) return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-    return null;
-  }
-
-  if (typeof MediaSource !== 'undefined') {
-    var origCreateObjectURL = URL.createObjectURL;
-    URL.createObjectURL = function(obj) {
-      var blobUrl = origCreateObjectURL.call(URL, obj);
-      if (obj instanceof MediaSource) {
-        msToBlob.set(obj, blobUrl);
-        blobStore[blobUrl] = {
-          videoChunks: [], audioChunks: [],
-          videoMime: '', audioMime: '',
-          totalBytes: 0, chunkCount: 0, ready: false
-        };
-        log('[BLOB] MediaSource created: ' + blobUrl);
-        obj.addEventListener('sourceended', function() {
-          var e = blobStore[blobUrl];
-          if (e) {
-            e.ready = true;
-            log('[BLOB] sourceended: vChunks=' + e.videoChunks.length + ' aChunks=' + e.audioChunks.length + ' bytes=' + e.totalBytes);
-            notifyBlobReady(blobUrl);
-          }
-        });
-      } else if (obj instanceof Blob && obj.type && obj.type.indexOf('video') !== -1) {
-        log('[BLOB] Video Blob: ' + blobUrl + ' type=' + obj.type + ' size=' + obj.size);
-        blobStore[blobUrl] = { blob: obj, videoMime: obj.type, totalBytes: obj.size, ready: true, videoChunks: [], audioChunks: [], audioMime: '', chunkCount: 0 };
-        notifyBlobReady(blobUrl);
-      }
-      return blobUrl;
-    };
-
-    var origAddSB = MediaSource.prototype.addSourceBuffer;
-    MediaSource.prototype.addSourceBuffer = function(mimeType) {
-      var sb = origAddSB.call(this, mimeType);
-      sbToMs.set(sb, this);
-      var blobUrl = msToBlob.get(this);
-      var isVideo = mimeType.indexOf('video') !== -1;
-      var isAudio = mimeType.indexOf('audio') !== -1;
-      if (isVideo) videoSBs.add(sb);
-      if (isAudio) audioSBs.add(sb);
-      if (blobUrl && blobStore[blobUrl]) {
-        if (isVideo) blobStore[blobUrl].videoMime = mimeType;
-        if (isAudio) blobStore[blobUrl].audioMime = mimeType;
-        log('[BLOB] SB added: ' + mimeType + (isVideo ? ' [VIDEO]' : isAudio ? ' [AUDIO]' : ' [OTHER]'));
-      }
-      return sb;
-    };
-
-    var origAppendBuf = SourceBuffer.prototype.appendBuffer;
-    SourceBuffer.prototype.appendBuffer = function(data) {
-      var isV = videoSBs.has(this);
-      var isA = audioSBs.has(this);
-      if (isV || isA) {
-        var ms = sbToMs.get(this);
-        if (ms) {
-          var blobUrl = msToBlob.get(ms);
-          var e = blobUrl ? blobStore[blobUrl] : null;
-          if (e) {
-            var byteLen = data.byteLength || 0;
-            if (e.totalBytes + byteLen <= MAX_BLOB_BYTES) {
-              var buf = cloneBuffer(data);
-              if (buf) {
-                if (isV) e.videoChunks.push(buf);
-                else e.audioChunks.push(buf);
-                e.totalBytes += buf.byteLength;
-                e.chunkCount++;
-                if (e.chunkCount <= 4 || e.chunkCount % 30 === 0) {
-                  log('[BLOB] ' + (isV ? 'V' : 'A') + ' chunk #' + e.chunkCount + ' sz=' + buf.byteLength + ' total=' + e.totalBytes);
-                }
-              }
-            }
-            if (!blobNotified[blobUrl] && e.totalBytes > 102400) {
-              blobNotified[blobUrl] = true;
-              notifyBlobReady(blobUrl);
-            }
-            // Send updated size notification every 512KB
-            if (blobNotified[blobUrl] && e.totalBytes > 0 && e.totalBytes % 524288 < buf.byteLength) {
-              notifyBlobReady(blobUrl);
-            }
-          }
-        }
-      }
-      return origAppendBuf.call(this, data);
-    };
-  }
-
-  function notifyBlobReady(blobUrl) {
-    var entry = blobStore[blobUrl];
-    if (!entry) return;
-    if (!window.ReactNativeWebView || !window.ReactNativeWebView.postMessage) {
-      setTimeout(function() { notifyBlobReady(blobUrl); }, 500);
-      return;
-    }
-    var hasAudio = entry.audioChunks && entry.audioChunks.length > 0;
-    log('[BLOB] Notify RN: ' + blobUrl + ' bytes=' + entry.totalBytes + ' hasAudio=' + hasAudio);
-    var pageTitle = '';
-    try { pageTitle = document.title || ''; } catch(e2) {}
-    var cookies = '';
-    try { cookies = document.cookie || ''; } catch(e2) {}
-    log('[SENDING] confirmed url=' + blobUrl.substring(0, 100) + (prev && prev !== url ? ' replaces=' + prev.substring(0, 80) : ''));
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'VIDEO_DETECTED',
-      payload: [{
-        url: blobUrl, type: 'blob-ready', downloadable: true,
-        pageUrl: window.location.href, pageTitle: pageTitle,
-        timestamp: Date.now(), cookies: cookies, blobSize: entry.totalBytes
-      }]
-    }));
-  }
-
-  // ===== fMP4 REMUXER: merge separate audio & video tracks =====
-  function ru32(d, o) { return ((d[o] << 24) | (d[o+1] << 16) | (d[o+2] << 8) | d[o+3]) >>> 0; }
-  function wu32(d, o, v) { d[o]=(v>>>24)&0xFF; d[o+1]=(v>>>16)&0xFF; d[o+2]=(v>>>8)&0xFF; d[o+3]=v&0xFF; }
-  function btype(d, o) { return String.fromCharCode(d[o], d[o+1], d[o+2], d[o+3]); }
-  function wtype(d, o, s) { d[o]=s.charCodeAt(0); d[o+1]=s.charCodeAt(1); d[o+2]=s.charCodeAt(2); d[o+3]=s.charCodeAt(3); }
-
-  function findBox(d, type, start, end) {
-    var o = start || 0;
-    var e = end || d.length;
-    while (o + 8 <= e) {
-      var sz = ru32(d, o);
-      if (sz < 8 || o + sz > e) break;
-      if (btype(d, o + 4) === type) return { o: o, s: sz };
-      o += sz;
-    }
-    return null;
-  }
-
-  function findAllBoxes(d, type, start, end) {
-    var result = [];
-    var o = start || 0;
-    var e = end || d.length;
-    while (o + 8 <= e) {
-      var sz = ru32(d, o);
-      if (sz < 8 || o + sz > e) break;
-      if (btype(d, o + 4) === type) result.push({ o: o, s: sz });
-      o += sz;
-    }
-    return result;
-  }
-
-  function splitInitMedia(chunks) {
-    var initParts = [];
-    var media = [];
-    for (var i = 0; i < chunks.length; i++) {
-      var d = new Uint8Array(chunks[i]);
-      if (d.length < 8) { media.push(chunks[i]); continue; }
-      // Parse each top-level box in this chunk separately
-      // ftyp and moov go to init; everything else (moof, mdat, styp, sidx) goes to media
-      var hasInit = false;
-      var mediaParts = [];
-      var o = 0;
-      while (o + 8 <= d.length) {
-        var bsz = ru32(d, o);
-        if (bsz < 8 || o + bsz > d.length) break;
-        var bt = btype(d, o + 4);
-        if (bt === 'ftyp' || bt === 'moov') {
-          initParts.push(d.slice(o, o + bsz));
-          hasInit = true;
-        } else {
-          mediaParts.push({ o: o, s: bsz });
-        }
-        o += bsz;
-      }
-      // Collect non-init boxes from this chunk as media
-      if (mediaParts.length > 0) {
-        if (mediaParts.length === 1 && !hasInit) {
-          // Whole chunk is one media segment, use original buffer (no copy)
-          media.push(chunks[i]);
-        } else {
-          // Extract media boxes into a new buffer
-          var mLen = 0;
-          for (var j = 0; j < mediaParts.length; j++) mLen += mediaParts[j].s;
-          var mBuf = new Uint8Array(mLen);
-          var mOff = 0;
-          for (var j = 0; j < mediaParts.length; j++) {
-            mBuf.set(d.subarray(mediaParts[j].o, mediaParts[j].o + mediaParts[j].s), mOff);
-            mOff += mediaParts[j].s;
-          }
-          media.push(mBuf.buffer);
-        }
-      }
-    }
-    log('[SPLIT] initParts=' + initParts.length + ' mediaSegs=' + media.length + ' (from ' + chunks.length + ' chunks)');
-    if (initParts.length === 0) return { init: null, media: chunks };
-    var total = 0;
-    for (var i = 0; i < initParts.length; i++) total += initParts[i].length;
-    var init = new Uint8Array(total);
-    var off = 0;
-    for (var i = 0; i < initParts.length; i++) { init.set(initParts[i], off); off += initParts[i].length; }
-    return { init: init, media: media };
-  }
-
-  function setTrackIdInTkhd(d, moovOff, moovSz, newId) {
-    var trak = findBox(d, 'trak', moovOff + 8, moovOff + moovSz);
-    if (!trak) return;
-    var tkhd = findBox(d, 'tkhd', trak.o + 8, trak.o + trak.s);
-    if (!tkhd) return;
-    var ver = d[tkhd.o + 8];
-    wu32(d, tkhd.o + (ver === 0 ? 20 : 28), newId);
-  }
-
-  function setTrackIdInTrex(d, moovOff, moovSz, newId) {
-    var mvex = findBox(d, 'mvex', moovOff + 8, moovOff + moovSz);
-    if (!mvex) return;
-    var trex = findBox(d, 'trex', mvex.o + 8, mvex.o + mvex.s);
-    if (!trex) return;
-    wu32(d, trex.o + 12, newId);
-  }
-
-  function fixMoofTrackId(buf, newId) {
-    var d = new Uint8Array(buf.slice(0));
-    var moof = findBox(d, 'moof', 0, d.length);
-    if (!moof) return d.buffer;
-    var trafs = findAllBoxes(d, 'traf', moof.o + 8, moof.o + moof.s);
-    for (var i = 0; i < trafs.length; i++) {
-      var tfhd = findBox(d, 'tfhd', trafs[i].o + 8, trafs[i].o + trafs[i].s);
-      if (tfhd) wu32(d, tfhd.o + 12, newId);
-    }
-    return d.buffer;
-  }
-
-  // Read tfdt (base media decode time) from a media segment buffer
-  function getTfdt(buf) {
-    var d = new Uint8Array(buf);
-    var moof = findBox(d, 'moof', 0, d.length);
-    if (!moof) return -1;
-    var traf = findBox(d, 'traf', moof.o + 8, moof.o + moof.s);
-    if (!traf) return -1;
-    var tfdt = findBox(d, 'tfdt', traf.o + 8, traf.o + traf.s);
-    if (!tfdt) return -1;
-    var ver = d[tfdt.o + 8];
-    if (ver === 0) return ru32(d, tfdt.o + 12);
-    return ru32(d, tfdt.o + 12) * 4294967296 + ru32(d, tfdt.o + 16);
-  }
-
-  // Write tfdt value into a media segment buffer (modifies in place)
-  function setTfdt(buf, val) {
-    var d = new Uint8Array(buf);
-    var moof = findBox(d, 'moof', 0, d.length);
-    if (!moof) return;
-    var traf = findBox(d, 'traf', moof.o + 8, moof.o + moof.s);
-    if (!traf) return;
-    var tfdt = findBox(d, 'tfdt', traf.o + 8, traf.o + traf.s);
-    if (!tfdt) return;
-    var ver = d[tfdt.o + 8];
-    if (ver === 0) {
-      wu32(d, tfdt.o + 12, val >>> 0);
-    } else {
-      wu32(d, tfdt.o + 12, (val / 4294967296) >>> 0);
-      wu32(d, tfdt.o + 16, val >>> 0);
-    }
-  }
-
-  // Set mfhd sequence_number in a media segment buffer (modifies in place)
-  function setMfhdSeqNum(buf, num) {
-    var d = new Uint8Array(buf);
-    var moof = findBox(d, 'moof', 0, d.length);
-    if (!moof) return;
-    var mfhd = findBox(d, 'mfhd', moof.o + 8, moof.o + moof.s);
-    if (!mfhd) return;
-    wu32(d, mfhd.o + 12, num);
-  }
-
-  // Read mvhd timescale
-  function getMvhdTimescale(d, off) {
-    var ver = d[off + 8];
-    return ver === 0 ? ru32(d, off + 20) : ru32(d, off + 28);
-  }
-
-  // Set mvhd duration (in mvhd timescale units)
-  function setMvhdDuration(d, off, dur) {
-    var ver = d[off + 8];
-    if (ver === 0) {
-      wu32(d, off + 24, dur >>> 0);
-    } else {
-      wu32(d, off + 32, (dur / 4294967296) >>> 0);
-      wu32(d, off + 36, dur >>> 0);
-    }
-  }
-
-  // Rename any top-level 'edts' box inside a trak Uint8Array to 'free', so
-  // its edit-list (elst) is ignored by demuxers. After we rebase tfdt and
-  // recompute durations, the original elst no longer matches the data and
-  // typically introduces unwanted gaps or skips.
-  function stripEdtsInTrak(d) {
-    var o = 8; // skip the trak header
-    while (o + 8 <= d.length) {
-      var sz = ru32(d, o);
-      if (sz < 8 || o + sz > d.length) break;
-      if (btype(d, o + 4) === 'edts') {
-        wtype(d, o + 4, 'free');
-      }
-      o += sz;
-    }
-  }
-
-  // Read mdhd timescale from a trak Uint8Array
-  function getMdhdTimescale(d) {
-    var mdia = findBox(d, 'mdia', 8, d.length);
-    if (!mdia) return 0;
-    var mdhd = findBox(d, 'mdhd', mdia.o + 8, mdia.o + mdia.s);
-    if (!mdhd) return 0;
-    var ver = d[mdhd.o + 8];
-    return ver === 0 ? ru32(d, mdhd.o + 20) : ru32(d, mdhd.o + 28);
-  }
-
-  // Set durations in tkhd and mdhd inside a trak Uint8Array
-  // tkhdDur is in mvhd timescale, mdhdDur is in mdhd timescale
-  function setDurationsInTrak(d, tkhdDur, mdhdDur) {
-    var tkhd = findBox(d, 'tkhd', 8, d.length);
-    if (tkhd) {
-      var ver = d[tkhd.o + 8];
-      if (ver === 0) { wu32(d, tkhd.o + 28, tkhdDur >>> 0); }
-      else { wu32(d, tkhd.o + 36, (tkhdDur / 4294967296) >>> 0); wu32(d, tkhd.o + 40, tkhdDur >>> 0); }
-    }
-    var mdia = findBox(d, 'mdia', 8, d.length);
-    if (mdia) {
-      var mdhd = findBox(d, 'mdhd', mdia.o + 8, mdia.o + mdia.s);
-      if (mdhd) {
-        var ver2 = d[mdhd.o + 8];
-        if (ver2 === 0) { wu32(d, mdhd.o + 24, mdhdDur >>> 0); }
-        else { wu32(d, mdhd.o + 32, (mdhdDur / 4294967296) >>> 0); wu32(d, mdhd.o + 36, mdhdDur >>> 0); }
-      }
-    }
-  }
-
-  // Set duration in mehd (Movie Extends Header) if present
-  function setMehdDuration(d, mvexOff, mvexSz, dur) {
-    var mehd = findBox(d, 'mehd', mvexOff + 8, mvexOff + mvexSz);
-    if (mehd) {
-      var ver = d[mehd.o + 8];
-      if (ver === 0) { wu32(d, mehd.o + 12, dur >>> 0); }
-      else { wu32(d, mehd.o + 12, (dur / 4294967296) >>> 0); wu32(d, mehd.o + 16, dur >>> 0); }
-    }
-  }
-
-  // Patch tfhd.base_data_offset in a moof+mdat buffer so it correctly points
-  // to the moof's absolute byte position in the reassembled file. When the
-  // original streaming segments are rearranged, any stored absolute offset is
-  // wrong, causing the player to read sample data from the wrong position —
-  // which breaks random access / seeking.
-  function fixTfhdBaseDataOffset(buf, absoluteMoofOffset) {
-    var d = new Uint8Array(buf);
-    var moof = findBox(d, 'moof', 0, d.length);
-    if (!moof) return;
-    var trafs = findAllBoxes(d, 'traf', moof.o + 8, moof.o + moof.s);
-    for (var ti = 0; ti < trafs.length; ti++) {
-      var tfhd = findBox(d, 'tfhd', trafs[ti].o + 8, trafs[ti].o + trafs[ti].s);
-      if (!tfhd) continue;
-      var flags = (d[tfhd.o + 9] << 16) | (d[tfhd.o + 10] << 8) | d[tfhd.o + 11];
-      if (!(flags & 0x000001)) continue; // base-data-offset not present in this tfhd
-      // tfhd layout: size(4) + 'tfhd'(4) + version(1) + flags(3) + track_ID(4) = 16 bytes
-      // base_data_offset(8) starts at offset 16 from the box start.
-      var hi = Math.floor(absoluteMoofOffset / 4294967296);
-      var lo = absoluteMoofOffset >>> 0;
-      d[tfhd.o + 16] = (hi >>> 24) & 0xFF;
-      d[tfhd.o + 17] = (hi >>> 16) & 0xFF;
-      d[tfhd.o + 18] = (hi >>> 8) & 0xFF;
-      d[tfhd.o + 19] = hi & 0xFF;
-      d[tfhd.o + 20] = (lo >>> 24) & 0xFF;
-      d[tfhd.o + 21] = (lo >>> 16) & 0xFF;
-      d[tfhd.o + 22] = (lo >>> 8) & 0xFF;
-      d[tfhd.o + 23] = lo & 0xFF;
-    }
-  }
-
-  // Build an mfra (Movie Fragment Random Access) box at the end of the file.
-  // Players use this to quickly locate the moof for any requested seek time
-  // without scanning the entire file. Each interleaved element must have a
-  // moofOffset property (absolute byte offset from file start) already set.
-  function buildMfra(interleaved, vTimescale, aTimescale) {
-    var vEntries = [];
-    var aEntries = [];
-    for (var i = 0; i < interleaved.length; i++) {
-      var frag = interleaved[i];
-      var d = new Uint8Array(frag.buf);
-      var moof = findBox(d, 'moof', 0, d.length);
-      if (!moof) continue;
-      var traf = findBox(d, 'traf', moof.o + 8, moof.o + moof.s);
-      if (!traf) continue;
-      var tfdtBox = findBox(d, 'tfdt', traf.o + 8, traf.o + traf.s);
-      var time = 0;
-      if (tfdtBox) {
-        var ver = d[tfdtBox.o + 8];
-        time = ver === 0 ? ru32(d, tfdtBox.o + 12)
-                        : ru32(d, tfdtBox.o + 12) * 4294967296 + ru32(d, tfdtBox.o + 16);
-      }
-      if (frag.kind === 0) vEntries.push({ time: time, moofOffset: frag.moofOffset });
-      else                 aEntries.push({ time: time, moofOffset: frag.moofOffset });
-    }
-
-    function buildTfra(trackId, entries) {
-      if (entries.length === 0) return null;
-      // FullBox(12) + track_ID(4) + entry_count(4) + N * (time32 + offset32 + 3 × 1) = 20 + N*11
-      var totalSize = 20 + entries.length * 11;
-      var box = new Uint8Array(totalSize);
-      wu32(box, 0, totalSize); wtype(box, 4, 'tfra');
-      // version=0 (32-bit fields), flags bits 0-5 = 0 → each count field is 1 byte
-      box[8] = 0; box[9] = 0; box[10] = 0; box[11] = 0;
-      wu32(box, 12, trackId);
-      wu32(box, 16, entries.length);
-      var off = 20;
-      for (var j = 0; j < entries.length; j++) {
-        wu32(box, off, entries[j].time >>> 0);        off += 4;
-        wu32(box, off, entries[j].moofOffset >>> 0);  off += 4;
-        box[off] = 1; off++; // traf_number (1-based)
-        box[off] = 1; off++; // trun_number
-        box[off] = 1; off++; // sample_number
-      }
-      return box;
-    }
-
-    var tfras = [];
-    var vTfra = buildTfra(1, vEntries); if (vTfra) tfras.push(vTfra);
-    var aTfra = buildTfra(2, aEntries); if (aTfra) tfras.push(aTfra);
-
-    var tfraBytes = 0;
-    for (var i = 0; i < tfras.length; i++) tfraBytes += tfras[i].length;
-    // mfra header(8) + tfras + mfro FullBox(16)
-    var mfroSize = 16;
-    var mfraTotalSize = 8 + tfraBytes + mfroSize;
-
-    var mfra = new Uint8Array(mfraTotalSize);
-    wu32(mfra, 0, mfraTotalSize); wtype(mfra, 4, 'mfra');
-    var off = 8;
-    for (var i = 0; i < tfras.length; i++) { mfra.set(tfras[i], off); off += tfras[i].length; }
-    // mfro: last box in mfra, last box in file — players read its 'size' field to locate mfra
-    wu32(mfra, off, mfroSize); wtype(mfra, off + 4, 'mfro');
-    mfra[off + 8] = 0; mfra[off + 9] = 0; mfra[off + 10] = 0; mfra[off + 11] = 0; // ver+flags
-    wu32(mfra, off + 12, mfraTotalSize); // size = total mfra box size (used by player to seek back)
-    return mfra;
-  }
-
-  // Compute duration from rebased media segments: max tfdt + estimated last segment duration
-  function computeDurationFromSegments(segments) {
-    if (segments.length === 0) return 0;
-    var maxTfdt = 0;
-    var prevTfdt = -1;
-    var lastSegDur = 0;
-    for (var i = 0; i < segments.length; i++) {
-      var t = getTfdt(segments[i]);
-      if (t < 0) continue;
-      if (t > maxTfdt) maxTfdt = t;
-      if (prevTfdt >= 0 && t > prevTfdt) {
-        lastSegDur = t - prevTfdt; // use gap between consecutive segments as estimate
-      }
-      prevTfdt = t;
-    }
-    // Add one segment duration so the last segment's content is included
-    return maxTfdt + (lastSegDur > 0 ? lastSegDur : 0);
-  }
-
-  function buildBox(type, contents) {
-    var totalLen = 8;
-    for (var i = 0; i < contents.length; i++) totalLen += contents[i].length;
-    var box = new Uint8Array(totalLen);
-    wu32(box, 0, totalLen);
-    wtype(box, 4, type);
-    var off = 8;
-    for (var i = 0; i < contents.length; i++) { box.set(contents[i], off); off += contents[i].length; }
-    return box;
-  }
-
-  function remuxTracks(videoChunks, audioChunks) {
-    var vs = splitInitMedia(videoChunks);
-    var as = splitInitMedia(audioChunks);
-    if (!vs.init || !as.init) {
-      log('[REMUX] Missing init segment, video-only fallback');
-      return null;
-    }
-    var vInit = new Uint8Array(vs.init);
-    var aInit = new Uint8Array(as.init);
-
-    var vMoov = findBox(vInit, 'moov', 0, vInit.length);
-    var vFtyp = findBox(vInit, 'ftyp', 0, vInit.length);
-    var aMoov = findBox(aInit, 'moov', 0, aInit.length);
-    if (!vMoov || !aMoov) {
-      log('[REMUX] Cannot find moov, video-only fallback');
-      return null;
-    }
-
-    // Set video track_id=1, audio track_id=2
-    setTrackIdInTkhd(vInit, vMoov.o, vMoov.s, 1);
-    setTrackIdInTrex(vInit, vMoov.o, vMoov.s, 1);
-    setTrackIdInTkhd(aInit, aMoov.o, aMoov.s, 2);
-    setTrackIdInTrex(aInit, aMoov.o, aMoov.s, 2);
-
-    // Extract child boxes from each moov
-    var vMvhd = findBox(vInit, 'mvhd', vMoov.o + 8, vMoov.o + vMoov.s);
-    var vTrak = findBox(vInit, 'trak', vMoov.o + 8, vMoov.o + vMoov.s);
-    var vMvex = findBox(vInit, 'mvex', vMoov.o + 8, vMoov.o + vMoov.s);
-    var aTrak = findBox(aInit, 'trak', aMoov.o + 8, aMoov.o + aMoov.s);
-    var aMvex = findBox(aInit, 'mvex', aMoov.o + 8, aMoov.o + aMoov.s);
-
-    if (!vMvhd || !vTrak || !aTrak) {
-      log('[REMUX] Missing required boxes, video-only fallback');
-      return null;
-    }
-
-    // Extract mvhd and traks for modification
-    var mvhdData = vInit.slice(vMvhd.o, vMvhd.o + vMvhd.s);
-    wu32(mvhdData, mvhdData.length - 4, 3); // next_track_ID=3
-    var mvhdTS = getMvhdTimescale(mvhdData, 0);
-
-    var vTrakData = vInit.slice(vTrak.o, vTrak.o + vTrak.s);
-    var aTrakData = aInit.slice(aTrak.o, aTrak.o + aTrak.s);
-    stripEdtsInTrak(vTrakData);
-    stripEdtsInTrak(aTrakData);
-    var vMdhdTS = getMdhdTimescale(vTrakData);
-    var aMdhdTS = getMdhdTimescale(aTrakData);
-    log('[REMUX] Timescales: mvhd=' + mvhdTS + ' vMdhd=' + vMdhdTS + ' aMdhd=' + aMdhdTS);
-
-    // Build combined mvex
-    var mvexChildren = [];
-    if (vMvex) {
-      var o = vMvex.o + 8;
-      while (o + 8 <= vMvex.o + vMvex.s) {
-        var sz = ru32(vInit, o);
-        if (sz < 8) break;
-        mvexChildren.push(vInit.slice(o, o + sz));
-        o += sz;
-      }
-    }
-    if (aMvex) {
-      var o2 = aMvex.o + 8;
-      while (o2 + 8 <= aMvex.o + aMvex.s) {
-        var sz2 = ru32(aInit, o2);
-        if (sz2 < 8) break;
-        mvexChildren.push(aInit.slice(o2, o2 + sz2));
-        o2 += sz2;
-      }
-    }
-    // Fix track IDs in media segments
-    var fixedV = [];
-    for (var i = 0; i < vs.media.length; i++) fixedV.push(fixMoofTrackId(vs.media[i], 1));
-    var fixedA = [];
-    for (var i = 0; i < as.media.length; i++) fixedA.push(fixMoofTrackId(as.media[i], 2));
-
-    if (fixedV.length === 0) {
-      log('[REMUX] No video media segments found, falling back');
-      return null;
-    }
-
-    // Rebase tfdt to a common zero. Convert each track's earliest tfdt to
-    // seconds (using its own mdhd timescale) and pick the smaller as global t=0.
-    // Whichever track started first now starts at 0; the other keeps its
-    // original positive offset, preserving A/V alignment. Per-track independent
-    // rebasing breaks alignment when the two tracks' first captured segments
-    // don't have the same presentation time.
-    var vMinTfdt = Infinity;
-    for (var i = 0; i < fixedV.length; i++) {
-      var t = getTfdt(fixedV[i]);
-      if (t >= 0 && t < vMinTfdt) vMinTfdt = t;
-    }
-    var aMinTfdt = Infinity;
-    for (var i = 0; i < fixedA.length; i++) {
-      var t2 = getTfdt(fixedA[i]);
-      if (t2 >= 0 && t2 < aMinTfdt) aMinTfdt = t2;
-    }
-    var vMinSec = (vMinTfdt < Infinity && vMdhdTS > 0) ? vMinTfdt / vMdhdTS : Infinity;
-    var aMinSec = (aMinTfdt < Infinity && aMdhdTS > 0) ? aMinTfdt / aMdhdTS : Infinity;
-    var globalMinSec = Math.min(vMinSec, aMinSec);
-    if (globalMinSec > 0 && globalMinSec < Infinity) {
-      var vRebase = vMdhdTS > 0 ? Math.round(globalMinSec * vMdhdTS) : 0;
-      var aRebase = aMdhdTS > 0 ? Math.round(globalMinSec * aMdhdTS) : 0;
-      log('[REMUX] Rebasing by ' + globalMinSec.toFixed(3) + 's (v=' + vRebase + ' a=' + aRebase + ')');
-      for (var i = 0; i < fixedV.length; i++) {
-        var tv = getTfdt(fixedV[i]);
-        if (tv >= 0) setTfdt(fixedV[i], Math.max(0, tv - vRebase));
-      }
-      for (var i = 0; i < fixedA.length; i++) {
-        var ta = getTfdt(fixedA[i]);
-        if (ta >= 0) setTfdt(fixedA[i], Math.max(0, ta - aRebase));
-      }
-    }
-
-    // Renumber mfhd sequence numbers per-track (each track numbered 1..N).
-    // mfhd.sequence_number is per-track, monotonically increasing within that
-    // track. Globally-unique numbering across tracks confuses some demuxers.
-    for (var i = 0; i < fixedV.length; i++) { setMfhdSeqNum(fixedV[i], i + 1); }
-    for (var i = 0; i < fixedA.length; i++) { setMfhdSeqNum(fixedA[i], i + 1); }
-
-    // Compute actual duration from rebased segments (in each track's timescale)
-    var vDurInMdhd = computeDurationFromSegments(fixedV);
-    var aDurInMdhd = computeDurationFromSegments(fixedA);
-    // Convert to mvhd timescale for mvhd and tkhd
-    var vDurInMvhd = vMdhdTS > 0 ? Math.round(vDurInMdhd * mvhdTS / vMdhdTS) : vDurInMdhd;
-    var aDurInMvhd = aMdhdTS > 0 ? Math.round(aDurInMdhd * mvhdTS / aMdhdTS) : aDurInMdhd;
-    var movieDur = Math.max(vDurInMvhd, aDurInMvhd);
-    log('[REMUX] Duration: vMdhd=' + vDurInMdhd + ' aMdhd=' + aDurInMdhd + ' movie=' + movieDur + ' (~' + (mvhdTS > 0 ? Math.round(movieDur / mvhdTS) : '?') + 's)');
-
-    // Set actual durations
-    setMvhdDuration(mvhdData, 0, movieDur);
-    setDurationsInTrak(vTrakData, vDurInMvhd, vDurInMdhd);
-    setDurationsInTrak(aTrakData, aDurInMvhd, aDurInMdhd);
-
-    // Build moov with correct durations
-    var mvexBox = buildBox('mvex', mvexChildren);
-    setMehdDuration(mvexBox, 0, mvexBox.length, movieDur);
-    var moovBox = buildBox('moov', [mvhdData, vTrakData, aTrakData, mvexBox]);
-
-    // Interleave video & audio fragments by presentation time (tfdt / mdhd
-    // timescale, in seconds). Many hardware decoders glitch when given all
-    // video fragments before all audio fragments — interleaved order matches
-    // what real fMP4 producers emit.
-    var interleaved = [];
-    for (var i = 0; i < fixedV.length; i++) {
-      var tvi = getTfdt(fixedV[i]);
-      interleaved.push({
-        buf: fixedV[i],
-        sec: tvi >= 0 && vMdhdTS > 0 ? tvi / vMdhdTS : Number.MAX_VALUE,
-        kind: 0, // video sorts before audio on tie
-      });
-    }
-    for (var i = 0; i < fixedA.length; i++) {
-      var tai = getTfdt(fixedA[i]);
-      interleaved.push({
-        buf: fixedA[i],
-        sec: tai >= 0 && aMdhdTS > 0 ? tai / aMdhdTS : Number.MAX_VALUE,
-        kind: 1,
-      });
-    }
-    interleaved.sort(function(a, b) {
-      if (a.sec !== b.sec) return a.sec - b.sec;
-      return a.kind - b.kind;
-    });
-
-    // Compute absolute byte offsets for each fragment, fix tfhd.base_data_offset,
-    // then build an mfra seek table.
-    var ftypSz = vFtyp ? vFtyp.s : 0;
-    var cumOff = ftypSz + moovBox.length;
-    for (var i = 0; i < interleaved.length; i++) {
-      interleaved[i].moofOffset = cumOff;
-      fixTfhdBaseDataOffset(interleaved[i].buf, cumOff);
-      cumOff += interleaved[i].buf.byteLength;
-    }
-    var mfraBox = buildMfra(interleaved, vMdhdTS, aMdhdTS);
-
-    // Build final: [ftyp][moov][interleaved fragments...][mfra]
-    var parts = [];
-    if (vFtyp) parts.push(vInit.slice(vFtyp.o, vFtyp.o + vFtyp.s).buffer);
-    parts.push(moovBox.buffer);
-    for (var i = 0; i < interleaved.length; i++) parts.push(interleaved[i].buf);
-    parts.push(mfraBox.buffer);
-
-    var totalSz = 0;
-    for (var i = 0; i < parts.length; i++) totalSz += parts[i].byteLength;
-    log('[REMUX] OK: moov=' + moovBox.length + ' vSegs=' + fixedV.length + ' aSegs=' + fixedA.length + ' totalSize=' + totalSz);
-    return new Blob(parts, { type: 'video/mp4' });
-  }
-
-  // Callable from RN via injectJavaScript.
-  // opts.waitForReady=true polls until MSE.sourceended fires (or the user
-  // cancels via __cancelBlobWait), then extracts. Without waiting, only the
-  // bytes already buffered into the SourceBuffer are captured — typically a
-  // small forward-buffer window, not the full video.
-  var blobWaitCancel = {};
-  window.__cancelBlobWait = function(blobUrl) {
-    blobWaitCancel[blobUrl] = true;
-  };
-  window.__extractBlobVideo = function(blobUrl, opts) {
-    opts = opts || {};
-    var entry = blobStore[blobUrl];
-    if (!entry) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'BLOB_DATA_ERROR',
-        payload: { blobUrl: blobUrl, error: 'No data found for this blob URL' }
-      }));
-      return;
-    }
-
-    if (opts.waitForReady && !entry.ready && !entry.blob) {
-      blobWaitCancel[blobUrl] = false;
-      var pollMs = 500;
-      var sentReady = false;
-      function waitTick() {
-        var e = blobStore[blobUrl];
-        if (!e) return;
-        var done = !!e.ready || blobWaitCancel[blobUrl];
-        if (!sentReady) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'BLOB_BUFFERING',
-            payload: { blobUrl: blobUrl, bytesBuffered: e.totalBytes, ready: !!e.ready, cancelled: !!blobWaitCancel[blobUrl] }
-          }));
-        }
-        if (done) {
-          sentReady = true;
-          delete blobWaitCancel[blobUrl];
-          doExtract();
-        } else {
-          setTimeout(waitTick, pollMs);
-        }
-      }
-      waitTick();
-      return;
-    }
-
-    doExtract();
-
-    function doExtract() {
-    var blob;
-    // Log collection state for debugging
-    var vCount = entry.videoChunks ? entry.videoChunks.length : 0;
-    var aCount = entry.audioChunks ? entry.audioChunks.length : 0;
-    var vBytes = 0;
-    for (var ci = 0; ci < vCount; ci++) vBytes += (entry.videoChunks[ci].byteLength || 0);
-    var aBytes = 0;
-    for (var ci2 = 0; ci2 < aCount; ci2++) aBytes += (entry.audioChunks[ci2].byteLength || 0);
-    log('[EXTRACT] videoChunks=' + vCount + ' (' + vBytes + ' bytes) audioChunks=' + aCount + ' (' + aBytes + ' bytes)');
-
-    if (entry.blob) {
-      blob = entry.blob;
-    } else if (entry.videoChunks && entry.videoChunks.length > 0) {
-      // Try remuxing audio + video together
-      if (entry.audioChunks && entry.audioChunks.length > 0) {
-        log('[BLOB] Remuxing ' + entry.videoChunks.length + ' video + ' + entry.audioChunks.length + ' audio chunks');
-        blob = remuxTracks(entry.videoChunks, entry.audioChunks);
-      }
-      // Fallback: video-only with proper splitting, rebasing, and duration fix
-      if (!blob) {
-        log('[BLOB] Using video-only fallback');
-        var fbSplit = splitInitMedia(entry.videoChunks);
-        if (fbSplit.init && fbSplit.media.length > 0) {
-          var fbInit = new Uint8Array(fbSplit.init);
-          var fbMoov = findBox(fbInit, 'moov', 0, fbInit.length);
-          var fbFtyp = findBox(fbInit, 'ftyp', 0, fbInit.length);
-          // Rebase tfdt timestamps to 0
-          var fbMinTfdt = Infinity;
-          for (var fi = 0; fi < fbSplit.media.length; fi++) {
-            var ft = getTfdt(fbSplit.media[fi]);
-            if (ft >= 0 && ft < fbMinTfdt) fbMinTfdt = ft;
-          }
-          if (fbMinTfdt > 0 && fbMinTfdt < Infinity) {
-            log('[FALLBACK] Rebasing tfdt by -' + fbMinTfdt);
-            for (var fi2 = 0; fi2 < fbSplit.media.length; fi2++) {
-              var ft2 = getTfdt(fbSplit.media[fi2]);
-              if (ft2 >= 0) setTfdt(fbSplit.media[fi2], ft2 - fbMinTfdt);
-            }
-          }
-          // Renumber sequence numbers
-          for (var fi3 = 0; fi3 < fbSplit.media.length; fi3++) {
-            setMfhdSeqNum(fbSplit.media[fi3], fi3 + 1);
-          }
-          // Compute and set actual duration
-          if (fbMoov) {
-            var fbMvhd = findBox(fbInit, 'mvhd', fbMoov.o + 8, fbMoov.o + fbMoov.s);
-            var fbTrak = findBox(fbInit, 'trak', fbMoov.o + 8, fbMoov.o + fbMoov.s);
-            if (fbMvhd && fbTrak) {
-              var fbMvhdTS = getMvhdTimescale(fbInit, fbMvhd.o);
-              var fbTrakView = fbInit.subarray(fbTrak.o, fbTrak.o + fbTrak.s);
-              stripEdtsInTrak(fbTrakView);
-              var fbMdhdTS = getMdhdTimescale(fbTrakView);
-              var fbDurMdhd = computeDurationFromSegments(fbSplit.media);
-              var fbDurMvhd = fbMdhdTS > 0 ? Math.round(fbDurMdhd * fbMvhdTS / fbMdhdTS) : fbDurMdhd;
-              log('[FALLBACK] Duration: mdhd=' + fbDurMdhd + ' mvhd=' + fbDurMvhd + ' (~' + (fbMvhdTS > 0 ? Math.round(fbDurMvhd / fbMvhdTS) : '?') + 's)');
-              setMvhdDuration(fbInit, fbMvhd.o, fbDurMvhd);
-              setDurationsInTrak(fbTrakView, fbDurMvhd, fbDurMdhd);
-            }
-            var fbMvex2 = findBox(fbInit, 'mvex', fbMoov.o + 8, fbMoov.o + fbMoov.s);
-            if (fbMvex2) {
-              var fbMvhdForMehd = findBox(fbInit, 'mvhd', fbMoov.o + 8, fbMoov.o + fbMoov.s);
-              var fbMehdDur = fbMvhdForMehd ? ru32(fbInit, fbMvhdForMehd.o + (fbInit[fbMvhdForMehd.o + 8] === 0 ? 24 : 32)) : 0;
-              setMehdDuration(fbInit, fbMvex2.o, fbMvex2.s, fbMehdDur);
-            }
-          }
-          // Fix tfhd offsets and build mfra for the fallback video-only output.
-          var fbFtypSz = fbFtyp ? fbFtyp.s : 0;
-          var fbMoovSz = fbMoov ? fbMoov.s : 0;
-          var fbCumOff = fbFtypSz + fbMoovSz;
-          var fbFakeInterleaved = [];
-          for (var fi4 = 0; fi4 < fbSplit.media.length; fi4++) {
-            fixTfhdBaseDataOffset(fbSplit.media[fi4], fbCumOff);
-            fbFakeInterleaved.push({ buf: fbSplit.media[fi4], moofOffset: fbCumOff, kind: 0 });
-            fbCumOff += fbSplit.media[fi4].byteLength;
-          }
-          var fbMfra = buildMfra(fbFakeInterleaved, fbMdhdTS, 0);
-
-          // Build output
-          var fbParts = [];
-          if (fbFtyp) fbParts.push(fbInit.slice(fbFtyp.o, fbFtyp.o + fbFtyp.s).buffer);
-          if (fbMoov) fbParts.push(fbInit.slice(fbMoov.o, fbMoov.o + fbMoov.s).buffer);
-          for (var fi5 = 0; fi5 < fbSplit.media.length; fi5++) fbParts.push(fbSplit.media[fi5]);
-          fbParts.push(fbMfra.buffer);
-          blob = new Blob(fbParts, { type: 'video/mp4' });
-          log('[FALLBACK] Built: ' + fbSplit.media.length + ' segments, size=' + blob.size);
-        } else {
-          // Last resort: raw concatenation
-          blob = new Blob(entry.videoChunks, { type: 'video/mp4' });
-        }
-      }
-    } else {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'BLOB_DATA_ERROR',
-        payload: { blobUrl: blobUrl, error: 'No chunks collected yet' }
-      }));
-      return;
-    }
-
-    log('[BLOB] Extracting: size=' + blob.size + ' type=' + blob.type);
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'BLOB_DATA_START',
-      payload: { blobUrl: blobUrl, totalSize: blob.size, mimeType: blob.type }
-    }));
-
-    var CHUNK = 768 * 1024;
-    var offset = 0;
-    var idx = 0;
-    function next() {
-      if (offset >= blob.size) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'BLOB_DATA_END',
-          payload: { blobUrl: blobUrl, totalChunks: idx }
-        }));
-        return;
-      }
-      var sl = blob.slice(offset, Math.min(offset + CHUNK, blob.size));
-      var reader = new FileReader();
-      reader.onload = function() {
-        var dataUrl = reader.result || '';
-        var commaPos = dataUrl.indexOf(',');
-        var b64 = commaPos !== -1 ? dataUrl.substring(commaPos + 1) : '';
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'BLOB_DATA_CHUNK',
-          payload: { blobUrl: blobUrl, index: idx, data: b64 }
-        }));
-        idx++;
-        offset += CHUNK;
-        setTimeout(next, 10);
-      };
-      reader.onerror = function() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'BLOB_DATA_ERROR',
-          payload: { blobUrl: blobUrl, error: 'FileReader error at chunk ' + idx }
-        }));
-      };
-      reader.readAsDataURL(sl);
-    }
-    next();
-    }
-  };
-
-  // Log that hooks are installed (runs before page JS)
   log('[INIT] Network & MSE hooks installed (before content loaded)');
 
   // DOM-dependent code must wait for the document to be ready

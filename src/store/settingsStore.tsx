@@ -34,6 +34,26 @@ export const SEARCH_ENGINE_HOME: Record<string, string> = {
   Ecosia: "https://www.ecosia.org",
 };
 
+const STRIP_SUBDOMAIN_RE = /^(www|m|search)\./i;
+
+const normalizeHost = (host: string) => host.replace(STRIP_SUBDOMAIN_RE, '').toLowerCase();
+
+export const SEARCH_ENGINE_HOSTS: ReadonlySet<string> = new Set(
+  [...Object.values(SEARCH_ENGINES), ...Object.values(SEARCH_ENGINE_HOME)]
+    .map((url) => {
+      try { return normalizeHost(new URL(url).hostname); } catch { return ''; }
+    })
+    .filter(Boolean),
+);
+
+export const isSearchEngineHost = (host: string): boolean => {
+  const h = normalizeHost(host);
+  for (const engine of SEARCH_ENGINE_HOSTS) {
+    if (h === engine || h.endsWith(`.${engine}`)) return true;
+  }
+  return false;
+};
+
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
 
 export type ColorScheme = "light" | "dark";

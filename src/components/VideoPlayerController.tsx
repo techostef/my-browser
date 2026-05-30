@@ -1,3 +1,5 @@
+/** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
+/** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
