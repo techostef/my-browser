@@ -1,17 +1,18 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
-  Pressable,
   TouchableOpacity,
   StyleSheet,
   Animated,
   GestureResponderEvent,
+  LayoutChangeEvent,
   Modal,
   FlatList,
 } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DetectedVideo, HlsVariant } from '../types';
 import { isPlayingVideo, isPlayingVideoM4S } from './VideoDetectedBanner';
 
@@ -41,7 +42,6 @@ interface Props {
   onDownloadVariant?: (video: DetectedVideo, variant?: HlsVariant) => void;
 }
 
-const DOUBLE_TAP_MS = 300;
 const SEEK_SECS = 10;
 const SEEK_THROTTLE_MS = 300;
 
@@ -73,11 +73,12 @@ export default function VideoPlayerController({
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seekBarWidth, setSeekBarWidth] = useState(0);
 
-  const lastLeftTap  = useRef(0);
-  const lastRightTap = useRef(0);
   const lastSeekAt   = useRef(0);
   const [seekingTime, setSeekingTime] = useState<number | null>(null);
   const seekingSetAtRef = useRef(0);
+  const seekBarRef = useRef<View>(null);
+  const seekBarPageXRef = useRef(0);
+  const isDraggingSeekRef = useRef(false);
   const leftOpacity  = useRef(new Animated.Value(0)).current;
   const rightOpacity = useRef(new Animated.Value(0)).current;
   const leftScale    = useRef(new Animated.Value(0.75)).current;
@@ -159,7 +160,7 @@ export default function VideoPlayerController({
     ]).start();
   };
 
-  const handleCenterPress = () => {
+  const toggleControls = useCallback(() => {
     if (controlsVisible) {
       cancelHide();
       Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }).start(
@@ -168,33 +169,70 @@ export default function VideoPlayerController({
     } else {
       showControls();
     }
-  };
+  }, [controlsVisible, opacity, cancelHide, showControls]);
 
-  const handleLeftPress = () => {
-    const now = Date.now();
-    if (now - lastLeftTap.current < DOUBLE_TAP_MS) {
-      onSkipBack();
-      flashSeekIndicator(leftOpacity, leftScale);
-      showControls();
-      lastLeftTap.current = 0;
-    } else {
-      handleCenterPress();
-      lastLeftTap.current = now;
-    }
-  };
+  // Stable refs so the gesture recognizers (memoized once) always call the
+  // latest closures without rebuilding the gestures every render.
+  const toggleControlsRef = useRef(toggleControls);
+  toggleControlsRef.current = toggleControls;
+  const onSkipBackRef = useRef(onSkipBack);
+  onSkipBackRef.current = onSkipBack;
+  const onSkipForwardRef = useRef(onSkipForward);
+  onSkipForwardRef.current = onSkipForward;
+  const showControlsRef = useRef(showControls);
+  showControlsRef.current = showControls;
 
-  const handleRightPress = () => {
-    const now = Date.now();
-    if (now - lastRightTap.current < DOUBLE_TAP_MS) {
-      onSkipForward();
-      flashSeekIndicator(rightOpacity, rightScale);
-      showControls();
-      lastRightTap.current = 0;
-    } else {
-      handleCenterPress();
-      lastRightTap.current = now;
-    }
-  };
+  const leftTapGesture = useMemo(() => {
+    const dbl = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        onSkipBackRef.current();
+        flashSeekIndicator(leftOpacity, leftScale);
+        showControlsRef.current();
+      });
+    const single = Gesture.Tap()
+      .numberOfTaps(1)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        toggleControlsRef.current();
+      });
+    return Gesture.Exclusive(dbl, single);
+  }, [leftOpacity, leftScale]);
+
+  const rightTapGesture = useMemo(() => {
+    const dbl = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        onSkipForwardRef.current();
+        flashSeekIndicator(rightOpacity, rightScale);
+        showControlsRef.current();
+      });
+    const single = Gesture.Tap()
+      .numberOfTaps(1)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        toggleControlsRef.current();
+      });
+    return Gesture.Exclusive(dbl, single);
+  }, [rightOpacity, rightScale]);
+
+  const centerTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(1)
+        .maxDistance(50)
+        .runOnJS(true)
+        .onEnd(() => {
+          toggleControlsRef.current();
+        }),
+    [],
+  );
 
   // Clear the optimistic seek override once the polled currentTime converges.
   // Require at least 500ms after seeking before accepting convergence — this
@@ -215,16 +253,62 @@ export default function VideoPlayerController({
   // 18 px thumb — keep center on fill position
   const thumbLeft = Math.max(0, Math.min(fillWidth - 9, seekBarWidth - 18));
 
-  const handleSeekPress = (e: GestureResponderEvent) => {
+  // Touch/drag-to-seek using the responder system. The previous tap-on-press
+  // implementation reported the *release* position, so any tiny finger slide
+  // during a tap would commit to wherever the finger lifted (e.g. tap middle
+  // → slide a few pixels → release near the left edge → jump to start).
+  // This version updates seekingTime continuously so the thumb visually
+  // follows the finger, and only fires onSeek once on release with the final
+  // position the user actually sees.
+
+  const measureSeekBar = useCallback(() => {
+    seekBarRef.current?.measure((_x, _y, w, _h, pageX) => {
+      if (w > 0) setSeekBarWidth(w);
+      if (pageX != null) seekBarPageXRef.current = pageX;
+    });
+  }, []);
+
+  const onSeekBarLayout = useCallback((e: LayoutChangeEvent) => {
+    setSeekBarWidth(e.nativeEvent.layout.width);
+    measureSeekBar();
+  }, [measureSeekBar]);
+
+  const computeSeekTimeFromPageX = useCallback(
+    (pageX: number): number | null => {
+      if (seekBarWidth <= 0 || duration <= 0) return null;
+      const x = pageX - seekBarPageXRef.current;
+      const ratio = Math.max(0, Math.min(1, x / seekBarWidth));
+      return ratio * duration;
+    },
+    [seekBarWidth, duration],
+  );
+
+  const onSeekGrant = (e: GestureResponderEvent) => {
     if (seekBarWidth <= 0 || duration <= 0) return;
+    isDraggingSeekRef.current = true;
+    cancelHide();
+    measureSeekBar();
+    const t = computeSeekTimeFromPageX(e.nativeEvent.pageX);
+    if (t !== null) setSeekingTime(t);
+  };
+
+  const onSeekMove = (e: GestureResponderEvent) => {
+    if (!isDraggingSeekRef.current) return;
+    const t = computeSeekTimeFromPageX(e.nativeEvent.pageX);
+    if (t !== null) setSeekingTime(t);
+  };
+
+  const onSeekRelease = (e: GestureResponderEvent) => {
+    if (!isDraggingSeekRef.current) return;
+    isDraggingSeekRef.current = false;
+    const t = computeSeekTimeFromPageX(e.nativeEvent.pageX);
+    if (t === null) return;
     const now = Date.now();
     if (now - lastSeekAt.current < SEEK_THROTTLE_MS) return;
     lastSeekAt.current = now;
-    const ratio = e.nativeEvent.locationX / seekBarWidth;
-    const seekTime = Math.max(0, Math.min(duration, ratio * duration));
-    setSeekingTime(seekTime);
+    setSeekingTime(t);
     seekingSetAtRef.current = Date.now();
-    onSeek(seekTime);
+    onSeek(t);
     showControls();
   };
 
@@ -242,13 +326,20 @@ export default function VideoPlayerController({
   };
 
   return (
+    <GestureHandlerRootView style={StyleSheet.absoluteFill}>
     <View style={StyleSheet.absoluteFill}>
 
       {/* ── Layer 1: Tap zones ── */}
       <View style={styles.backdropRow}>
-        <Pressable style={styles.sideZone}   onPress={handleLeftPress} />
-        <Pressable style={styles.centerZone} onPress={handleCenterPress} />
-        <Pressable style={styles.sideZone}   onPress={handleRightPress} />
+        <GestureDetector gesture={leftTapGesture}>
+          <View style={styles.sideZone} />
+        </GestureDetector>
+        <GestureDetector gesture={centerTapGesture}>
+          <View style={styles.centerZone} />
+        </GestureDetector>
+        <GestureDetector gesture={rightTapGesture}>
+          <View style={styles.sideZone} />
+        </GestureDetector>
       </View>
 
       {/* ── Layer 2: Seek flash indicators ── */}
@@ -357,16 +448,23 @@ export default function VideoPlayerController({
           <View style={styles.bottomBar}>
 
             {/* Seek bar */}
-            <Pressable
+            <View
+              ref={seekBarRef}
+              collapsable={false}
               style={styles.seekArea}
-              onPress={handleSeekPress}
-              onLayout={e => setSeekBarWidth(e.nativeEvent.layout.width)}
+              onLayout={onSeekBarLayout}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={onSeekGrant}
+              onResponderMove={onSeekMove}
+              onResponderRelease={onSeekRelease}
+              onResponderTerminate={onSeekRelease}
             >
               <View style={styles.seekTrack}>
                 <View style={[styles.seekFill, { width: fillWidth }]} />
               </View>
               <View style={[styles.seekThumb, { left: thumbLeft }]} />
-            </Pressable>
+            </View>
 
             {/* Time + mute */}
             <View style={styles.timeRow}>
@@ -479,6 +577,7 @@ export default function VideoPlayerController({
         </View>
       </Modal>
     </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -486,8 +585,15 @@ const TEAL = '#4ECDC4';
 
 const styles = StyleSheet.create({
 
-  /* ── Tap zones ── */
-  backdropRow: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  /* ── Tap zones ──
+     Mirror PreviewModal: leave the top bar (60px) and bottom bar (~140px)
+     clear so a tap on the seek bar / buttons can never be captured by a side
+     tap zone and misread as a double-tap-to-skip. */
+  backdropRow: {
+    position: 'absolute',
+    top: 60, bottom: 140, left: 0, right: 0,
+    flexDirection: 'row',
+  },
   sideZone:   { flex: 3 },
   centerZone: { flex: 4 },
 
