@@ -1,10 +1,11 @@
+/** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
+/** biome-ignore-all lint/suspicious/useIterableCallbackReturn: <explanation> */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   View,
   Text,
   TouchableOpacity,
-  Pressable,
   StyleSheet,
   ActivityIndicator,
   StatusBar,
@@ -43,7 +44,6 @@ type Props = {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const SEEK_SECS = 10;
-const DOUBLE_TAP_MS = 280;
 const CONTROLS_HIDE_MS = 3000;
 const SEEK_THROTTLE_MS = 300;
 
@@ -72,8 +72,6 @@ export default function PreviewModal({
     task?.filePath ? { uri: task.filePath } : null,
   );
 
-  const lastTapRef = useRef<{ time: number; side: "left" | "right" } | null>(null);
-  const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seekHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -190,7 +188,6 @@ export default function PreviewModal({
   }, [duration]);
 
   useEffect(() => {
-    lastTapRef.current = null;
     setSeekHint(null);
     setIsPlaying(true);
     setPosition(0);
@@ -254,7 +251,6 @@ export default function PreviewModal({
 
   useEffect(() => {
     return () => {
-      if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
       if (seekHintTimer.current) clearTimeout(seekHintTimer.current);
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
       if (pendingSeekTimerRef.current) clearTimeout(pendingSeekTimerRef.current);
@@ -328,11 +324,26 @@ export default function PreviewModal({
   };
 
   const seekBy = (deltaSec: number) => {
-    const dur = player.duration;
-    const cur = player.currentTime;
-    const newPosSec = Math.max(0, Math.min(dur, cur + deltaSec));
-    player.currentTime = newPosSec;
-    setPosition(newPosSec * 1000);
+    try {
+      const curRaw = player.currentTime;
+      const curSec =
+        typeof curRaw === "number" && !Number.isNaN(curRaw)
+          ? curRaw
+          : position / 1000;
+      const durRaw = player.duration;
+      const durSec =
+        typeof durRaw === "number" && durRaw > 0
+          ? durRaw
+          : durationRef.current / 1000;
+      const newPosSec =
+        durSec > 0
+          ? Math.max(0, Math.min(durSec, curSec + deltaSec))
+          : Math.max(0, curSec + deltaSec);
+      seekTargetMsRef.current = newPosSec * 1000;
+      seekStartTimeRef.current = Date.now();
+      player.currentTime = newPosSec;
+      setPosition(newPosSec * 1000);
+    } catch {}
   };
 
   const flashHint = (side: "left" | "right") => {
@@ -341,31 +352,60 @@ export default function PreviewModal({
     seekHintTimer.current = setTimeout(() => setSeekHint(null), 500);
   };
 
-  const handleSideTap = (side: "left" | "right") => {
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last && last.side === side && now - last.time < DOUBLE_TAP_MS) {
-      if (tapTimeoutRef.current) {
-        clearTimeout(tapTimeoutRef.current);
-        tapTimeoutRef.current = null;
-      }
-      seekBy(side === "left" ? -SEEK_SECS : SEEK_SECS);
-      flashHint(side);
-      lastTapRef.current = null;
-    } else {
-      lastTapRef.current = { time: now, side };
-      if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-      tapTimeoutRef.current = setTimeout(() => {
-        setShowControls((s) => !s);
-        lastTapRef.current = null;
-        tapTimeoutRef.current = null;
-      }, DOUBLE_TAP_MS);
-    }
-  };
+  const seekByRef = useRef(seekBy);
+  seekByRef.current = seekBy;
+  const flashHintRef = useRef(flashHint);
+  flashHintRef.current = flashHint;
 
-  const handleCenterTap = () => {
-    setShowControls((s) => !s);
-  };
+  const leftTapGesture = useMemo(() => {
+    const dbl = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        seekByRef.current(-SEEK_SECS);
+        flashHintRef.current("left");
+      });
+    const single = Gesture.Tap()
+      .numberOfTaps(1)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        setShowControls((s) => !s);
+      });
+    return Gesture.Exclusive(dbl, single);
+  }, []);
+
+  const rightTapGesture = useMemo(() => {
+    const dbl = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        seekByRef.current(SEEK_SECS);
+        flashHintRef.current("right");
+      });
+    const single = Gesture.Tap()
+      .numberOfTaps(1)
+      .maxDistance(50)
+      .runOnJS(true)
+      .onEnd(() => {
+        setShowControls((s) => !s);
+      });
+    return Gesture.Exclusive(dbl, single);
+  }, []);
+
+  const centerTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(1)
+        .maxDistance(50)
+        .runOnJS(true)
+        .onEnd(() => {
+          setShowControls((s) => !s);
+        }),
+    [],
+  );
 
   const measureSeekBar = () => {
     seekBarRef.current?.measure(
@@ -517,29 +557,29 @@ export default function PreviewModal({
             {/* Tap zones (always present) */}
             <View style={StyleSheet.absoluteFill}>
               {mediaType === "video" && (
-                <Pressable
-                  style={[styles.tapZone, styles.tapZoneLeft]}
-                  onPress={() => handleSideTap("left")}
-                >
-                  {seekHint === "left" && (
-                    <View style={styles.seekHint}>
-                      <Text style={styles.seekHintText}>« {SEEK_SECS}s</Text>
-                    </View>
-                  )}
-                </Pressable>
+                <GestureDetector gesture={leftTapGesture}>
+                  <View style={[styles.tapZone, styles.tapZoneLeft]}>
+                    {seekHint === "left" && (
+                      <View style={styles.seekHint}>
+                        <Text style={styles.seekHintText}>« {SEEK_SECS}s</Text>
+                      </View>
+                    )}
+                  </View>
+                </GestureDetector>
               )}
-              <Pressable style={styles.tapZoneCenter} onPress={handleCenterTap} />
+              <GestureDetector gesture={centerTapGesture}>
+                <View style={styles.tapZoneCenter} />
+              </GestureDetector>
               {mediaType === "video" && (
-                <Pressable
-                  style={[styles.tapZone, styles.tapZoneRight]}
-                  onPress={() => handleSideTap("right")}
-                >
-                  {seekHint === "right" && (
-                    <View style={styles.seekHint}>
-                      <Text style={styles.seekHintText}>{SEEK_SECS}s »</Text>
-                    </View>
-                  )}
-                </Pressable>
+                <GestureDetector gesture={rightTapGesture}>
+                  <View style={[styles.tapZone, styles.tapZoneRight]}>
+                    {seekHint === "right" && (
+                      <View style={styles.seekHint}>
+                        <Text style={styles.seekHintText}>{SEEK_SECS}s »</Text>
+                      </View>
+                    )}
+                  </View>
+                </GestureDetector>
               )}
             </View>
 
