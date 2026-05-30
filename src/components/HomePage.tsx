@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,8 +11,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  FlatList,
 } from "react-native";
 import { useSettings, useThemeColors, Shortcut } from "../store/settingsStore";
+import { useSearchHistory } from "../hooks/useSearchHistory";
 
 const SHORTCUT_SIZE = 64;
 
@@ -35,24 +37,41 @@ interface Props {
 export default function HomePage({ onNavigate }: Props) {
   const { settings, history, searchUrl, addShortcut, removeShortcut } = useSettings();
   const c = useThemeColors();
+  const { history: searchHistory, saveEntry, deleteEntry } = useSearchHistory();
   const [query, setQuery] = useState("");
+  const [focused, setFocused] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [addUrl, setAddUrl] = useState("");
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resolveUrl = (input: string): string => {
+    if (/^https?:\/\//i.test(input)) return input;
+    if (/^[\w-]+(\.[\w-]+)+/.test(input)) return `https://${input}`;
+    return searchUrl(input);
+  };
 
   const handleSearch = () => {
     const q = query.trim();
     if (!q) return;
-    let url: string;
-    if (/^https?:\/\//i.test(q)) {
-      url = q;
-    } else if (/^[\w-]+(\.[\w-]+)+/.test(q)) {
-      url = "https://" + q;
-    } else {
-      url = searchUrl(q);
-    }
+    saveEntry(q);
+    const url = resolveUrl(q);
     setQuery("");
+    setFocused(false);
     onNavigate(url);
   };
+
+  const handlePickHistory = (item: string) => {
+    setQuery("");
+    setFocused(false);
+    onNavigate(resolveUrl(item.trim()));
+  };
+
+  const filteredHistory = focused
+    ? (query.trim()
+        ? searchHistory.filter((h) => h.toLowerCase().includes(query.toLowerCase()))
+        : searchHistory
+      ).slice(0, 10)
+    : [];
 
   const handleAddShortcut = () => {
     setAddUrl("");
@@ -95,23 +114,57 @@ export default function HomePage({ onNavigate }: Props) {
       </View>
 
       {/* Search bar */}
-      <View style={[styles.searchBar, { backgroundColor: c.inputBackground, borderColor: c.inputBorder }]}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={[styles.searchInput, { color: c.text }]}
-          placeholder={`Search ${engineName} or type a URL`}
-          placeholderTextColor={c.textSecondary}
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {query.length > 0 && (
-          <TouchableOpacity onPress={() => setQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={[styles.clearBtn, { color: c.textSecondary }]}>✕</Text>
-          </TouchableOpacity>
+      <View style={styles.searchWrap}>
+        <View style={[styles.searchBar, { backgroundColor: c.inputBackground, borderColor: c.inputBorder }]}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={[styles.searchInput, { color: c.text }]}
+            placeholder={`Search ${engineName} or type a URL`}
+            placeholderTextColor={c.textSecondary}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            onFocus={() => {
+              if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+              setFocused(true);
+            }}
+            onBlur={() => {
+              blurTimeoutRef.current = setTimeout(() => setFocused(false), 200);
+            }}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.clearBtn, { color: c.textSecondary }]}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {filteredHistory.length > 0 && (
+          <View style={[styles.dropdown, { backgroundColor: c.inputBackground, borderColor: c.inputBorder }]}>
+            <FlatList
+              data={filteredHistory}
+              keyExtractor={(item, idx) => `${item}_${idx}`}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <View style={styles.historyDropdownRow}>
+                  <TouchableOpacity
+                    style={styles.historyDropdownItem}
+                    onPress={() => handlePickHistory(item)}
+                  >
+                    <Text style={[styles.historyDropdownText, { color: c.text }]} numberOfLines={1}>{item}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.historyDropdownDelete}
+                    onPress={() => deleteEntry(item)}
+                  >
+                    <Text style={[styles.historyDropdownDeleteText, { color: c.textSecondary }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          </View>
         )}
       </View>
 
@@ -228,6 +281,12 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     letterSpacing: -1,
   },
+  searchWrap: {
+    width: "100%",
+    position: "relative",
+    marginBottom: 32,
+    zIndex: 10,
+  },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -243,7 +302,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
-    marginBottom: 32,
+  },
+  dropdown: {
+    position: "absolute",
+    top: 52,
+    left: 0,
+    right: 0,
+    maxHeight: 280,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    zIndex: 999,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+  },
+  historyDropdownRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  historyDropdownItem: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  historyDropdownText: {
+    fontSize: 14,
+  },
+  historyDropdownDelete: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  historyDropdownDeleteText: {
+    fontSize: 13,
   },
   searchIcon: {
     fontSize: 16,

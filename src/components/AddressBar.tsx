@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   TextInput,
@@ -8,11 +8,8 @@ import {
   ActivityIndicator,
   FlatList,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSettings } from '../store/settingsStore';
-
-const HISTORY_KEY = '@search_history_v1';
-const MAX_HISTORY = 50;
+import { useSearchHistory } from '../hooks/useSearchHistory';
 
 interface Props {
   initialUrl: string;
@@ -42,9 +39,9 @@ export default function AddressBar({
   onMenuAction,
 }: Props) {
   const { searchUrl, themeColors: c } = useSettings();
+  const { history, saveEntry, deleteEntry } = useSearchHistory();
   const displayUrl = initialUrl === 'about:home' ? '' : initialUrl;
   const [text, setText] = useState(displayUrl);
-  const [history, setHistory] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,22 +49,6 @@ export default function AddressBar({
   useEffect(() => {
     setText(initialUrl === 'about:home' ? '' : initialUrl);
   }, [initialUrl]);
-
-  // Load history on mount
-  useEffect(() => {
-    AsyncStorage.getItem(HISTORY_KEY).then((raw) => {
-      if (raw) setHistory(JSON.parse(raw));
-    });
-  }, []);
-
-  const saveToHistory = useCallback((entry: string) => {
-    setHistory((prev) => {
-      const filtered = prev.filter((h) => h !== entry);
-      const next = [entry, ...filtered].slice(0, MAX_HISTORY);
-      AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
 
   const filteredHistory = focused
     ? (text.trim()
@@ -80,7 +61,7 @@ export default function AddressBar({
     let url = text.trim();
     if (!url) return;
 
-    saveToHistory(url);
+    saveEntry(url);
 
     if (!/^https?:\/\//i.test(url)) {
       if (/^[\w-]+(\.[\w-]+)+/.test(url)) {
@@ -109,13 +90,9 @@ export default function AddressBar({
     onNavigate(url);
   };
 
-  const handleDeleteHistory = useCallback((item: string) => {
-    setHistory((prev) => {
-      const next = prev.filter((h) => h !== item);
-      AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
+  const handleDeleteHistory = (item: string) => {
+    deleteEntry(item);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: c.addressBar, borderBottomColor: c.border }]}>
