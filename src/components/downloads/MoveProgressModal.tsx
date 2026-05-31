@@ -6,12 +6,14 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   progress: { total: number; label: string } | null;
 };
 
 export default function MoveProgressModal({ progress }: Props) {
+  const { t } = useTranslation();
   return (
     <Modal
       visible={progress !== null}
@@ -22,10 +24,9 @@ export default function MoveProgressModal({ progress }: Props) {
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <ActivityIndicator size="large" color="#1A73E8" />
-          <Text style={styles.label}>{progress?.label ?? "Working..."}</Text>
+          <Text style={styles.label}>{progress?.label ?? t('working')}</Text>
           <Text style={styles.sub}>
-            {progress?.total ?? 0} item
-            {(progress?.total ?? 0) !== 1 ? "s" : ""} · please wait
+            {progress?.total ?? 0} {t('items')} · {t('pleaseWait')}
           </Text>
         </View>
       </View>

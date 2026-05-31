@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 
 import { useThemeColors } from '../store/settingsStore';
+import { useTranslation } from '../i18n';
 
 export interface PageError {
   url: string;
@@ -25,36 +26,38 @@ interface ErrorMeta {
   tint: string;
 }
 
-function resolveErrorMeta(error: PageError, accent: string): ErrorMeta {
+type TFn = ReturnType<typeof useTranslation>['t'];
+
+function resolveErrorMeta(error: PageError, accent: string, t: TFn): ErrorMeta {
   if (error.kind === 'http') {
     const code = error.code ?? 0;
     if (code === 404) {
       return {
-        title: 'Page not found',
-        hint: 'The page you were looking for doesn’t exist on this server.',
+        title: t('errorPageNotFound'),
+        hint: t('errorPageNotFoundHint'),
         icon: 'document-text-outline',
         tint: '#FF9500',
       };
     }
     if (code === 403) {
       return {
-        title: 'Access denied',
-        hint: 'You don’t have permission to view this page.',
+        title: t('errorAccessDenied'),
+        hint: t('errorAccessDeniedHint'),
         icon: 'lock-closed-outline',
         tint: '#FF3B30',
       };
     }
     if (code >= 500) {
       return {
-        title: 'Server error',
-        hint: 'The website is having problems right now. Try again in a moment.',
+        title: t('errorServerError'),
+        hint: t('errorServerErrorHint'),
         icon: 'server-outline',
         tint: '#FF3B30',
       };
     }
     return {
-      title: `Couldn’t load page (${code || 'HTTP error'})`,
-      hint: 'The server returned an unexpected response.',
+      title: t('errorCouldntLoad', { code: String(code || 'HTTP error') }),
+      hint: t('errorUnexpectedResponse'),
       icon: 'alert-circle-outline',
       tint: '#FF9500',
     };
@@ -63,47 +66,47 @@ function resolveErrorMeta(error: PageError, accent: string): ErrorMeta {
   const desc = (error.description || '').toLowerCase();
   if (desc.includes('not connected to the internet') || desc.includes('internet_disconnected')) {
     return {
-      title: 'You’re offline',
-      hint: 'Check your Wi-Fi or mobile data and try again.',
+      title: t('errorOffline'),
+      hint: t('errorOfflineHint'),
       icon: 'cloud-offline-outline',
       tint: accent,
     };
   }
   if (desc.includes('name_not_resolved') || desc.includes('hostname could not be found') || desc.includes('cannot find host')) {
     return {
-      title: 'This site can’t be reached',
-      hint: 'The address may be misspelled, or the server may not exist.',
+      title: t('errorCantReach'),
+      hint: t('errorCantReachHint'),
       icon: 'help-circle-outline',
       tint: '#FF9500',
     };
   }
   if (desc.includes('timed out') || desc.includes('timeout')) {
     return {
-      title: 'Connection timed out',
-      hint: 'The site took too long to respond. Your connection may be slow.',
+      title: t('errorTimeout'),
+      hint: t('errorTimeoutHint'),
       icon: 'time-outline',
       tint: '#FF9500',
     };
   }
   if (desc.includes('connection_refused') || desc.includes('could not connect')) {
     return {
-      title: 'Connection refused',
-      hint: 'The server isn’t accepting connections right now.',
+      title: t('errorConnectionRefused'),
+      hint: t('errorConnectionRefusedHint'),
       icon: 'close-circle-outline',
       tint: '#FF3B30',
     };
   }
   if (desc.includes('ssl') || desc.includes('certificate') || desc.includes('cert_')) {
     return {
-      title: 'Connection isn’t private',
-      hint: 'There’s a problem with this site’s security certificate.',
+      title: t('errorNotPrivate'),
+      hint: t('errorNotPrivateHint'),
       icon: 'shield-outline',
       tint: '#FF3B30',
     };
   }
   return {
-    title: 'This page didn’t load',
-    hint: error.description || 'Something went wrong while opening this page.',
+    title: t('errorPageDidntLoad'),
+    hint: error.description || t('errorDefaultHint'),
     icon: 'warning-outline',
     tint: '#FF9500',
   };
@@ -119,7 +122,8 @@ function getDomain(url: string): string {
 
 export default function PageErrorView({ error, onRetry, onGoBack, canGoBack }: Props) {
   const c = useThemeColors();
-  const meta = useMemo(() => resolveErrorMeta(error, '#4ECDC4'), [error]);
+  const { t } = useTranslation();
+  const meta = useMemo(() => resolveErrorMeta(error, '#4ECDC4', t), [error, t]);
   const domain = getDomain(error.url);
 
   if (error?.description) {
@@ -144,13 +148,13 @@ export default function PageErrorView({ error, onRetry, onGoBack, canGoBack }: P
           <View style={[styles.detailsCard, { backgroundColor: c.surfaceSecondary, borderColor: c.border }]}>
             {error.code !== undefined && (
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Status</Text>
+                <Text style={[styles.detailLabel, { color: c.textSecondary }]}>{t('statusLabel')}</Text>
                 <Text style={[styles.detailValue, { color: c.text }]}>{error.code}</Text>
               </View>
             )}
             {error.description ? (
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: c.textSecondary }]}>Details</Text>
+                <Text style={[styles.detailLabel, { color: c.textSecondary }]}>{t('detailsLabel')}</Text>
                 <Text style={[styles.detailValue, { color: c.text }]} numberOfLines={3}>
                   {error.description}
                 </Text>
@@ -165,7 +169,7 @@ export default function PageErrorView({ error, onRetry, onGoBack, canGoBack }: P
             onPress={onRetry}
             activeOpacity={0.85}>
             <Ionicons name="refresh" size={18} color="#FFFFFF" />
-            <Text style={styles.primaryBtnText}>Try again</Text>
+            <Text style={styles.primaryBtnText}>{t('tryAgain')}</Text>
           </TouchableOpacity>
 
           {canGoBack && onGoBack && (
@@ -174,7 +178,7 @@ export default function PageErrorView({ error, onRetry, onGoBack, canGoBack }: P
               onPress={onGoBack}
               activeOpacity={0.85}>
               <Ionicons name="arrow-back" size={18} color={c.text} />
-              <Text style={[styles.secondaryBtnText, { color: c.text }]}>Go back</Text>
+              <Text style={[styles.secondaryBtnText, { color: c.text }]}>{t('goBack')}</Text>
             </TouchableOpacity>
           )}
         </View>

@@ -14,6 +14,7 @@ import {
   FlatList,
 } from "react-native";
 import { useSettings, useThemeColors, Shortcut } from "../store/settingsStore";
+import { useTranslation } from "../i18n";
 import { useSearchHistory } from "../hooks/useSearchHistory";
 
 const SHORTCUT_SIZE = 64;
@@ -37,6 +38,7 @@ interface Props {
 export default function HomePage({ onNavigate }: Props) {
   const { settings, history, searchUrl, addShortcut, removeShortcut } = useSettings();
   const c = useThemeColors();
+  const { t } = useTranslation();
   const { history: searchHistory, saveEntry, deleteEntry } = useSearchHistory();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
@@ -91,9 +93,9 @@ export default function HomePage({ onNavigate }: Props) {
 
   const handleLongPressShortcut = (shortcut: Shortcut) => {
     Alert.alert(shortcut.title, shortcut.url, [
-      { text: "Open", onPress: () => onNavigate(shortcut.url) },
-      { text: "Remove", style: "destructive", onPress: () => removeShortcut(shortcut.id) },
-      { text: "Cancel", style: "cancel" },
+      { text: t('open'), onPress: () => onNavigate(shortcut.url) },
+      { text: t('remove'), style: "destructive", onPress: () => removeShortcut(shortcut.id) },
+      { text: t('cancel'), style: "cancel" },
     ]);
   };
 
@@ -119,7 +121,7 @@ export default function HomePage({ onNavigate }: Props) {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={[styles.searchInput, { color: c.text }]}
-            placeholder={`Search ${engineName} or type a URL`}
+            placeholder={t('searchOrType', { engine: engineName })}
             placeholderTextColor={c.textSecondary}
             value={query}
             onChangeText={setQuery}
@@ -189,14 +191,14 @@ export default function HomePage({ onNavigate }: Props) {
           <View style={[styles.shortcutIcon, styles.shortcutAddIcon, { backgroundColor: c.surfaceSecondary, borderColor: c.border }]}>
             <Text style={[styles.shortcutAddText, { color: c.textSecondary }]}>+</Text>
           </View>
-          <Text style={[styles.shortcutLabel, { color: c.textSecondary }]}>Add shortcut</Text>
+          <Text style={[styles.shortcutLabel, { color: c.textSecondary }]}>{t('addShortcut')}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Recent history */}
       {recentHistory.length > 0 && (
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>Recent</Text>
+          <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>{t('recent')}</Text>
           {recentHistory.map((entry) => (
             <TouchableOpacity
               key={entry.id}
@@ -231,7 +233,7 @@ export default function HomePage({ onNavigate }: Props) {
       >
         <Pressable style={styles.modalBackdrop} onPress={() => setAddModalVisible(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Add Shortcut</Text>
+            <Text style={styles.modalTitle}>{t('addShortcut')}</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="https://example.com"
@@ -247,10 +249,10 @@ export default function HomePage({ onNavigate }: Props) {
             />
             <View style={styles.modalBtnRow}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setAddModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalAddBtn} onPress={handleConfirmShortcut}>
-                <Text style={styles.modalAddText}>Add</Text>
+                <Text style={styles.modalAddText}>{t('add')}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

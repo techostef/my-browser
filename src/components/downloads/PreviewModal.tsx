@@ -29,6 +29,7 @@ import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../../config/admob";
 import { Ionicons } from "@expo/vector-icons";
 import { DownloadTask } from "../../types";
 import { DownloadMediaType } from "../DownloadItem";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   task: DownloadTask | null;
@@ -68,6 +69,7 @@ export default function PreviewModal({
   hasPrev,
   hasNext,
 }: Props) {
+  const { t } = useTranslation();
   const player = useVideoPlayer(
     task?.filePath ? { uri: task.filePath } : null,
   );
@@ -512,7 +514,7 @@ export default function PreviewModal({
             >
               <View style={styles.topBar} pointerEvents="box-none">
                 <Text style={styles.titleText} numberOfLines={1}>
-                  {task?.fileName || "Preview"}
+                  {task?.fileName || t('preview')}
                 </Text>
                 <TouchableOpacity
                   style={[styles.iconBtn, styles.modeBtn]}
@@ -520,7 +522,7 @@ export default function PreviewModal({
                   hitSlop={8}
                 >
                   <Text style={styles.modeBtnText}>
-                    {landscape ? "▯ Portrait" : "▭ Landscape"}
+                    {landscape ? `▯ ${t('portrait')}` : `▭ ${t('landscapeMode')}`}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -602,14 +604,14 @@ export default function PreviewModal({
                 {/* Top bar — title + edit + rotate + close */}
                 <View style={styles.topBar} pointerEvents="box-none">
                   <Text style={styles.titleText} numberOfLines={1}>
-                    {task?.fileName || "Preview"}
+                    {task?.fileName || t('preview')}
                   </Text>
                   {mediaType === "video" && onEditVideo && (
                     <TouchableOpacity
                       style={[styles.iconBtn, styles.editBtn]}
                       onPress={handleEditPress}
                     >
-                      <Text style={styles.editBtnText}>✂️ Edit</Text>
+                      <Text style={styles.editBtnText}>✂️ {t('edit')}</Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
@@ -703,7 +705,7 @@ export default function PreviewModal({
                             !hasPrev && styles.navBtnTextDisabled,
                           ]}
                         >
-                          ⏮  Previous
+                          ⏮  {t('previous')}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -723,7 +725,7 @@ export default function PreviewModal({
                             !hasNext && styles.navBtnTextDisabled,
                           ]}
                         >
-                          Next  ⏭
+                          {t('next')}  ⏭
                         </Text>
                       </TouchableOpacity>
                     )}

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MangaChapterInfo } from '../../types/manga';
 import { useSettings } from '../../store/settingsStore';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   visible: boolean;
@@ -54,6 +55,7 @@ export default function MangaDownloadModal({
   onConfirm, onCancel, onRetry,
 }: Props) {
   const { themeColors: c } = useSettings();
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editedTitle, setEditedTitle] = useState(mangaTitle);
   const [rangeText, setRangeText] = useState('');
@@ -125,9 +127,9 @@ export default function MangaDownloadModal({
       <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: c.border }]}>
-          <Text style={[styles.headerTitle, { color: c.text }]}>Download Manga</Text>
+          <Text style={[styles.headerTitle, { color: c.text }]}>{t('downloadManga')}</Text>
           <TouchableOpacity onPress={onCancel}>
-            <Text style={[styles.cancelText, { color: c.textSecondary }]}>Cancel</Text>
+            <Text style={[styles.cancelText, { color: c.textSecondary }]}>{t('cancel')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -135,7 +137,7 @@ export default function MangaDownloadModal({
           style={[styles.mangaTitle, { color: c.text, borderColor: c.border }]}
           value={editedTitle}
           onChangeText={setEditedTitle}
-          placeholder="Manga title"
+          placeholder={t('mangaTitlePlaceholder')}
           placeholderTextColor={c.textSecondary}
         />
 
@@ -143,7 +145,7 @@ export default function MangaDownloadModal({
         {loading && (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#3b82f6" />
-            <Text style={[styles.loadingText, { color: c.textSecondary }]}>Finding chapters…</Text>
+            <Text style={[styles.loadingText, { color: c.textSecondary }]}>{t('findingChapters')}</Text>
           </View>
         )}
 
@@ -152,7 +154,7 @@ export default function MangaDownloadModal({
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryBtn} onPress={onRetry}>
-              <Text style={styles.retryText}>Retry</Text>
+              <Text style={styles.retryText}>{t('retry')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -173,7 +175,7 @@ export default function MangaDownloadModal({
                 onSubmitEditing={applyRange}
               />
               <TouchableOpacity style={styles.applyBtn} onPress={applyRange}>
-                <Text style={styles.applyBtnText}>Apply</Text>
+                <Text style={styles.applyBtnText}>{t('apply')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -181,12 +183,12 @@ export default function MangaDownloadModal({
             <View style={[styles.selectBar, { borderBottomColor: c.border }]}>
               <View style={styles.selectBarLeft}>
                 <Text style={[styles.countText, { color: c.text }]}>
-                  {selectedChapters.length} / {chapters.length} chapters
+                  {t('chaptersSelected', { selected: String(selectedChapters.length), total: String(chapters.length) })}
                 </Text>
               </View>
               <TouchableOpacity onPress={selected.size === chapters.length ? deselectAll : selectAll}>
                 <Text style={styles.selectAllText}>
-                  {selected.size === chapters.length ? 'Deselect All' : 'Select All'}
+                  {selected.size === chapters.length ? t('deselectAll') : t('selectAll')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -211,7 +213,7 @@ export default function MangaDownloadModal({
                 disabled={selectedChapters.length === 0}
               >
                 <Text style={styles.downloadBtnText}>
-                  Download {selectedChapters.length} Chapter{selectedChapters.length !== 1 ? 's' : ''}
+                  {t('downloadChapters', { count: String(selectedChapters.length), s: selectedChapters.length !== 1 ? 's' : '' })}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -220,7 +222,7 @@ export default function MangaDownloadModal({
 
         {!loading && !error && chapters.length === 0 && (
           <View style={styles.center}>
-            <Text style={[styles.emptyText, { color: c.textSecondary }]}>No chapters found on this page.</Text>
+            <Text style={[styles.emptyText, { color: c.textSecondary }]}>{t('noChaptersFound')}</Text>
           </View>
         )}
       </SafeAreaView>

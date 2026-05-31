@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { DownloadTask } from "../../types";
 import { DuplicateMode } from "./DuplicateModePicker";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   visible: boolean;
@@ -174,6 +175,7 @@ export default function DuplicatesModal({
   onClose,
   onDelete,
 }: Props) {
+  const { t } = useTranslation();
   const groups = useMemo(() => computeGroups(downloads, mode), [downloads, mode]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -217,12 +219,12 @@ export default function DuplicatesModal({
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     Alert.alert(
-      `Move ${ids.length} file${ids.length !== 1 ? "s" : ""} to Trash`,
-      "These videos will be moved to the Trash folder.",
+      t('moveToTrashTitle', { count: ids.length, s: ids.length !== 1 ? 's' : '' }),
+      t('moveToTrashDesc'),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t('cancel'), style: "cancel" },
         {
-          text: "Move to Trash",
+          text: t('delete'),
           style: "destructive",
           onPress: () => {
             onDelete(ids);
@@ -245,11 +247,11 @@ export default function DuplicatesModal({
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
           <View style={styles.titleWrap}>
-            <Text style={styles.title}>Duplicates</Text>
+            <Text style={styles.title}>{t('duplicates')}</Text>
             <Text style={styles.subtitle}>
               {groups.length === 0
-                ? "No groups"
-                : `${groups.length} group${groups.length !== 1 ? "s" : ""} · ${totalFiles} files`}
+                ? t('noGroups')
+                : `${groups.length} ${t('group')}${groups.length !== 1 ? "s" : ""} · ${totalFiles} ${t('items')}`}
             </Text>
           </View>
           <TouchableOpacity
@@ -266,7 +268,7 @@ export default function DuplicatesModal({
                 selectedCount === 0 && styles.deleteBtnTextDisabled,
               ]}
             >
-              Delete ({selectedCount})
+              {t('delete')} ({selectedCount})
             </Text>
           </TouchableOpacity>
         </View>
@@ -274,13 +276,13 @@ export default function DuplicatesModal({
         {groups.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🎉</Text>
-            <Text style={styles.emptyText}>No duplicate videos found</Text>
+            <Text style={styles.emptyText}>{t('noDuplicatesFound')}</Text>
           </View>
         ) : (
           <>
             <View style={styles.toolbar}>
               <Text style={styles.toolbarHint}>
-                {selectedCount} selected
+                {selectedCount} {t('selected')}
               </Text>
               <TouchableOpacity
                 style={[styles.toolbarBtn, selectedCount === 0 && styles.toolbarBtnDisabled]}
@@ -293,7 +295,7 @@ export default function DuplicatesModal({
                     selectedCount === 0 && styles.toolbarBtnTextDisabled,
                   ]}
                 >
-                  Clear all
+                  {t('clearAll')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -308,6 +310,7 @@ export default function DuplicatesModal({
                   selectedIds={selectedIds}
                   onToggle={toggle}
                   onSelectAllButFirst={() => selectAllButFirst(item)}
+                  t={t}
                 />
               )}
             />
@@ -324,6 +327,7 @@ type GroupCardProps = {
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   onSelectAllButFirst: () => void;
+  t: (key: any, params?: Record<string, string | number>) => string;
 };
 
 function GroupCard({
@@ -332,6 +336,7 @@ function GroupCard({
   selectedIds,
   onToggle,
   onSelectAllButFirst,
+  t,
 }: GroupCardProps) {
   const sizeLabel =
     group.sizeMin === group.sizeMax
@@ -345,12 +350,12 @@ function GroupCard({
       <View style={styles.groupHeader}>
         <View style={{ flex: 1 }}>
           <Text style={styles.groupTitle}>
-            Group {index + 1} · {group.files.length} files
+            {t('group')} {index + 1} · {group.files.length} {t('items')}
           </Text>
           {!!meta && <Text style={styles.groupMeta}>{meta}</Text>}
         </View>
         <TouchableOpacity onPress={onSelectAllButFirst} style={styles.helperBtn}>
-          <Text style={styles.helperBtnText}>All but 1st</Text>
+          <Text style={styles.helperBtnText}>{t('allButFirst')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -396,7 +401,7 @@ function FileRow({ file, selected, onToggle }: FileRowProps) {
     };
   }, [file.filePath]);
 
-  const folderLabel = file.folderPath ? file.folderPath : "Root";
+  const folderLabel = file.folderPath ? file.folderPath : "Root";  // Root here is a folder name fallback, not UI text
   const fileSize = formatBytes(file.totalBytes);
 
   return (

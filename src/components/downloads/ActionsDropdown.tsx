@@ -7,17 +7,19 @@ import {
   StyleSheet,
 } from "react-native";
 import { SortKey } from "./types";
+import { useTranslation } from "../../i18n";
+import { TranslationKey } from "../../i18n/translations";
 
-const SORT_OPTIONS: [SortKey, string][] = [
-  ["name_asc", "Name A → Z"],
-  ["name_desc", "Name Z → A"],
-  ["date_newest", "Date (newest first)"],
-  ["date_oldest", "Date (oldest first)"],
-  ["size_largest", "Size (largest first)"],
-  ["size_smallest", "Size (smallest first)"],
-  ["duration_longest", "Duration (longest first)"],
-  ["duration_shortest", "Duration (shortest first)"],
-  ["type", "File type"],
+const SORT_OPTIONS: [SortKey, TranslationKey][] = [
+  ["name_asc", "sortNameAsc"],
+  ["name_desc", "sortNameDesc"],
+  ["date_newest", "sortDateNewest"],
+  ["date_oldest", "sortDateOldest"],
+  ["size_largest", "sortSizeLargest"],
+  ["size_smallest", "sortSizeSmallest"],
+  ["duration_longest", "sortDurationLongest"],
+  ["duration_shortest", "sortDurationShortest"],
+  ["type", "sortFileType"],
 ];
 
 type Props = {
@@ -49,6 +51,7 @@ export default function ActionsDropdown({
   onManageLabels,
   onFindDuplicates,
 }: Props) {
+  const { t } = useTranslation();
   const [page, setPage] = useState<"main" | "sort">("main");
 
   function close() {
@@ -84,7 +87,7 @@ export default function ActionsDropdown({
                   }}
                 >
                   <Text style={styles.icon}>📁</Text>
-                  <Text style={styles.label}>New folder</Text>
+                  <Text style={styles.label}>{t('newFolder')}</Text>
                 </TouchableOpacity>
               )}
               {isDevicePath && (
@@ -98,7 +101,7 @@ export default function ActionsDropdown({
                 >
                   <Text style={styles.icon}>🔄</Text>
                   <Text style={styles.label}>
-                    {isDeviceScanRunning ? "Scanning..." : "Rescan device"}
+                    {isDeviceScanRunning ? t('scanning') : t('rescanDevice')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -108,7 +111,7 @@ export default function ActionsDropdown({
                 onPress={() => setPage("sort")}
               >
                 <Text style={styles.icon}>↕️</Text>
-                <Text style={styles.label}>Sort</Text>
+                <Text style={styles.label}>{t('sort')}</Text>
                 <Text style={styles.chevron}>›</Text>
               </TouchableOpacity>
               {!isDevicePath && (
@@ -123,7 +126,7 @@ export default function ActionsDropdown({
                   <Text
                     style={[styles.label, showHidden && styles.labelActive]}
                   >
-                    Show hidden
+                    {t('showHidden')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -135,7 +138,7 @@ export default function ActionsDropdown({
                 }}
               >
                 <Text style={styles.icon}>🏷</Text>
-                <Text style={styles.label}>Manage labels</Text>
+                <Text style={styles.label}>{t('manageLabels')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.row}
@@ -145,7 +148,7 @@ export default function ActionsDropdown({
                 }}
               >
                 <Text style={styles.icon}>🔍</Text>
-                <Text style={styles.label}>Find duplicates</Text>
+                <Text style={styles.label}>{t('findDuplicates')}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -156,7 +159,7 @@ export default function ActionsDropdown({
               >
                 <Text style={styles.icon}>‹</Text>
                 <Text style={[styles.label, { fontWeight: "700" }]}>
-                  Sort by
+                  {t('sortBy')}
                 </Text>
               </TouchableOpacity>
               <View style={styles.divider} />
@@ -176,7 +179,7 @@ export default function ActionsDropdown({
                       sortKey === key && styles.labelActive,
                     ]}
                   >
-                    {label}
+                    {t(label)}
                   </Text>
                 </TouchableOpacity>
               ))}

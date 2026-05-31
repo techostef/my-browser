@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { sharedStyles as s } from "./sharedStyles";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   visible: boolean;
@@ -26,15 +27,16 @@ export default function DeleteConfirmModal({
   onCancel,
   onConfirm,
 }: Props) {
+  const { t } = useTranslation();
   const isMany = count > 1;
-  const title = isMany ? `Delete ${count} items` : "Delete item";
+  const title = isMany ? t('deleteItems', { count }) : t('deleteItem');
   const message = permanent
     ? isMany
-      ? "These files will be deleted forever and cannot be recovered."
-      : "This file will be deleted forever and cannot be recovered."
+      ? t('deleteForeverPlural')
+      : t('deleteForeverSingle')
     : isMany
-      ? "Selected files will be moved to Trash."
-      : "This file will be moved to Trash.";
+      ? t('moveToTrashPlural')
+      : t('moveToTrashSingle');
 
   return (
     <Modal
@@ -58,19 +60,19 @@ export default function DeleteConfirmModal({
                 <Ionicons name="checkmark" size={14} color="#FFF" />
               )}
             </View>
-            <Text style={styles.checkLabel}>Delete permanently</Text>
+            <Text style={styles.checkLabel}>{t('deletePermanentlyCheckbox')}</Text>
           </TouchableOpacity>
 
           <View style={s.modalActions}>
             <TouchableOpacity style={s.modalBtn} onPress={onCancel}>
-              <Text style={s.modalBtnText}>Cancel</Text>
+              <Text style={s.modalBtnText}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.modalBtn, styles.deleteBtn]}
               onPress={onConfirm}
             >
               <Text style={[s.modalBtnText, styles.deleteBtnText]}>
-                Delete
+                {t('delete')}
               </Text>
             </TouchableOpacity>
           </View>

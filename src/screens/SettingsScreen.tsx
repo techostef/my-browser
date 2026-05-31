@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
 import React, { useCallback, useEffect, useState } from "react";
 import { withErrorBoundary } from '../components/ErrorBoundary';
 import {
@@ -17,6 +18,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import { useSettings, useThemeColors, HistoryEntry } from "../store/settingsStore";
+import { useTranslation } from "../i18n";
 import { getOpenAIKey, setOpenAIKey, clearOpenAIKey } from "../lib/openaiKey";
 import { useActiveTabId, useTabActions } from "../store/tabStore";
 import { LOCAL_MODEL_PATH } from "../lib/videoEditor/whisper";
@@ -40,10 +42,11 @@ interface Section {
 
 function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) {
   const c = useThemeColors();
+  const { t } = useTranslation();
   return (
     <View style={[s.screenHeader, { backgroundColor: c.surfaceSecondary, borderBottomColor: c.border }]}>
       <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={s.backBtnText}>{"‹"} Settings</Text>
+        <Text style={s.backBtnText}>{"‹"} {t('settings')}</Text>
       </TouchableOpacity>
       <Text style={[s.screenHeaderTitle, { color: c.text }]}>{title}</Text>
       <View style={s.backBtn} />
@@ -56,10 +59,11 @@ function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) 
 function SearchEngineScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
   const c = useThemeColors();
+  const { t } = useTranslation();
   const engines = ["Google", "Bing", "DuckDuckGo", "Yahoo", "Brave Search", "Ecosia"];
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="Search Engine" onBack={onBack} />
+      <ScreenHeader title={t('searchEngine')} onBack={onBack} />
       <ScrollView>
         {engines.map((e) => (
           <TouchableOpacity key={e} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("searchEngine", e)}>
@@ -75,10 +79,11 @@ function SearchEngineScreen({ onBack }: { onBack: () => void }) {
 function LanguageScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
   const c = useThemeColors();
-  const languages = ["English", "Spanish", "French", "German", "Japanese", "Korean", "Chinese (Simplified)", "Arabic", "Portuguese", "Russian"];
+  const { t } = useTranslation();
+  const languages = ["English", "Indonesian", "Spanish", "French", "German", "Japanese", "Korean", "Chinese (Simplified)", "Arabic", "Portuguese", "Russian"];
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="Language" onBack={onBack} />
+      <ScreenHeader title={t('language')} onBack={onBack} />
       <ScrollView>
         {languages.map((l) => (
           <TouchableOpacity key={l} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("language", l)}>
@@ -91,21 +96,26 @@ function LanguageScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-function formatTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hr ago`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return "Yesterday";
-  return `${days} days ago`;
+function useFormatTime() {
+  const { t } = useTranslation();
+  return (ts: number): string => {
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return t('justNow');
+    if (mins < 60) return `${mins} ${t('minAgo')}`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} ${t('hrAgo')}`;
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return t('yesterday');
+    return `${days} ${t('daysAgo')}`;
+  };
 }
 
 function HistoryScreen({ onBack }: { onBack: () => void }) {
   const { history, clearHistory } = useSettings();
   const c = useThemeColors();
+  const { t } = useTranslation();
+  const formatTime = useFormatTime();
   const navigation = useNavigation();
   const { addTab } = useTabActions();
 
@@ -115,17 +125,17 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
   };
 
   const confirmClear = () =>
-    Alert.alert("Clear History", "Are you sure you want to clear all browsing history?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Clear", style: "destructive", onPress: clearHistory },
+    Alert.alert(t('clearHistory'), t('clearHistoryConfirm'), [
+      { text: t('cancel'), style: "cancel" },
+      { text: t('clearHistory'), style: "destructive", onPress: clearHistory },
     ]);
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="History" onBack={onBack} />
+      <ScreenHeader title={t('history')} onBack={onBack} />
       <ScrollView>
         {history.length === 0 ? (
-          <Text style={[s.emptyText, { color: c.textSecondary }]}>No history yet.</Text>
+          <Text style={[s.emptyText, { color: c.textSecondary }]}>{t('noHistoryYet')}</Text>
         ) : (
           history.map((item: HistoryEntry) => (
             <TouchableOpacity
@@ -146,7 +156,7 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
         )}
         {history.length > 0 && (
           <TouchableOpacity style={[s.dangerBtn, { backgroundColor: c.surface }]} onPress={confirmClear}>
-            <Text style={s.dangerBtnText}>Clear History</Text>
+            <Text style={s.dangerBtnText}>{t('clearHistory')}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -156,6 +166,7 @@ function HistoryScreen({ onBack }: { onBack: () => void }) {
 
 function BookmarksScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
+  const { t } = useTranslation();
   const { bookmarks, removeBookmark } = useSettings();
   const navigation = useNavigation();
   const activeTabId = useActiveTabId();
@@ -167,17 +178,17 @@ function BookmarksScreen({ onBack }: { onBack: () => void }) {
   };
 
   const confirmDelete = (id: string, title: string) =>
-    Alert.alert("Remove bookmark", `Remove "${title}"?`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => removeBookmark(id) },
+    Alert.alert(t('removeBookmark'), `${t('remove')} "${title}"?`, [
+      { text: t('cancel'), style: "cancel" },
+      { text: t('remove'), style: "destructive", onPress: () => removeBookmark(id) },
     ]);
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="Bookmarks" onBack={onBack} />
+      <ScreenHeader title={t('bookmarks')} onBack={onBack} />
       <ScrollView>
         {bookmarks.length === 0 ? (
-          <Text style={[s.emptyText, { color: c.textSecondary }]}>No bookmarks yet. Tap ☆ in the address bar to save a page.</Text>
+          <Text style={[s.emptyText, { color: c.textSecondary }]}>{t('noBookmarksYet')}</Text>
         ) : (
           bookmarks.map((b) => (
             <TouchableOpacity
@@ -211,21 +222,26 @@ function BookmarksScreen({ onBack }: { onBack: () => void }) {
 function AppearanceScreen({ onBack }: { onBack: () => void }) {
   const { settings, setSetting } = useSettings();
   const c = useThemeColors();
-  const themes = ["System Default", "Light", "Dark"];
+  const { t } = useTranslation();
+  const themes: Array<{ key: string; label: string }> = [
+    { key: "System Default", label: t('systemDefault') },
+    { key: "Light", label: t('light') },
+    { key: "Dark", label: t('dark') },
+  ];
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="Appearance" onBack={onBack} />
+      <ScreenHeader title={t('appearance')} onBack={onBack} />
       <ScrollView>
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>THEME</Text>
-        {themes.map((t) => (
-          <TouchableOpacity key={t} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("theme", t)}>
-            <Text style={[s.rowLabel, { color: c.text }]}>{t}</Text>
-            {settings.theme === t && <Text style={s.checkmark}>✓</Text>}
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('theme')}</Text>
+        {themes.map((th) => (
+          <TouchableOpacity key={th.key} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]} onPress={() => setSetting("theme", th.key)}>
+            <Text style={[s.rowLabel, { color: c.text }]}>{th.label}</Text>
+            {settings.theme === th.key && <Text style={s.checkmark}>✓</Text>}
           </TouchableOpacity>
         ))}
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>TABS</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('tabs')}</Text>
         <View style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-          <Text style={[s.rowLabel, { color: c.text }]}>Compact Tab Switcher</Text>
+          <Text style={[s.rowLabel, { color: c.text }]}>{t('compactTabSwitcher')}</Text>
           <Switch value={settings.compactTabs} onValueChange={(v) => setSetting("compactTabs", v)} trackColor={{ true: "#4ECDC4" }} />
         </View>
       </ScrollView>
@@ -235,6 +251,7 @@ function AppearanceScreen({ onBack }: { onBack: () => void }) {
 
 function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
+  const { t } = useTranslation();
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -251,18 +268,18 @@ function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
   };
 
   const handleClear = () =>
-    Alert.alert('Remove API Key', 'Remove your OpenAI API key from this device?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { await clearOpenAIKey(); setKey(''); } },
+    Alert.alert(t('removeApiKey'), t('removeApiKeyConfirm'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('remove'), style: 'destructive', onPress: async () => { await clearOpenAIKey(); setKey(''); } },
     ]);
 
   const preview = key.length > 8 ? key.slice(0, 4) + '••••••••' + key.slice(-4) : key ? '••••••••' : '';
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={['top']}>
-      <ScreenHeader title="AI Subtitles" onBack={onBack} />
+      <ScreenHeader title={t('aiSubtitles')} onBack={onBack} />
       <ScrollView keyboardShouldPersistTaps="handled">
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>OPENAI API KEY</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('openaiApiKey')}</Text>
         <View style={[s.keyCard, { backgroundColor: c.surface, borderColor: c.border }]}>
           <View style={[s.keyInputRow, { borderColor: c.border }]}>
             <TextInput
@@ -280,7 +297,7 @@ function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
             </TouchableOpacity>
           </View>
           {preview ? (
-            <Text style={[s.keyPreview, { color: c.textSecondary }]}>Stored: {preview}</Text>
+            <Text style={[s.keyPreview, { color: c.textSecondary }]}>{t('stored')}: {preview}</Text>
           ) : null}
           <View style={s.keyBtnRow}>
             <TouchableOpacity
@@ -288,17 +305,17 @@ function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
               onPress={handleSave}
               disabled={!key.trim()}
             >
-              <Text style={s.keyBtnText}>{saved ? 'Saved ✓' : 'Save'}</Text>
+              <Text style={s.keyBtnText}>{saved ? t('saved') : t('save')}</Text>
             </TouchableOpacity>
             {preview ? (
               <TouchableOpacity style={[s.keyBtn, { backgroundColor: '#FF3B30' }]} onPress={handleClear}>
-                <Text style={s.keyBtnText}>Remove</Text>
+                <Text style={s.keyBtnText}>{t('remove')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
         </View>
         <Text style={[s.keyHint, { color: c.textSecondary }]}>
-          Your key is stored only on this device and never shared. It is used to transcribe video audio via OpenAI Whisper when no embedded or sidecar subtitles are found.
+          {t('apiKeyHint')}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -307,6 +324,7 @@ function AISubtitlesScreen({ onBack }: { onBack: () => void }) {
 
 function WhisperModelScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
+  const { t } = useTranslation();
   const [modelSize, setModelSize] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
 
@@ -327,19 +345,19 @@ function WhisperModelScreen({ onBack }: { onBack: () => void }) {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
       await FileSystem.copyAsync({ from: file.uri, to: LOCAL_MODEL_PATH });
       await refresh();
-      Alert.alert('Model imported', 'Whisper model is ready. Use "Generate (on-device)" in the video editor.');
+      Alert.alert(t('modelImported'), t('modelImportedDesc'));
     } catch (e) {
-      Alert.alert('Import failed', e instanceof Error ? e.message : 'Unknown error');
+      Alert.alert(t('importFailed'), e instanceof Error ? e.message : 'Unknown error');
     } finally {
       setImporting(false);
     }
   };
 
   const handleDelete = () =>
-    Alert.alert('Delete model', 'Remove the Whisper model from this device?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deleteModel'), t('deleteModelConfirm'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive', onPress: async () => {
+        text: t('delete'), style: 'destructive', onPress: async () => {
           await FileSystem.deleteAsync(LOCAL_MODEL_PATH, { idempotent: true });
           await refresh();
         },
@@ -358,28 +376,28 @@ function WhisperModelScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={['top']}>
-      <ScreenHeader title="Whisper Model" onBack={onBack} />
+      <ScreenHeader title={t('whisperModel')} onBack={onBack} />
       <ScrollView keyboardShouldPersistTaps="handled">
 
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>STATUS</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('status')}</Text>
         <View style={[s.wmCard, { backgroundColor: c.surface, borderColor: c.border }]}>
           <Text style={s.wmStatusDot}>{installed ? '🟢' : '⚪'}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[s.wmStatusLabel, { color: c.text }]}>
-              {installed ? 'Model installed' : 'No model installed'}
+              {installed ? t('modelInstalled') : t('noModelInstalled')}
             </Text>
             {sizeMB ? <Text style={[s.wmStatusSub, { color: c.textSecondary }]}>{sizeMB}</Text> : null}
           </View>
         </View>
 
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>HOW TO USE</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('howToUse')}</Text>
         <View style={[s.wmCard, { backgroundColor: c.surface, borderColor: c.border }]}>
           {[
-            'Open the HuggingFace link below and download a .bin model file.',
-            'Transfer the file to your device (e.g. via USB, cloud, or browser download).',
-            'Tap "Import Model" below and select the .bin file.',
-            'In the video editor, tap Caption → Generate (on-device).',
-            'Transcription runs fully offline — no internet or API key required.',
+            t('whisperStep1'),
+            t('whisperStep2'),
+            t('whisperStep3'),
+            t('whisperStep4'),
+            t('whisperStep5'),
           ].map((step, i) => (
             <View key={i} style={s.wmStep}>
               <Text style={[s.wmStepNum, { color: '#4ECDC4' }]}>{i + 1}</Text>
@@ -388,15 +406,15 @@ function WhisperModelScreen({ onBack }: { onBack: () => void }) {
           ))}
         </View>
 
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>DOWNLOAD</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('download')}</Text>
         <TouchableOpacity
           style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}
           onPress={() => Linking.openURL('https://huggingface.co/ggerganov/whisper.cpp/tree/main')}
         >
-          <Text style={[s.rowLabel, { color: '#4ECDC4' }]}>Open HuggingFace ↗</Text>
+          <Text style={[s.rowLabel, { color: '#4ECDC4' }]}>{t('openHuggingFace')}</Text>
         </TouchableOpacity>
 
-        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>AVAILABLE MODELS</Text>
+        <Text style={[s.sectionHeader, { color: c.textSecondary }]}>{t('availableModels')}</Text>
         {MODELS.map((m) => (
           <View key={m.name} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
             <View style={{ flex: 1 }}>
@@ -414,11 +432,11 @@ function WhisperModelScreen({ onBack }: { onBack: () => void }) {
               onPress={handleImport}
               disabled={importing}
             >
-              <Text style={s.wmBtnText}>{importing ? 'Importing…' : 'Import Model'}</Text>
+              <Text style={s.wmBtnText}>{importing ? t('importing') : t('importModel')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={[s.wmBtn, { backgroundColor: '#FF3B30' }]} onPress={handleDelete}>
-              <Text style={s.wmBtnText}>Delete Model</Text>
+              <Text style={s.wmBtnText}>{t('deleteModel')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -430,18 +448,19 @@ function WhisperModelScreen({ onBack }: { onBack: () => void }) {
 
 function AboutScreen({ onBack }: { onBack: () => void }) {
   const c = useThemeColors();
+  const { t } = useTranslation();
   return (
     <SafeAreaView style={[s.root, { backgroundColor: c.surfaceSecondary }]} edges={["top"]}>
-      <ScreenHeader title="About" onBack={onBack} />
+      <ScreenHeader title={t('about')} onBack={onBack} />
       <ScrollView>
         <View style={[s.aboutCard, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
           <Text style={[s.aboutAppName, { color: c.text }]}>My Browser</Text>
           <Text style={[s.aboutVersion, { color: c.textSecondary }]}>Version 1.0.0</Text>
         </View>
         {[
-          { label: "Version", value: "1.0.0" },
-          { label: "Build", value: "100" },
-          { label: "Platform", value: "React Native / Expo" },
+          { label: t('version'), value: "1.0.0" },
+          { label: t('build'), value: "100" },
+          { label: t('platform'), value: "React Native / Expo" },
         ].map((item) => (
           <View key={item.label} style={[s.row, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
             <Text style={[s.rowLabel, { color: c.text }]}>{item.label}</Text>
@@ -461,6 +480,7 @@ function SettingsScreen() {
   const navigation = useNavigation();
   const { settings, setSetting } = useSettings();
   const c = useThemeColors();
+  const { t } = useTranslation();
   const [sub, setSub] = useState<SubScreen>(null);
   const [subtitleCount, setSubtitleCount] = useState(0);
 
@@ -470,16 +490,16 @@ function SettingsScreen() {
 
   const handleClearSubtitles = () => {
     if (subtitleCount === 0) {
-      Alert.alert('No subtitles', 'There are no cached subtitles to delete.');
+      Alert.alert(t('noSubtitles'), t('noSubtitlesDesc'));
       return;
     }
     Alert.alert(
-      'Delete all subtitles',
-      `This will permanently delete cached subtitles for ${subtitleCount} video${subtitleCount === 1 ? '' : 's'}. The videos themselves are not affected.`,
+      t('deleteAllSubtitlesTitle'),
+      t('deleteAllSubtitlesDesc', { count: subtitleCount, s: subtitleCount === 1 ? '' : 's' }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete all', style: 'destructive', onPress: async () => {
+          text: t('deleteAll'), style: 'destructive', onPress: async () => {
             await clearAllSubtitles();
             setSubtitleCount(0);
           },
@@ -499,31 +519,31 @@ function SettingsScreen() {
 
   const sections: Section[] = [
     {
-      title: "BROWSING",
+      title: t('browsing'),
       data: [
-        { kind: "nav", label: "🔍  Search Engine", value: settings.searchEngine, onPress: () => setSub("searchEngine") },
-        { kind: "nav", label: "🌐  Language", value: settings.language, onPress: () => setSub("language") },
-        { kind: "toggle", label: "🛡️  Ad Blocker", value: settings.adBlockEnabled, onToggle: (v) => setSetting("adBlockEnabled", v) },
-        { kind: "toggle", label: "🚫  Popup Blocker", value: settings.popupBlockEnabled, onToggle: (v) => setSetting("popupBlockEnabled", v) },
-        { kind: "nav", label: "🕐  History", onPress: () => setSub("history") },
-        { kind: "nav", label: "🔖  Bookmarks", onPress: () => setSub("bookmarks") },
+        { kind: "nav", label: `🔍  ${t('searchEngine')}`, value: settings.searchEngine, onPress: () => setSub("searchEngine") },
+        { kind: "nav", label: `🌐  ${t('language')}`, value: settings.language, onPress: () => setSub("language") },
+        { kind: "toggle", label: `🛡️  ${t('adBlocker')}`, value: settings.adBlockEnabled, onToggle: (v) => setSetting("adBlockEnabled", v) },
+        { kind: "toggle", label: `🚫  ${t('popupBlocker')}`, value: settings.popupBlockEnabled, onToggle: (v) => setSetting("popupBlockEnabled", v) },
+        { kind: "nav", label: `🕐  ${t('history')}`, onPress: () => setSub("history") },
+        { kind: "nav", label: `🔖  ${t('bookmarks')}`, onPress: () => setSub("bookmarks") },
       ],
     },
     {
-      title: "DISPLAY",
-      data: [{ kind: "nav", label: "🎨  Appearance", onPress: () => setSub("appearance") }],
+      title: t('display'),
+      data: [{ kind: "nav", label: `🎨  ${t('appearance')}`, onPress: () => setSub("appearance") }],
     },
     {
-      title: "AI",
+      title: t('ai'),
       data: [
-        ...(ENABLE_AI_CAPTIONS ? [{ kind: "nav" as const, label: "🤖  AI Subtitles", onPress: () => setSub("aiSubtitles") }] : []),
-        { kind: "nav", label: "🎙️  Whisper Model", onPress: () => setSub("whisperModel") },
-        ...(subtitleCount > 0 ? [{ kind: "nav" as const, label: "🗑️  Delete All Subtitles", value: `${subtitleCount} cached`, onPress: handleClearSubtitles }] : []),
+        ...(ENABLE_AI_CAPTIONS ? [{ kind: "nav" as const, label: `🤖  ${t('aiSubtitles')}`, onPress: () => setSub("aiSubtitles") }] : []),
+        { kind: "nav", label: `�️  ${t('whisperModel')}`, onPress: () => setSub("whisperModel") },
+        ...(subtitleCount > 0 ? [{ kind: "nav" as const, label: `🗑️  ${t('deleteAllSubtitles')}`, value: `${subtitleCount} ${t('cached')}`, onPress: handleClearSubtitles }] : []),
       ],
     },
     {
-      title: "INFO",
-      data: [{ kind: "nav", label: "ℹ️  About", onPress: () => setSub("about") }],
+      title: t('info'),
+      data: [{ kind: "nav", label: `ℹ️  ${t('about')}`, onPress: () => setSub("about") }],
     },
   ];
 
@@ -565,7 +585,7 @@ function SettingsScreen() {
         >
           <Text style={[s.mainBackBtnText, { color: c.text }]}>{'‹'}</Text>
         </TouchableOpacity>
-        <Text style={[s.mainHeaderTitle, { color: c.text }]}>Settings</Text>
+        <Text style={[s.mainHeaderTitle, { color: c.text }]}>{t('settings')}</Text>
       </View>
       <SectionList
         sections={sections}

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { sharedStyles as s } from "./sharedStyles";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   mode: "create" | "rename" | null;
@@ -23,6 +24,8 @@ export default function FolderDialog({
   onCancel,
   onSubmit,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       visible={!!mode}
@@ -33,7 +36,7 @@ export default function FolderDialog({
       <View style={s.modalBackdrop}>
         <View style={s.modalCard}>
           <Text style={s.modalTitle}>
-            {mode === "create" ? "Create folder" : "Rename folder"}
+            {mode === "create" ? t('createFolder') : t('renameFolder')}
           </Text>
           <TextInput
             style={s.modalInput}
@@ -42,18 +45,18 @@ export default function FolderDialog({
             autoFocus
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="Folder name"
+            placeholder={t('folderName')}
           />
           <View style={s.modalActions}>
             <TouchableOpacity style={s.modalBtn} onPress={onCancel}>
-              <Text style={s.modalBtnText}>Cancel</Text>
+              <Text style={s.modalBtnText}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.modalBtn, s.modalPrimaryBtn]}
               onPress={onSubmit}
             >
               <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>
-                {mode === "create" ? "Create" : "Save"}
+                {mode === "create" ? t('create') : t('save')}
               </Text>
             </TouchableOpacity>
           </View>

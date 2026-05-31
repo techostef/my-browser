@@ -2,13 +2,15 @@ import React from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { sharedStyles as s } from "./sharedStyles";
 import { FilterType } from "./types";
+import { useTranslation } from "../../i18n";
+import { TranslationKey } from "../../i18n/translations";
 
-const TYPE_OPTIONS: { value: FilterType; label: string; icon: string }[] = [
-  { value: "all", label: "Filter All", icon: "🗂️" },
-  { value: "video", label: "Video", icon: "🎬" },
-  { value: "audio", label: "Audio", icon: "🎵" },
-  { value: "image", label: "Image", icon: "🖼️" },
-  { value: "other", label: "Other", icon: "📄" },
+const TYPE_OPTIONS: { value: FilterType; labelKey: TranslationKey; icon: string }[] = [
+  { value: "all", labelKey: "filterAll", icon: "🗂️" },
+  { value: "video", labelKey: "video", icon: "🎬" },
+  { value: "audio", labelKey: "audio", icon: "🎵" },
+  { value: "image", labelKey: "image", icon: "🖼️" },
+  { value: "other", labelKey: "other", icon: "📄" },
 ];
 
 type Props = {
@@ -34,6 +36,8 @@ export default function FilterDialog({
   onClose,
   onClear,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       visible={visible}
@@ -47,10 +51,10 @@ export default function FilterDialog({
         onPress={onClose}
       >
         <TouchableOpacity activeOpacity={1} style={s.modalCard} onPress={() => {}}>
-          <Text style={s.modalTitle}>Filter</Text>
-          <Text style={styles.section}>TYPE</Text>
+          <Text style={s.modalTitle}>{t('filter')}</Text>
+          <Text style={styles.section}>{t('type')}</Text>
           <View style={styles.chips}>
-            {TYPE_OPTIONS.map(({ value, label, icon }) => {
+            {TYPE_OPTIONS.map(({ value, labelKey, icon }) => {
               const active = filterType === value;
               return (
                 <TouchableOpacity
@@ -59,7 +63,7 @@ export default function FilterDialog({
                   onPress={() => onFilterType(value)}
                 >
                   <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {icon} {label}
+                    {icon} {t(labelKey)}
                   </Text>
                 </TouchableOpacity>
               );
@@ -67,7 +71,7 @@ export default function FilterDialog({
           </View>
           {labelDefs.length > 0 && (
             <>
-              <Text style={styles.section}>LABELS</Text>
+              <Text style={styles.section}>{t('labels')}</Text>
               <View style={styles.chips}>
                 {labelDefs.map((lbl) => {
                   const active = labelFilter.includes(lbl);
@@ -97,14 +101,14 @@ export default function FilterDialog({
           <View style={s.modalActions}>
             {isFilterActive && (
               <TouchableOpacity style={s.modalBtn} onPress={onClear}>
-                <Text style={s.modalBtnText}>Clear</Text>
+                <Text style={s.modalBtnText}>{t('clear')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={[s.modalBtn, s.modalPrimaryBtn]}
               onPress={onClose}
             >
-              <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>Done</Text>
+              <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>{t('done')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

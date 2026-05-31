@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, BackHandler } from "react-native";
+import { useTranslation } from "../../i18n";
 
 const DEVICE_ROOT_PATH = "__device_download__";
 
@@ -28,6 +29,8 @@ export default function DownloadsHeader({
   onBack,
   onActionsMenu,
 }: Props) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!isSelectionMode) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -45,11 +48,11 @@ export default function DownloadsHeader({
         </TouchableOpacity>
         <TouchableOpacity style={styles.pill} onPress={onSelectAll}>
           <Text style={styles.pillText}>
-            {allSelected ? "Deselect all" : "Select all"}
+            {allSelected ? t('deselectAll') : t('selectAll')}
           </Text>
         </TouchableOpacity>
         <View style={{ marginRight: "auto", marginLeft: 8 }}>
-          <Text style={styles.title}>{selectedCount} selected</Text>
+          <Text style={styles.title}>{selectedCount} {t('selected')}</Text>
         </View>
         <TouchableOpacity style={styles.actionsBtn} onPress={onBulkActionsMenu}>
           <Text style={styles.actionsBtnText}>⋯</Text>
@@ -69,11 +72,11 @@ export default function DownloadsHeader({
       ) : null}
       <View style={{ marginRight: "auto" }}>
         <Text style={styles.title}>
-          {(currentFolderPath || "Root").replace(
+          {(currentFolderPath || t('root')).replace(
             DEVICE_ROOT_PATH,
-            "Device Download",
+            t('deviceDownload'),
           )}{" "}
-          · {gridDataLength} item{gridDataLength !== 1 ? "s" : ""}
+          · {gridDataLength} {t('items')}
         </Text>
       </View>
       <TouchableOpacity style={styles.actionsBtn} onPress={onActionsMenu}>

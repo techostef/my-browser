@@ -130,6 +130,22 @@ const DEFAULT_SHORTCUTS: Shortcut[] = [
   { id: "s6", title: "Wikipedia",   url: "https://wikipedia.org",        emoji: "📖" },
 ];
 
+// ─── Language codes ──────────────────────────────────────────────────────────
+
+export const LANGUAGE_CODES: Record<string, string> = {
+  English: "en",
+  Indonesian: "id",
+  Spanish: "es",
+  French: "fr",
+  German: "de",
+  Japanese: "ja",
+  Korean: "ko",
+  "Chinese (Simplified)": "zh-CN",
+  Arabic: "ar",
+  Portuguese: "pt",
+  Russian: "ru",
+};
+
 // ─── Settings state ───────────────────────────────────────────────────────────
 
 export type VideoBannerPosition = 'top' | 'left' | 'right' | 'bottom';

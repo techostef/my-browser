@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   filterSummary: string;
@@ -14,6 +15,8 @@ export default function FilterBar({
   onOpenFilter,
   onClear,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.bar}>
       <TouchableOpacity
@@ -26,7 +29,7 @@ export default function FilterBar({
       </TouchableOpacity>
       {isFilterActive && (
         <TouchableOpacity style={styles.clearBtn} onPress={onClear}>
-          <Text style={styles.clearText}>✕ Clear</Text>
+          <Text style={styles.clearText}>✕ {t('clear')}</Text>
         </TouchableOpacity>
       )}
     </View>

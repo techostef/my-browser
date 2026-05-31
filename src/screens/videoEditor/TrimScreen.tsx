@@ -40,6 +40,7 @@ import {
   saveLastSubtitleStyle,
 } from '../../lib/videoEditor/editSession';
 import { ENABLE_AI_CAPTIONS } from '../../config';
+import { useTranslation } from '../../i18n';
 import {
   RewardedInterstitialAd,
   RewardedAdEventType,
@@ -286,6 +287,7 @@ function parseTimeSec(raw: string): number | null {
 }
 
 function TrimScreen({ navigation, route }: Props) {
+  const { t } = useTranslation();
   const { videoUri, duration: paramDuration } = route.params;
 
   const player = useVideoPlayer({ uri: videoUri }, p => {
@@ -371,7 +373,7 @@ function TrimScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!sessionReady.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       saveSession({
         videoUri,
         splitPoints,
@@ -382,7 +384,7 @@ function TrimScreen({ navigation, route }: Props) {
       });
       saveLastSubtitleStyle(subtitleStyle);
     }, 600);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [splitPoints, deletedSegments, subtitleSegments, subtitleStyle, videoUri]);
 
   // ─── Derive segments from split points ──────────────────────────────────────
@@ -517,7 +519,7 @@ function TrimScreen({ navigation, route }: Props) {
 
     const frac = currentTime / dur;
     if (frac <= 0.01 || frac >= 0.99) {
-      Alert.alert('Cannot Split', 'Move the playhead away from the edges.');
+      Alert.alert(t('cannotSplit'), t('cannotSplitMsg'));
       return;
     }
 
@@ -526,7 +528,7 @@ function TrimScreen({ navigation, route }: Props) {
       (sp) => Math.abs(sp - frac) < MIN_SPLIT_GAP / dur,
     );
     if (tooClose) {
-      Alert.alert('Too Close', 'Move the playhead further from an existing split.');
+      Alert.alert(t('tooClose'), t('tooCloseMsg'));
       return;
     }
 
@@ -548,7 +550,7 @@ function TrimScreen({ navigation, route }: Props) {
         (s, i) => i !== selectedSegment && s.kept,
       );
       if (wouldKeep.length === 0) {
-        Alert.alert('Cannot Delete', 'You must keep at least one section.');
+        Alert.alert(t('cannotDeleteSection'), t('cannotDeleteMsg'));
         return;
       }
       newDeleted.add(selectedSegment);
@@ -623,10 +625,10 @@ function TrimScreen({ navigation, route }: Props) {
   }, [editingId, editEndDraft, subtitleSegments]);
 
   const handleChipDelete = useCallback((seg: SubtitleSegment) => {
-    Alert.alert('Delete subtitle', `Remove "${seg.text}"?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deleteSubtitleTitle'), t('deleteSubtitleConfirm', { text: seg.text }), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('delete'),
         style: 'destructive',
         onPress: () => {
           setSubtitleSegments(prev => prev.filter(s => s.id !== seg.id));
@@ -644,10 +646,10 @@ function TrimScreen({ navigation, route }: Props) {
 
   const handleDeleteSubtitle = useCallback(() => {
     if (editingId === null) return;
-    Alert.alert('Delete subtitle', 'Remove this subtitle segment?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('deleteSubtitleTitle'), t('removeSubtitleSegment'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('delete'),
         style: 'destructive',
         onPress: () => {
           setSubtitleSegments(prev => prev.filter(s => s.id !== editingId));
@@ -666,15 +668,15 @@ function TrimScreen({ navigation, route }: Props) {
     const start = parseTimeSec(manualStart);
     const end = parseTimeSec(manualEnd);
     if (start === null || end === null) {
-      Alert.alert('Invalid time', 'Enter times as M:SS or seconds (e.g. 1:30 or 90).');
+      Alert.alert(t('invalidTime'), t('invalidTimeMsg'));
       return;
     }
     if (end <= start) {
-      Alert.alert('Invalid range', 'End time must be after start time.');
+      Alert.alert(t('invalidRange'), t('invalidRangeMsg'));
       return;
     }
     if (!manualText.trim()) {
-      Alert.alert('Empty caption', 'Please enter caption text.');
+      Alert.alert(t('emptyCaption'), t('emptyCaptionMsg'));
       return;
     }
     const newSeg: SubtitleSegment = {
@@ -728,7 +730,7 @@ function TrimScreen({ navigation, route }: Props) {
     if (subtitleSegments.length === 0) return;
     setLoading(true);
     try {
-      setStatusMsg(`Translating to ${targetLanguage}…`);
+      setStatusMsg(t('statusTranslating', { language: targetLanguage }));
       const translated = await translateSegments(
         subtitleSegments,
         targetLanguage,
@@ -739,8 +741,8 @@ function TrimScreen({ navigation, route }: Props) {
       await saveSubtitles(videoUri, translated);
       setSubtitleSegments(translated);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Translation failed';
-      Alert.alert('Translation failed', msg);
+      const msg = err instanceof Error ? err.message : t('translationFailed');
+      Alert.alert(t('translationFailed'), msg);
     } finally {
       setStatusMsg('');
       setLoading(false);
@@ -756,21 +758,18 @@ function TrimScreen({ navigation, route }: Props) {
       if (subtitleSegments.length > 0) return;
 
       // No saved subtitles — extract fresh
-      setStatusMsg('Looking for subtitles…');
+      setStatusMsg(t('statusLookingForSubtitles'));
       let rawSrt = await getSubtitles(videoUri);
 
       if (!rawSrt) {
         if (source === 'ai') {
           const apiKey = await getOpenAIKey();
           if (!apiKey) {
-            Alert.alert(
-              'No subtitles found',
-              'This video has no embedded or sidecar subtitle file.\n\nAdd your OpenAI API key in Settings → AI Subtitles to enable automatic transcription.',
-            );
+            Alert.alert(t('noSubtitlesFound'), t('noSubtitlesFoundMsg'));
             return;
           }
         }
-        setStatusMsg(source === 'local' ? 'Transcribing on-device…' : 'Transcribing with Whisper AI…');
+        setStatusMsg(source === 'local' ? t('statusTranscribingLocal') : t('statusTranscribingAI'));
         const result = await transcribeVideo(videoUri, setStatusMsg, source);
         rawSrt = result.srt;
       }
@@ -785,15 +784,15 @@ function TrimScreen({ navigation, route }: Props) {
 
       let finalSegments = allSrtSegments;
       if (!isFullVideo(segments)) {
-        setStatusMsg('Filtering subtitles…');
+        setStatusMsg(t('statusFiltering'));
         const filtered = filterSegments(allSrtSegments, segments, dur);
         finalSegments = filtered.segments;
       }
 
       setSubtitleSegments(finalSegments);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Processing failed';
-      Alert.alert('Error', msg);
+      const msg = err instanceof Error ? err.message : t('errorLabel');
+      Alert.alert(t('errorLabel'), msg);
       setStatusMsg('');
     } finally {
       setLoading(false);
@@ -824,9 +823,9 @@ function TrimScreen({ navigation, route }: Props) {
       {/* ── Resume banner ── */}
       {sessionRestored && (
         <View style={styles.resumeBanner}>
-          <Text style={styles.resumeText}>Continuing previous edit</Text>
+          <Text style={styles.resumeText}>{t('continuingEdit')}</Text>
           <TouchableOpacity onPress={handleReset} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.resumeDismiss}>Reset ×</Text>
+            <Text style={styles.resumeDismiss}>{t('resetDismissBtn')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -861,7 +860,7 @@ function TrimScreen({ navigation, route }: Props) {
 
         <View style={[styles.controlsSide, styles.controlsSideRight]}>
           <Text style={styles.keptBadge}>
-            {hasDeleted ? `Kept: ${fmtCompact(keptDuration)}` : fmtCompact(duration)}
+            {hasDeleted ? t('keptBadge', { time: fmtCompact(keptDuration) }) : fmtCompact(duration)}
           </Text>
         </View>
       </View>
@@ -896,17 +895,17 @@ function TrimScreen({ navigation, route }: Props) {
       <View style={styles.infoRow}>
         {hasSplits && selectedSegment !== null && selSeg ? (
           <Text style={styles.infoText}>
-            Section {selectedSegment + 1}/{segments.length}
+            {t('sectionLabel')} {selectedSegment + 1}/{segments.length}
             {'  •  '}
             {fmtCompact(selSeg.startFrac * duration)} → {fmtCompact(selSeg.endFrac * duration)}
             {'  •  '}
             <Text style={{ color: selIsDeleted ? '#ff5252' : '#4caf50' }}>
-              {selIsDeleted ? 'Deleted' : 'Kept'}
+              {selIsDeleted ? t('sectionDeletedLabel') : t('sectionKeptLabel')}
             </Text>
           </Text>
         ) : (
           <Text style={styles.hintText}>
-            Scroll to position the line, then press Split
+            {t('scrollToSplitHint')}
           </Text>
         )}
       </View>
@@ -942,10 +941,10 @@ function TrimScreen({ navigation, route }: Props) {
             />
             <View style={styles.editTimeSpacer} />
             <TouchableOpacity style={styles.editDeleteBtn} onPress={handleDeleteSubtitle}>
-              <Text style={styles.editDeleteText}>Delete</Text>
+              <Text style={styles.editDeleteText}>{t('delete')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
-              <Text style={styles.editDoneText}>Done</Text>
+              <Text style={styles.editDoneText}>{t('done')}</Text>
             </TouchableOpacity>
           </View>
           <TextInput
@@ -956,7 +955,7 @@ function TrimScreen({ navigation, route }: Props) {
             multiline
             selectionColor="#a89fff"
             placeholderTextColor="#555"
-            placeholder="Type subtitle text…"
+            placeholder={t('typeSubtitlePlaceholder')}
           />
         </View>
       ) : null}
@@ -980,7 +979,7 @@ function TrimScreen({ navigation, route }: Props) {
             disabled={loading || !hasSplits}
           >
             <Text style={[styles.toolbarIcon, !hasSplits && styles.iconDim]}>↺</Text>
-            <Text style={[styles.toolbarLabel, !hasSplits && styles.labelDim]}>Reset</Text>
+            <Text style={[styles.toolbarLabel, !hasSplits && styles.labelDim]}>{t('resetBtn')}</Text>
           </TouchableOpacity>
 
           {/* Split */}
@@ -990,7 +989,7 @@ function TrimScreen({ navigation, route }: Props) {
             disabled={loading}
           >
             <Text style={styles.toolbarIcon}>✂️</Text>
-            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>Split</Text>
+            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>{t('splitBtn')}</Text>
           </TouchableOpacity>
 
           {/* Delete / Restore */}
@@ -1003,7 +1002,7 @@ function TrimScreen({ navigation, route }: Props) {
               {selIsDeleted ? '↩' : '🗑️'}
             </Text>
             <Text style={[styles.toolbarLabel, (!hasSplits) && styles.labelDim]}>
-              {selIsDeleted ? 'Restore' : 'Delete'}
+              {selIsDeleted ? t('restoreBtn') : t('delete')}
             </Text>
           </TouchableOpacity>
 
@@ -1018,7 +1017,7 @@ function TrimScreen({ navigation, route }: Props) {
             ) : (
               <Text style={styles.toolbarIcon}>💬</Text>
             )}
-            <Text style={styles.toolbarLabel}>Caption</Text>
+            <Text style={styles.toolbarLabel}>{t('captionBtn')}</Text>
           </TouchableOpacity>
 
           {/* Export → ExportScreen (no subtitles) */}
@@ -1028,7 +1027,7 @@ function TrimScreen({ navigation, route }: Props) {
             disabled={loading}
           >
             <Text style={styles.toolbarIcon}>⬇️</Text>
-            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>Export</Text>
+            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>{t('exportBtn')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1042,7 +1041,7 @@ function TrimScreen({ navigation, route }: Props) {
       >
         <Pressable style={styles.menuBackdrop} onPress={() => setCaptionMenuOpen(false)}>
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            <Text style={styles.menuTitle}>Caption</Text>
+            <Text style={styles.menuTitle}>{t('captionBtn')}</Text>
             {ENABLE_AI_CAPTIONS && (
               <TouchableOpacity
                 style={styles.menuItem}
@@ -1053,8 +1052,8 @@ function TrimScreen({ navigation, route }: Props) {
               >
                 <Text style={styles.menuItemIcon}>📝</Text>
                 <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemLabel}>Generate caption (AI)</Text>
-                  <Text style={styles.menuItemDetail}>Transcribe audio with Whisper AI</Text>
+                  <Text style={styles.menuItemLabel}>{t('generateCaptionAI')}</Text>
+                  <Text style={styles.menuItemDetail}>{t('generateCaptionAIDetail')}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -1067,8 +1066,8 @@ function TrimScreen({ navigation, route }: Props) {
             >
               <Text style={styles.menuItemIcon}>📱</Text>
               <View style={styles.menuItemBody}>
-                <Text style={styles.menuItemLabel}>Generate caption (on-device)</Text>
-                <Text style={styles.menuItemDetail}>Transcribe using local Whisper model, no internet needed</Text>
+                <Text style={styles.menuItemLabel}>{t('generateCaptionLocal')}</Text>
+                <Text style={styles.menuItemDetail}>{t('generateCaptionLocalDetail')}</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1080,8 +1079,8 @@ function TrimScreen({ navigation, route }: Props) {
             >
               <Text style={styles.menuItemIcon}>✏️</Text>
               <View style={styles.menuItemBody}>
-                <Text style={styles.menuItemLabel}>Add manual caption</Text>
-                <Text style={styles.menuItemDetail}>Type a caption with custom start and end time</Text>
+                <Text style={styles.menuItemLabel}>{t('addManualCaptionMenu')}</Text>
+                <Text style={styles.menuItemDetail}>{t('addManualCaptionDetail')}</Text>
               </View>
             </TouchableOpacity>
             {subtitleSegments.length > 0 && (
@@ -1094,8 +1093,8 @@ function TrimScreen({ navigation, route }: Props) {
               >
                 <Text style={styles.menuItemIcon}>🎨</Text>
                 <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemLabel}>Change subtitle style</Text>
-                  <Text style={styles.menuItemDetail}>Update font, color, and background for all captions</Text>
+                  <Text style={styles.menuItemLabel}>{t('changeSubtitleStyle')}</Text>
+                  <Text style={styles.menuItemDetail}>{t('changeSubtitleStyleDetail')}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -1105,12 +1104,12 @@ function TrimScreen({ navigation, route }: Props) {
                 onPress={() => {
                   setCaptionMenuOpen(false);
                   Alert.alert(
-                    'Delete subtitles',
-                    'Remove subtitles for this video?',
+                    t('deleteSubtitlesMenu'),
+                    t('deleteSubtitlesBody'),
                     [
-                      { text: 'Cancel', style: 'cancel' },
+                      { text: t('cancel'), style: 'cancel' },
                       {
-                        text: 'Delete', style: 'destructive', onPress: async () => {
+                        text: t('delete'), style: 'destructive', onPress: async () => {
                           await clearSubtitles(videoUri);
                           setSubtitleSegments([]);
                         },
@@ -1121,8 +1120,8 @@ function TrimScreen({ navigation, route }: Props) {
               >
                 <Text style={styles.menuItemIcon}>🗑️</Text>
                 <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemLabel}>Delete subtitles</Text>
-                  <Text style={styles.menuItemDetail}>Remove subtitles for this video</Text>
+                  <Text style={styles.menuItemLabel}>{t('deleteSubtitlesMenu')}</Text>
+                  <Text style={styles.menuItemDetail}>{t('deleteSubtitlesMenuDetail')}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -1142,11 +1141,11 @@ function TrimScreen({ navigation, route }: Props) {
                 <Text style={[
                   styles.menuItemLabel,
                   subtitleSegments.length === 0 && styles.menuItemLabelDisabled,
-                ]}>Translate caption</Text>
+                ]}>{t('translateCaptionMenu')}</Text>
                 <Text style={styles.menuItemDetail}>
                   {subtitleSegments.length === 0
-                    ? 'Generate captions first'
-                    : 'Translate existing captions to another language'}
+                    ? t('generateCaptionsFirst')
+                    : t('translateCaptionDetail')}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1165,7 +1164,7 @@ function TrimScreen({ navigation, route }: Props) {
           <Pressable style={styles.sheetCard} onPress={() => {}}>
             <View style={styles.sheetGrabber} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Subtitle style</Text>
+              <Text style={styles.sheetTitle}>{t('subtitleStyleTitle')}</Text>
               <TouchableOpacity onPress={() => setSetupSource(null)} hitSlop={10}>
                 <Text style={styles.sheetClose}>✕</Text>
               </TouchableOpacity>
@@ -1181,7 +1180,7 @@ function TrimScreen({ navigation, route }: Props) {
                 }}
               >
                 <Text style={styles.generateBtnText}>
-                  {setupSource === 'edit' ? 'Done' : 'Generate'}
+                  {setupSource === 'edit' ? t('done') : t('generateBtn')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1198,10 +1197,10 @@ function TrimScreen({ navigation, route }: Props) {
       >
         <Pressable style={styles.menuBackdrop} onPress={() => setManualCaptionOpen(false)}>
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            <Text style={styles.menuTitle}>Add Manual Caption</Text>
+            <Text style={styles.menuTitle}>{t('addManualCaptionTitle')}</Text>
             <View style={styles.manualRow}>
               <View style={styles.manualTimeField}>
-                <Text style={styles.manualLabel}>Start</Text>
+                <Text style={styles.manualLabel}>{t('startLabel')}</Text>
                 <TextInput
                   style={styles.manualInput}
                   value={manualStart}
@@ -1214,7 +1213,7 @@ function TrimScreen({ navigation, route }: Props) {
               </View>
               <Text style={styles.manualArrow}>→</Text>
               <View style={styles.manualTimeField}>
-                <Text style={styles.manualLabel}>End</Text>
+                <Text style={styles.manualLabel}>{t('endLabel')}</Text>
                 <TextInput
                   style={styles.manualInput}
                   value={manualEnd}
@@ -1226,12 +1225,12 @@ function TrimScreen({ navigation, route }: Props) {
                 />
               </View>
             </View>
-            <Text style={styles.manualLabel}>Caption text</Text>
+            <Text style={styles.manualLabel}>{t('captionTextLabel')}</Text>
             <TextInput
               style={[styles.manualInput, styles.manualTextInput]}
               value={manualText}
               onChangeText={setManualText}
-              placeholder="Type caption here…"
+              placeholder={t('typeCaptionPlaceholder')}
               placeholderTextColor="#bbb"
               multiline
               returnKeyType="done"
@@ -1241,13 +1240,13 @@ function TrimScreen({ navigation, route }: Props) {
                 style={styles.manualCancelBtn}
                 onPress={() => setManualCaptionOpen(false)}
               >
-                <Text style={styles.manualCancelText}>Cancel</Text>
+                <Text style={styles.manualCancelText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.manualAddBtn}
                 onPress={handleAddManualCaption}
               >
-                <Text style={styles.manualAddText}>Add</Text>
+                <Text style={styles.manualAddText}>{t('add')}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -1263,7 +1262,7 @@ function TrimScreen({ navigation, route }: Props) {
       >
         <Pressable style={styles.menuBackdrop} onPress={() => setLangPickerOpen(false)}>
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            <Text style={styles.menuTitle}>Translate to…</Text>
+            <Text style={styles.menuTitle}>{t('translateToTitle')}</Text>
             <ScrollView style={styles.langScroll}>
               {TRANSLATION_LANGUAGES.map(lang => (
                 <TouchableOpacity

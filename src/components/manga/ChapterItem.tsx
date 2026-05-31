@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { MangaChapter } from '../../types/manga';
 import { useSettings } from '../../store/settingsStore';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   chapter: MangaChapter;
@@ -26,6 +27,7 @@ function formatDate(ts: number): string {
 
 export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, onRedownload, selected, selectionMode }: Props) {
   const { themeColors: c } = useSettings();
+  const { t } = useTranslation();
 
   const statusIcon = () => {
     if (selectionMode) {
@@ -58,15 +60,15 @@ export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, o
         delayLongPress={400}
       >
         <Text style={[styles.chapterTitle, { color: c.text }, !isReadable && !selectionMode && { opacity: 0.5 }]} numberOfLines={1}>
-          Ch. {chapter.chapterNumber}
+          {t('chapterLabel', { n: String(chapter.chapterNumber) })}
           {chapter.title && chapter.title !== `Chapter ${chapter.chapterNumber}` ? ` — ${chapter.title}` : ''}
         </Text>
         {chapter.status === 'downloading' && (
           <>
             <Text style={[styles.meta, { color: c.textSecondary }]}>
               {chapter.imageCount > 0
-                ? `${chapter.downloadedImages}/${chapter.imageCount} pages`
-                : 'Downloading…'}
+                ? t('downloadingPages', { downloaded: String(chapter.downloadedImages), total: String(chapter.imageCount) })
+                : t('downloadingEllipsis')}
             </Text>
             <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
               <View style={[styles.progressFill, { flex: chapter.progress || 0 }]} />
@@ -76,16 +78,16 @@ export default function ChapterItem({ chapter, onPress, onLongPress, onDelete, o
         )}
         {chapter.status === 'completed' && (
           <Text style={[styles.meta, { color: c.textSecondary }]}>
-            {chapter.imageCount > 0 ? `${chapter.imageCount} pages` : ''}
+            {chapter.imageCount > 0 ? t('chapterPages', { count: String(chapter.imageCount) }) : ''}
             {chapter.sizeBytes ? `  ·  ${formatSize(chapter.sizeBytes)}` : ''}
             {chapter.downloadedAt ? `  ·  ${formatDate(chapter.downloadedAt)}` : ''}
           </Text>
         )}
         {chapter.status === 'queued' && (
-          <Text style={styles.queuedText}>In queue — waiting to download</Text>
+          <Text style={styles.queuedText}>{t('chapterQueued')}</Text>
         )}
         {chapter.status === 'failed' && (
-          <Text style={styles.failText}>Failed — tap to retry</Text>
+          <Text style={styles.failText}>{t('chapterFailed')}</Text>
         )}
       </TouchableOpacity>
       {!selectionMode && chapter.status === 'completed' && (

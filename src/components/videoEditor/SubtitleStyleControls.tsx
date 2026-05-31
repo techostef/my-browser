@@ -14,6 +14,7 @@ import type {
   SubtitleFontSize,
 } from '../../types/videoEditor';
 import { SUBTITLE_FONT_SCALE } from '../../types/videoEditor';
+import { useTranslation } from '../../i18n';
 
 type Props = {
   value: SubtitleStyle;
@@ -75,6 +76,7 @@ export function resolveFontFamily(family: SubtitleFontFamily): string | undefine
 }
 
 export default function SubtitleStyleControls({ value, onChange }: Props) {
+  const { t } = useTranslation();
   const trackRef = useRef<View | null>(null);
   const trackPageXRef = useRef(0);
   const trackWRef = useRef(0);
@@ -136,13 +138,13 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
               textShadowRadius: 3,
             }}
           >
-            Sample subtitle
+            {t('sampleSubtitle')}
           </Text>
         </View>
       </View>
 
       {/* Font family */}
-      <Text style={styles.sectionTitle}>Font</Text>
+      <Text style={styles.sectionTitle}>{t('subtitleFont')}</Text>
       <View style={styles.chipRow}>
         {FONT_OPTIONS.map((f) => {
           const selected = f.id === value.fontFamily;
@@ -167,7 +169,7 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       {/* Font size */}
-      <Text style={styles.sectionTitle}>Size</Text>
+      <Text style={styles.sectionTitle}>{t('subtitleSize')}</Text>
       <View style={styles.chipRow}>
         {SIZE_OPTIONS.map((s) => {
           const selected = s.id === value.fontSize;
@@ -186,7 +188,7 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       {/* Text color */}
-      <Text style={styles.sectionTitle}>Text color</Text>
+      <Text style={styles.sectionTitle}>{t('textColor')}</Text>
       <View style={styles.chipRow}>
         {TEXT_COLORS.map((c) => {
           const selected = c.hex.toUpperCase() === (value.textColor ?? '').toUpperCase();
@@ -210,7 +212,7 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       {/* Background color */}
-      <Text style={styles.sectionTitle}>Background</Text>
+      <Text style={styles.sectionTitle}>{t('background')}</Text>
       <View style={styles.chipRow}>
         {BG_COLORS.map((c) => {
           const selected = c.hex.toUpperCase() === (value.color ?? '').toUpperCase();
@@ -234,9 +236,9 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       <View style={styles.sliderRow}>
-        <Text style={styles.sliderLabel}>Opacity</Text>
+        <Text style={styles.sliderLabel}>{t('opacity')}</Text>
         <Text style={styles.sliderValue}>
-          {value.opacity === 0 ? 'Off' : `${opacityPct}%`}
+          {value.opacity === 0 ? t('off') : `${opacityPct}%`}
         </Text>
       </View>
       <View

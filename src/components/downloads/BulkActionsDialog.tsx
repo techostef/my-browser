@@ -1,5 +1,6 @@
 import React from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   visible: boolean;
@@ -22,11 +23,13 @@ export default function BulkActionsDialog({
   onBulkMoveToPrivate,
   onBulkDelete,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.dialog}>
-          <Text style={styles.title}>Bulk Actions</Text>
+          <Text style={styles.title}>{t('bulkActions')}</Text>
           
           {canBulkMove && (
             <>
@@ -37,7 +40,7 @@ export default function BulkActionsDialog({
                   onBulkMove();
                 }}
               >
-                <Text style={styles.optionText}>📁 Move to Private Folder</Text>
+                <Text style={styles.optionText}>📁 {t('moveToPrivateFolder')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.option}
@@ -46,7 +49,7 @@ export default function BulkActionsDialog({
                   onBulkMoveToDevice();
                 }}
               >
-                <Text style={styles.optionText}>📱 Move to Device Download</Text>
+                <Text style={styles.optionText}>📱 {t('moveToDeviceDownload')}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -59,7 +62,7 @@ export default function BulkActionsDialog({
                 onBulkMoveToPrivate();
               }}
             >
-              <Text style={styles.optionText}>📁 Move to Private Folder</Text>
+              <Text style={styles.optionText}>📁 {t('moveToPrivateFolder')}</Text>
             </TouchableOpacity>
           )}
 
@@ -70,11 +73,11 @@ export default function BulkActionsDialog({
               onBulkDelete();
             }}
           >
-            <Text style={[styles.optionText, styles.deleteText]}>🗑 Delete</Text>
+            <Text style={[styles.optionText, styles.deleteText]}>🗑 {t('delete')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={styles.cancelText}>{t('cancel')}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>

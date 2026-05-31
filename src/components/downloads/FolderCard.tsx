@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { FolderGridItem } from "./types";
+import { useTranslation } from "../../i18n";
 
 type Props = {
   item: FolderGridItem;
@@ -19,6 +20,8 @@ export default function FolderCard({
   onOpen,
   onAction,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <View style={[styles.folderCard, isHidden && styles.cardHidden]}>
       {isHidden ? (
@@ -35,8 +38,8 @@ export default function FolderCard({
       <View style={{ display: "flex", flexDirection: "row" }}>
         <Text style={styles.folderMeta} numberOfLines={1}>
           {item.isDeviceRoot && isDeviceScanRunning
-            ? "Scanning..."
-            : `${itemCount} item${itemCount !== 1 ? "s" : ""} · Tap to open`}
+            ? t('scanning')
+            : `${itemCount} ${t('items')} · ${t('tapToOpen')}`}
         </Text>
         {item.source === "private" && onAction ? (
           <TouchableOpacity style={styles.folderMenuBtn} onPress={onAction}>

@@ -16,6 +16,7 @@ import { trimAndConcat, probeVideoSize, probeVideoInfo, burnSubtitlesWithOverlay
 import { clearSession } from '../../lib/videoEditor/editSession';
 import { preCacheMediaDuration } from '../../services/downloadManager';
 import { buildSubtitleRenderHtml } from '../../lib/videoEditor/subtitlePng';
+import { useTranslation } from '../../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Export'>;
 
@@ -28,9 +29,10 @@ type WebViewMessage =
 type Resolution = { label: string; detail: string; height: number | null };
 
 function ExportScreen({ navigation, route }: Props) {
+  const { t } = useTranslation();
   const { videoUri, timelineSegments, duration, segments: subtitleSegments, srt, subtitleStyle } = route.params;
   const effectiveStyle = subtitleStyle ?? DEFAULT_SUBTITLE_STYLE;
-  const [status, setStatus] = useState('Preparing…');
+  const [status, setStatus] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
   const [done, setDone] = useState(false);
   const [outputPath, setOutputPath] = useState('');
@@ -60,10 +62,10 @@ function ExportScreen({ navigation, route }: Props) {
   const resolutions: Resolution[] = (() => {
     if (!sourceInfo) {
       return [
-        { label: 'Original', detail: 'Full source resolution', height: null },
-        { label: '1080p', detail: 'Full HD', height: 1080 },
-        { label: '720p', detail: 'HD', height: 720 },
-        { label: '480p', detail: 'Smaller file', height: 480 },
+        { label: t('originalRes'), detail: t('fullSourceRes'), height: null },
+        { label: '1080p', detail: t('fullHd'), height: 1080 },
+        { label: '720p', detail: t('hd'), height: 720 },
+        { label: '480p', detail: t('smallerFile'), height: 480 },
       ];
     }
     const { width, height: srcH, videoKbps } = sourceInfo;
@@ -78,13 +80,13 @@ function ExportScreen({ navigation, route }: Props) {
     };
     return [
       {
-        label: 'Original',
+        label: t('originalRes'),
         detail: `${width}×${srcH} · ${videoKbps} kbps · ${formatSize(videoKbps)}`,
         height: null,
       },
-      { label: '1080p', detail: `Full HD · ${formatSize(estKbps(1080))}`, height: 1080 },
-      { label: '720p', detail: `HD · ${formatSize(estKbps(720))}`, height: 720 },
-      { label: '480p', detail: `Smaller file · ${formatSize(estKbps(480))}`, height: 480 },
+      { label: '1080p', detail: `${t('fullHd')} · ${formatSize(estKbps(1080))}`, height: 1080 },
+      { label: '720p', detail: `${t('hd')} · ${formatSize(estKbps(720))}`, height: 720 },
+      { label: '480p', detail: `${t('smallerFile')} · ${formatSize(estKbps(480))}`, height: 480 },
     ];
   })();
 
@@ -134,7 +136,7 @@ function ExportScreen({ navigation, route }: Props) {
     }
     if (msg.type === 'png') {
       pngBufferRef.current.push({ id: msg.id, png: msg.png });
-      setStatus(`Rendering subtitles ${msg.index + 1}/${msg.total}…`);
+      setStatus(t('renderingSubtitles', { index: String(msg.index + 1), total: String(msg.total) }));
       if (pngPhaseRef.current) {
         const { start, end, total } = pngPhaseRef.current;
         setProgress(start + ((msg.index + 1) / Math.max(1, total)) * (end - start));
@@ -254,12 +256,12 @@ function ExportScreen({ navigation, route }: Props) {
           outputDurationSec,
         );
       } else if (trimmedTmp) {
-        setStatus('Finalising…');
+        setStatus(t('exportFinalising'));
         await FileSystem.moveAsync({ from: tmpUri, to: outputUri });
         trimmedTmp = false;
         setProgress(P_DONE);
       } else {
-        setStatus('Copying file…');
+        setStatus(t('exportCopying'));
         await FileSystem.copyAsync({ from: videoUri, to: outputUri });
         setProgress(P_DONE);
       }
@@ -278,7 +280,7 @@ function ExportScreen({ navigation, route }: Props) {
       setProgress(100);
       setDone(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Export failed');
+      setError(err instanceof Error ? err.message : t('exportFailed'));
     }
   };
 
@@ -287,10 +289,10 @@ function ExportScreen({ navigation, route }: Props) {
       <View style={styles.container}>
         <View style={styles.center}>
           <Text style={styles.errorIcon}>✕</Text>
-          <Text style={styles.errorTitle}>Export failed</Text>
+          <Text style={styles.errorTitle}>{t('exportFailed')}</Text>
           <Text style={styles.errorDetail}>{error}</Text>
           <TouchableOpacity style={styles.btn} onPress={() => navigation.goBack()}>
-            <Text style={styles.btnText}>Go Back</Text>
+            <Text style={styles.btnText}>{t('goBack')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -303,10 +305,10 @@ function ExportScreen({ navigation, route }: Props) {
       <View style={styles.container}>
         <View style={styles.center}>
           <Text style={styles.doneIcon}>✓</Text>
-          <Text style={styles.doneTitle}>Export complete</Text>
+          <Text style={styles.doneTitle}>{t('exportComplete')}</Text>
           <Text style={styles.filename}>{filename}</Text>
           <TouchableOpacity style={styles.btn} onPress={() => navigation.popToTop()}>
-            <Text style={styles.btnText}>Done</Text>
+            <Text style={styles.btnText}>{t('done')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -317,10 +319,8 @@ function ExportScreen({ navigation, route }: Props) {
     return (
       <View style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.pickerTitle}>Export resolution</Text>
-          <Text style={styles.pickerHint}>
-            Higher resolution preserves quality. Lower resolution produces a smaller file.
-          </Text>
+          <Text style={styles.pickerTitle}>{t('exportResolution')}</Text>
+          <Text style={styles.pickerHint}>{t('exportResolutionHint')}</Text>
           {resolutions.map(r => (
             <TouchableOpacity
               key={r.label}

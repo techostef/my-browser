@@ -22,6 +22,7 @@ import { useProjects, type Project } from '../store/projectStore';
 import { loadSession } from '../lib/videoEditor/editSession';
 import { useThemeColors } from '../store/settingsStore';
 import { AdBanner } from '../components/AdBanner';
+import { useTranslation } from '../i18n';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,13 +50,14 @@ type CardProps = {
   hasSession: boolean;
   isSelectionMode: boolean;
   isSelected: boolean;
+  inProgressLabel: string;
   onOpen: () => void;
   onDelete: () => void;
   onLongPress: () => void;
   onToggleSelect: () => void;
 };
 
-function ProjectCard({ project, hasSession, isSelectionMode, isSelected, onOpen, onDelete, onLongPress, onToggleSelect }: CardProps) {
+function ProjectCard({ project, hasSession, isSelectionMode, isSelected, inProgressLabel, onOpen, onDelete, onLongPress, onToggleSelect }: CardProps) {
   const handlePress = isSelectionMode ? onToggleSelect : onOpen;
 
   return (
@@ -87,7 +89,7 @@ function ProjectCard({ project, hasSession, isSelectionMode, isSelected, onOpen,
         <View style={styles.cardMeta}>
           {hasSession && (
             <View style={styles.inProgressBadge}>
-              <Text style={styles.inProgressText}>In progress</Text>
+              <Text style={styles.inProgressText}>{inProgressLabel}</Text>
             </View>
           )}
           <Text style={styles.cardTime}>{timeAgo(project.updatedAt)}</Text>
@@ -114,6 +116,7 @@ function ProjectsScreen() {
   const { projects, removeProject } = useProjects();
   const navigation = useNavigation();
   const c = useThemeColors();
+  const { t } = useTranslation();
   const [sessionMap, setSessionMap] = useState<Record<string, boolean>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const isSelectionMode = selectedIds.size > 0;
@@ -158,12 +161,12 @@ function ProjectsScreen() {
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
     Alert.alert(
-      'Delete Projects',
-      `Delete ${count} project${count !== 1 ? 's' : ''}? Edit progress will be lost.`,
+      t('deleteProjects'),
+      t('deleteProjectsConfirm', { count, s: count !== 1 ? 's' : '' }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: () => {
             selectedIds.forEach(id => removeProject(id));
@@ -200,12 +203,12 @@ function ProjectsScreen() {
 
   const handleDelete = useCallback((project: Project) => {
     Alert.alert(
-      'Delete Project',
-      `Delete "${project.videoName}"? Your edit progress will be lost.`,
+      t('deleteProject'),
+      t('deleteProjectConfirm', { name: project.videoName }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('delete'),
           style: 'destructive',
           onPress: () => removeProject(project.id),
         },
@@ -219,12 +222,13 @@ function ProjectsScreen() {
       hasSession={sessionMap[item.id] ?? false}
       isSelectionMode={isSelectionMode}
       isSelected={selectedIds.has(item.id)}
+      inProgressLabel={t('inProgress')}
       onOpen={() => handleOpen(item)}
       onDelete={() => handleDelete(item)}
       onLongPress={() => handleLongPress(item)}
       onToggleSelect={() => handleToggleSelect(item)}
     />
-  ), [sessionMap, isSelectionMode, selectedIds, handleOpen, handleDelete, handleLongPress, handleToggleSelect]);
+  ), [sessionMap, isSelectionMode, selectedIds, handleOpen, handleDelete, handleLongPress, handleToggleSelect, t]);
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: c.background }]} edges={['top']}>
@@ -244,12 +248,12 @@ function ProjectsScreen() {
               {selectedIds.size === projects.length && <Text style={styles.selectAllCheck}>✓</Text>}
             </View>
             <Text style={styles.selectAllText}>
-              {selectedIds.size === projects.length ? 'Deselect all' : 'Select all'}
+              {selectedIds.size === projects.length ? t('deselectAll') : t('selectAll')}
             </Text>
           </TouchableOpacity>
-          <Text style={[styles.selCount, { color: c.text }]}>{selectedIds.size} selected</Text>
+          <Text style={[styles.selCount, { color: c.text }]}>{selectedIds.size} {t('selected')}</Text>
           <TouchableOpacity style={styles.deleteSelBtn} onPress={handleBulkDelete}>
-            <Text style={styles.deleteSelText}>Delete</Text>
+            <Text style={styles.deleteSelText}>{t('delete')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -261,12 +265,12 @@ function ProjectsScreen() {
           >
             <Text style={[styles.backBtnText, { color: c.text }]}>{'‹'}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: c.text }]}>Projects</Text>
+          <Text style={[styles.title, { color: c.text }]}>{t('projects')}</Text>
           <TouchableOpacity
             style={styles.newBtn}
             onPress={() => (navigation as any).navigate('Downloads')}
           >
-            <Text style={styles.newBtnText}>+ New</Text>
+            <Text style={styles.newBtnText}>{t('newProject')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -274,9 +278,9 @@ function ProjectsScreen() {
       {projects.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🎬</Text>
-          <Text style={[styles.emptyTitle, { color: c.text }]}>No projects yet</Text>
+          <Text style={[styles.emptyTitle, { color: c.text }]}>{t('noProjectsYet')}</Text>
           <Text style={[styles.emptyHint, { color: c.textSecondary }]}>
-            Open the Downloads tab, tap a video, then press ✂️ Edit to start a project.
+            {t('noProjectsHint')}
           </Text>
         </View>
       ) : (

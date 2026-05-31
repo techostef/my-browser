@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { MangaTitle } from '../../types/manga';
 import { useSettings } from '../../store/settingsStore';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   manga: MangaTitle;
@@ -11,6 +12,7 @@ interface Props {
 
 export default function MangaCard({ manga, onPress, onLongPress }: Props) {
   const { themeColors: c } = useSettings();
+  const { t } = useTranslation();
 
   const completed = manga.chapters.filter(ch => ch.status === 'completed').length;
   const total = manga.chapters.length;
@@ -42,7 +44,7 @@ export default function MangaCard({ manga, onPress, onLongPress }: Props) {
       <View style={styles.info}>
         <Text style={[styles.title, { color: c.text }]} numberOfLines={2}>{manga.title}</Text>
         <Text style={[styles.subtitle, { color: c.textSecondary }]}>
-          {completed} / {total} chapter{total !== 1 ? 's' : ''}
+          {t('chaptersOfTotal', { completed: String(completed), total: String(total) })}
         </Text>
         <View style={[styles.progressTrack, { backgroundColor: c.border }]}>
           <View
@@ -53,10 +55,10 @@ export default function MangaCard({ manga, onPress, onLongPress }: Props) {
           />
         </View>
         {downloading ? (
-          <Text style={styles.downloadingText}>Downloading ch. {downloading.chapterNumber}…</Text>
+          <Text style={styles.downloadingText}>{t('downloadingChapter', { n: String(downloading.chapterNumber) })}</Text>
         ) : lastRead && lastReadDate ? (
           <Text style={[styles.lastReadText, { color: c.textSecondary }]}>
-            Last read: Ch. {lastRead.chapterNumber} · {lastReadDate}
+            {t('lastReadChapter', { n: String(lastRead.chapterNumber), date: lastReadDate })}
           </Text>
         ) : null}
       </View>

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTranslation } from '../i18n';
 
 interface Props {
   url: string;
@@ -10,6 +11,7 @@ interface Props {
 const AUTO_DISMISS_MS = 3000;
 
 export default function PopupBlockedBanner({ url, onAllow, onDismiss }: Props) {
+  const { t } = useTranslation();
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
@@ -31,11 +33,11 @@ export default function PopupBlockedBanner({ url, onAllow, onDismiss }: Props) {
         <Text style={s.icon}>🚫</Text>
       </View>
       <View style={s.body}>
-        <Text style={s.title}>Popup blocked</Text>
+        <Text style={s.title}>{t('popupBlocked')}</Text>
         <Text style={s.url} numberOfLines={1}>{display}</Text>
       </View>
       <TouchableOpacity style={s.allowBtn} onPress={onAllow} activeOpacity={0.7}>
-        <Text style={s.allowText}>Allow</Text>
+        <Text style={s.allowText}>{t('allow')}</Text>
       </TouchableOpacity>
       <TouchableOpacity style={s.dismissBtn} onPress={onDismiss} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
         <Text style={s.dismissText}>✕</Text>

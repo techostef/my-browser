@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSettings } from '../store/settingsStore';
 import { installUpdate } from '../services/appUpdate';
+import { useTranslation } from '../i18n';
 
 interface Props {
   visible: boolean;
@@ -11,6 +12,7 @@ interface Props {
 
 export function UpdateReadyBanner({ visible, onDismiss }: Props) {
   const { themeColors } = useSettings();
+  const { t } = useTranslation();
 
   if (!visible) return null;
 
@@ -24,7 +26,7 @@ export function UpdateReadyBanner({ visible, onDismiss }: Props) {
     >
       <View style={styles.row}>
         <Text style={[styles.message, { color: themeColors.text }]} numberOfLines={2}>
-          Update ready to install
+          {t('updateReady')}
         </Text>
         <View style={styles.actions}>
           <Pressable
@@ -33,7 +35,7 @@ export function UpdateReadyBanner({ visible, onDismiss }: Props) {
             }}
             style={[styles.btn, { backgroundColor: themeColors.tabBarActive }]}
           >
-            <Text style={styles.btnText}>Restart</Text>
+            <Text style={styles.btnText}>{t('restart')}</Text>
           </Pressable>
           <Pressable
             onPress={onDismiss}

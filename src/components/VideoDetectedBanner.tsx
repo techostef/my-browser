@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { DetectedVideo, HlsVariant } from "../types";
 import type { VideoBannerPosition } from "../store/settingsStore";
+import { useTranslation } from "../i18n";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -84,6 +85,7 @@ export default function VideoDetectedBanner({
   onSeekBackward,
   onChangePosition,
 }: Props) {
+  const { t } = useTranslation();
   const [isDetailVisible, setIsDetailVisible] = React.useState(false);
   const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
     [],
@@ -222,8 +224,7 @@ export default function VideoDetectedBanner({
           <View style={styles.titleRow}>
             <View style={styles.liveDot} />
             <Text style={styles.title}>
-              {filteredVideos.length} video
-              {filteredVideos.length > 1 ? "s" : ""} detected
+              {t('videosDetected', { count: String(filteredVideos.length), s: filteredVideos.length > 1 ? 's' : '' })}
             </Text>
           </View>
 
@@ -306,7 +307,7 @@ export default function VideoDetectedBanner({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detected Videos</Text>
+              <Text style={styles.modalTitle}>{t('detectedVideos')}</Text>
               <TouchableOpacity
                 onPress={() => setIsDetailVisible(false)}
                 style={styles.closeBtn}
@@ -337,10 +338,10 @@ export default function VideoDetectedBanner({
                         <View style={{ flex: 1 }}>
                           <Text style={styles.videoUrl} numberOfLines={1}>
                             {item.type === "hls"
-                              ? item.pageTitle || "HLS Stream"
+                              ? item.pageTitle || t('hlsStream')
                               : item.type === "dash"
-                                ? item.pageTitle || "DASH Stream"
-                                : item.videoWidth || item.pageTitle || "Video"}
+                                ? item.pageTitle || t('dashStream')
+                                : item.videoWidth || item.pageTitle || t('video')}
                           </Text>
                         </View>
                       </View>
@@ -351,7 +352,7 @@ export default function VideoDetectedBanner({
                             <View key={vi} style={styles.variantRow}>
                               <View style={styles.variantInfo}>
                                 <Text style={styles.variantResolution}>
-                                  {variant.resolution || "Unknown"}
+                                  {variant.resolution || t('unknownResolution')}
                                 </Text>
                               </View>
                               <TouchableOpacity
@@ -361,7 +362,7 @@ export default function VideoDetectedBanner({
                                 }
                               >
                                 <Text style={styles.downloadVariantBtnText}>
-                                  ↓ Download
+                                  {t('downloadBtn')}
                                 </Text>
                               </TouchableOpacity>
                             </View>
@@ -371,7 +372,7 @@ export default function VideoDetectedBanner({
                             onPress={() => handlePreviewFromDetail(item)}
                           >
                             <Text style={styles.previewBtnRowText}>
-                              ▶ Preview
+                              {'▶ '}{t('preview')}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -394,7 +395,7 @@ export default function VideoDetectedBanner({
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>
-                  No downloadable videos found
+                  {t('noDownloadableVideos')}
                 </Text>
               </View>
             )}

@@ -96,8 +96,6 @@ const DownloadItem = memo(function DownloadItem({
   onToggleHide,
 }: Props) {
   const statusColor = getStatusColor(task.status);
-  const isPlayableMedia =
-    task.status === "completed" && !!task.filePath && mediaType !== "other";
   const canMoveCompletedFile = task.status === "completed" && !!task.filePath;
   const canMovePrivateFile =
     task.source !== "device" && task.status === "completed" && !!task.filePath;

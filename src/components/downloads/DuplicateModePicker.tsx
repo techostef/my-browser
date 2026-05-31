@@ -6,15 +6,17 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
+import { useTranslation } from "../../i18n";
+import { TranslationKey } from "../../i18n/translations";
 
 export type DuplicateMode = "size" | "duration" | "both";
 
-type Option = { value: DuplicateMode; label: string; hint: string };
+type Option = { value: DuplicateMode; labelKey: TranslationKey; hintKey: TranslationKey };
 
 const OPTIONS: Option[] = [
-  { value: "size", label: "Size", hint: "Within ~1% of each other" },
-  { value: "duration", label: "Duration", hint: "Same whole-second length" },
-  { value: "both", label: "Size and duration", hint: "Duration matches and size within ~1%" },
+  { value: "size", labelKey: "size", hintKey: "sizeHint" },
+  { value: "duration", labelKey: "duration", hintKey: "durationHint" },
+  { value: "both", labelKey: "sizeAndDuration", hintKey: "sizeAndDurationHint" },
 ];
 
 type Props = {
@@ -32,6 +34,8 @@ export default function DuplicateModePicker({
   onCancel,
   onScan,
 }: Props) {
+  const { t } = useTranslation();
+
   return (
     <Modal
       visible={visible}
@@ -45,8 +49,8 @@ export default function DuplicateModePicker({
         onPress={onCancel}
       >
         <TouchableOpacity activeOpacity={1} style={styles.card} onPress={() => {}}>
-          <Text style={styles.title}>Find duplicate videos</Text>
-          <Text style={styles.subtitle}>Match videos by:</Text>
+          <Text style={styles.title}>{t('findDuplicateVideos')}</Text>
+          <Text style={styles.subtitle}>{t('matchVideosBy')}</Text>
 
           {OPTIONS.map((opt) => {
             const selected = mode === opt.value;
@@ -62,8 +66,8 @@ export default function DuplicateModePicker({
                   {selected && <View style={styles.radioDot} />}
                 </View>
                 <View style={styles.optionTextWrap}>
-                  <Text style={styles.optionLabel}>{opt.label}</Text>
-                  <Text style={styles.optionHint}>{opt.hint}</Text>
+                  <Text style={styles.optionLabel}>{t(opt.labelKey)}</Text>
+                  <Text style={styles.optionHint}>{t(opt.hintKey)}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -71,10 +75,10 @@ export default function DuplicateModePicker({
 
           <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.btnGhost} onPress={onCancel}>
-              <Text style={styles.btnGhostText}>Cancel</Text>
+              <Text style={styles.btnGhostText}>{t('cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.btnPrimary} onPress={onScan}>
-              <Text style={styles.btnPrimaryText}>Scan</Text>
+              <Text style={styles.btnPrimaryText}>{t('scan')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

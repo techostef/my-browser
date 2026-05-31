@@ -11,6 +11,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { DetectedVideo } from '../types';
 import VideoPlayerController from './VideoPlayerController';
+import { useTranslation } from '../i18n';
 
 const TAG = '[VideoPreview]';
 
@@ -417,6 +418,7 @@ export default function VideoPreviewModal({
   onDownload,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -545,7 +547,7 @@ export default function VideoPreviewModal({
           <View style={styles.headerInfo}>
             <Text style={styles.headerType}>{video.type.toUpperCase()}</Text>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {video.pageTitle || 'Video Preview'}
+              {video.pageTitle || t('videoPreview')}
             </Text>
           </View>
           <View style={styles.headerSpacer} />
@@ -557,7 +559,7 @@ export default function VideoPreviewModal({
             {isLoading && !hasError && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#4ECDC4" />
-                <Text style={styles.loadingText}>Loading video...</Text>
+                <Text style={styles.loadingText}>{t('loadingVideo')}</Text>
               </View>
             )}
 
@@ -623,7 +625,7 @@ export default function VideoPreviewModal({
         {/* Bottom Actions */}
         <View style={styles.actions}>
           <TouchableOpacity style={styles.downloadBtn} onPress={handleDownload}>
-            <Text style={styles.downloadBtnText}>↓ Download Video</Text>
+            <Text style={styles.downloadBtnText}>{t('downloadVideoBtn')}</Text>
           </TouchableOpacity>
         </View>
       </View>

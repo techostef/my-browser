@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useTranslation } from '../i18n';
 
 interface Props {
   children: ReactNode;
@@ -9,6 +10,22 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+}
+
+function ErrorFallback({ error, onReset }: { error: Error | null; onReset: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.container}>
+      <Text style={styles.emoji}>⚠️</Text>
+      <Text style={styles.title}>{t('somethingWentWrong')}</Text>
+      <ScrollView style={styles.errorScroll} contentContainerStyle={styles.errorContent}>
+        <Text style={styles.errorText}>{error?.message || t('unknownError')}</Text>
+      </ScrollView>
+      <TouchableOpacity style={styles.retryBtn} onPress={onReset}>
+        <Text style={styles.retryText}>{t('tryAgain')}</Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
@@ -30,20 +47,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
 
-      return (
-        <View style={styles.container}>
-          <Text style={styles.emoji}>⚠️</Text>
-          <Text style={styles.title}>Something went wrong</Text>
-          <ScrollView style={styles.errorScroll} contentContainerStyle={styles.errorContent}>
-            <Text style={styles.errorText}>
-              {this.state.error?.message || 'Unknown error'}
-            </Text>
-          </ScrollView>
-          <TouchableOpacity style={styles.retryBtn} onPress={this.handleReset}>
-            <Text style={styles.retryText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      );
+      return <ErrorFallback error={this.state.error} onReset={this.handleReset} />;
     }
 
     return this.props.children;

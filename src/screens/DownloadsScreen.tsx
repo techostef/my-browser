@@ -24,6 +24,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import DownloadItem, { DownloadMediaType } from "../components/DownloadItem";
 import { DEVICE_DOWNLOAD_MOVE_TARGET, DownloadTask } from "../types";
 import { useDownloads } from "../store/downloadStore";
+import { useTranslation } from "../i18n";
 
 import { DownloadGridItem, FolderGridItem, FilterType, SortKey } from "../components/downloads/types";
 import FolderCard from "../components/downloads/FolderCard";
@@ -50,6 +51,7 @@ const TRASH_FOLDER_PATH = "__trash__";
 function DownloadsScreen() {
   const navigation = useNavigation();
   const { addOrUpdateProject } = useProjects();
+  const { t } = useTranslation();
   const {
     downloads,
     folders,
@@ -466,8 +468,8 @@ function DownloadsScreen() {
       })
       .catch((err) => {
         Alert.alert(
-          "Folder error",
-          err instanceof Error ? err.message : "Unable to update folder",
+          t('folderError'),
+          err instanceof Error ? err.message : t('unableToUpdateFolder'),
         );
       })
       .finally(closeFolderDialog);
@@ -481,16 +483,16 @@ function DownloadsScreen() {
           const message = err instanceof Error ? err.message : "Unable to delete folder";
           if (!force && message.toLowerCase().includes("not empty")) {
             Alert.alert(
-              "Delete folder and all contents?",
-              "This folder contains files or subfolders. This action cannot be undone.",
+              t('deleteFolderAndContents'),
+              t('deleteFolderAndContentsDesc'),
               [
-                { text: "Cancel", style: "cancel" },
-                { text: "Delete All", style: "destructive", onPress: () => runDeleteFolder(folderPath, true) },
+                { text: t('cancel'), style: "cancel" },
+                { text: t('deleteAll'), style: "destructive", onPress: () => runDeleteFolder(folderPath, true) },
               ],
             );
             return;
           }
-          Alert.alert("Folder error", message);
+          Alert.alert(t('folderError'), message);
         });
     },
     [deleteFolder, removeHiddenFolder],
@@ -499,9 +501,9 @@ function DownloadsScreen() {
   const handleDeleteFolder = useCallback(
     (folderPath: string) => {
       const folderName = folderPath.split("/").pop() || folderPath;
-      Alert.alert("Delete folder", `Delete folder "${folderName}"?`, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => runDeleteFolder(folderPath) },
+      Alert.alert(t('deleteFolder'), t('deleteFolderConfirm', { name: folderName }), [
+        { text: t('cancel'), style: "cancel" },
+        { text: t('delete'), style: "destructive", onPress: () => runDeleteFolder(folderPath) },
       ]);
     },
     [runDeleteFolder],
@@ -511,14 +513,14 @@ function DownloadsScreen() {
     (folderPath: string) => {
       const folderName = folderPath.split("/").pop() || folderPath;
       const isHidden = hiddenFolderPaths.has(folderPath);
-      Alert.alert(folderName, "Folder options", [
-        { text: "Rename", onPress: () => openRenameFolder(folderPath) },
+      Alert.alert(folderName, t('folderOptions'), [
+        { text: t('rename'), onPress: () => openRenameFolder(folderPath) },
         {
-          text: isHidden ? "Unhide" : "Hide",
+          text: isHidden ? t('unhide') : t('hide'),
           onPress: () => toggleHideFolder(folderPath),
         },
-        { text: "Delete", style: "destructive", onPress: () => handleDeleteFolder(folderPath) },
-        { text: "Cancel", style: "cancel" },
+        { text: t('delete'), style: "destructive", onPress: () => handleDeleteFolder(folderPath) },
+        { text: t('cancel'), style: "cancel" },
       ]);
     },
     [handleDeleteFolder, openRenameFolder, hiddenFolderPaths, toggleHideFolder],
@@ -594,12 +596,12 @@ function DownloadsScreen() {
   const handleDeletePermanently = useCallback(
     (id: string) => {
       Alert.alert(
-        "Delete Permanently",
-        "This file will be deleted forever and cannot be recovered.",
+        t('deletePermanently'),
+        t('deletePermanentlyDesc'),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t('cancel'), style: "cancel" },
           {
-            text: "Delete",
+            text: t('delete'),
             style: "destructive",
             onPress: () => {
               deleteFromTrash(id);
@@ -642,7 +644,7 @@ function DownloadsScreen() {
       const target = task.source === "private" ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
       moveDownloadToFolder(task.id, target)
         .catch((err) => {
-          Alert.alert("Copy error", err instanceof Error ? err.message : "Unable to move file");
+          Alert.alert(t('copyError'), err instanceof Error ? err.message : t('unableToMoveFile'));
         });
     },
     [copyTask, moveDownloadToFolder],
@@ -661,7 +663,7 @@ function DownloadsScreen() {
           }
         })
         .catch((err) => {
-          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move file");
+          Alert.alert(t('moveError'), err instanceof Error ? err.message : t('unableToMoveFile'));
         });
     },
     [moveDownloadToFolder, moveTaskInPrivate, migrateLabels, migrateHidden],
@@ -711,7 +713,7 @@ function DownloadsScreen() {
       const ids = Array.from(selectedIds);
       setBulkMoveModalVisible(false);
       setSelectedIds(new Set());
-      setMoveProgress({ total: ids.length, label: "Moving files..." });
+      setMoveProgress({ total: ids.length, label: t('movingFiles') });
       bulkMoveDownloadsToFolder(ids, folderPath)
         .then((idMapping) => {
           if (Object.keys(idMapping).length > 0) {
@@ -720,7 +722,7 @@ function DownloadsScreen() {
           }
         })
         .catch((err) => {
-          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
+          Alert.alert(t('moveError'), err instanceof Error ? err.message : t('unableToMoveSomeFiles'));
         })
         .finally(() => setMoveProgress(null));
     },
@@ -732,7 +734,7 @@ function DownloadsScreen() {
       const ids = Array.from(selectedIds);
       setBulkMoveToPrivateModalVisible(false);
       setSelectedIds(new Set());
-      setMoveProgress({ total: ids.length, label: "Moving to private folder..." });
+      setMoveProgress({ total: ids.length, label: t('movingToPrivate') });
       bulkMoveDownloadsToFolder(ids, folderPath ?? null)
         .then((idMapping) => {
           if (Object.keys(idMapping).length > 0) {
@@ -741,7 +743,7 @@ function DownloadsScreen() {
           }
         })
         .catch((err) => {
-          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
+          Alert.alert(t('moveError'), err instanceof Error ? err.message : t('unableToMoveSomeFiles'));
         })
         .finally(() => setMoveProgress(null));
     },
@@ -753,7 +755,7 @@ function DownloadsScreen() {
       const ids = Array.from(selectedIds);
       setBulkMoveToDeviceModalVisible(false);
       setSelectedIds(new Set());
-      setMoveProgress({ total: ids.length, label: "Moving to device download..." });
+      setMoveProgress({ total: ids.length, label: t('movingToDevice') });
       bulkMoveDownloadsToFolder(ids, DEVICE_DOWNLOAD_MOVE_TARGET)
         .then((idMapping) => {
           if (Object.keys(idMapping).length > 0) {
@@ -762,7 +764,7 @@ function DownloadsScreen() {
           }
         })
         .catch((err) => {
-          Alert.alert("Move error", err instanceof Error ? err.message : "Unable to move some files");
+          Alert.alert(t('moveError'), err instanceof Error ? err.message : t('unableToMoveSomeFiles'));
         })
         .finally(() => setMoveProgress(null));
     },
@@ -801,8 +803,8 @@ function DownloadsScreen() {
   const handleRescanDevice = useCallback(() => {
     scanDeviceDownloadFolder().catch((err) => {
       Alert.alert(
-        "Scan failed",
-        err instanceof Error ? err.message : "Unable to scan device download folder",
+        t('scanFailed'),
+        err instanceof Error ? err.message : t('unableToScanDevice'),
       );
     });
   }, [scanDeviceDownloadFolder]);
@@ -885,7 +887,7 @@ function DownloadsScreen() {
 
     const deviceRoot =
       currentFolderPath === ""
-        ? [{ type: "folder" as const, path: DEVICE_ROOT_PATH, name: "Device Download", source: "device" as const, isDeviceRoot: true }]
+        ? [{ type: "folder" as const, path: DEVICE_ROOT_PATH, name: t('deviceDownload'), source: "device" as const, isDeviceRoot: true }]
         : [];
 
     return [...privateFolders, ...deviceRoot, ...deviceFolderItems].sort((a, b) =>
@@ -978,8 +980,8 @@ function DownloadsScreen() {
       parts.push(`${icon} ${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`);
     }
     if (labelFilter.length === 1) parts.push(`🏷 ${labelFilter[0]}`);
-    else if (labelFilter.length > 1) parts.push(`🏷 ${labelFilter.length} labels`);
-    return parts.length > 0 ? parts.join(" · ") : "Filter All";
+    else if (labelFilter.length > 1) parts.push(`🏷 ${labelFilter.length} ${t('labels')}`);
+    return parts.length > 0 ? parts.join(" · ") : t('filterAll');
   }, [filterType, labelFilter]);
   const isFilterActive = filterType !== "all" || labelFilter.length > 0;
 
@@ -1000,7 +1002,7 @@ function DownloadsScreen() {
   // ── folder picker options builders ─────────────────────────────────────────
   const privateFolderPickerOptions = useCallback(
     (onSelect: (path: string | null) => void): FolderPickerOption[] => [
-      { label: "Root", onPress: () => onSelect(null) },
+      { label: t('root'), onPress: () => onSelect(null) },
       ...privateFolderTreeOptions.map((f) => ({
         label: `📁 ${f.name}`,
         depth: f.depth,
@@ -1015,7 +1017,7 @@ function DownloadsScreen() {
     if (copyTask.source === "device") {
       return privateFolderPickerOptions(handleCopyToFolder);
     }
-    return [{ label: "Device Download", onPress: () => handleCopyToFolder(DEVICE_DOWNLOAD_MOVE_TARGET) }];
+    return [{ label: t('deviceDownload'), onPress: () => handleCopyToFolder(DEVICE_DOWNLOAD_MOVE_TARGET) }];
   }, [copyTask, privateFolderPickerOptions, handleCopyToFolder]);
 
   // ── render item ────────────────────────────────────────────────────────────
@@ -1100,7 +1102,7 @@ function DownloadsScreen() {
             style={styles.screenBackBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.screenBackText}>{'‹'} Browser</Text>
+            <Text style={styles.screenBackText}>{'‹'} {t('browser')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1130,8 +1132,8 @@ function DownloadsScreen() {
         <View style={styles.deviceScanStatusRow}>
           <Text style={styles.deviceScanStatusText}>
             {isDeviceScanRunning
-              ? "Device download scan is running..."
-              : "Showing last scanned device download results"}
+              ? t('deviceScanRunning')
+              : t('deviceScanResults')}
           </Text>
         </View>
       )}
@@ -1141,17 +1143,17 @@ function DownloadsScreen() {
           <Text style={styles.emptyIcon}>📥</Text>
           <Text style={styles.emptyText}>
             {isDeviceScanRunning
-              ? "Scanning device folder..."
+              ? t('scanningDeviceFolder')
               : currentFolderPath
-                ? "This folder is empty"
-                : "No downloads yet"}
+                ? t('folderEmpty')
+                : t('noDownloadsYet')}
           </Text>
           <Text style={styles.emptySubtext}>
             {isDevicePath
-              ? "Use Rescan to refresh files and folders from device storage"
+              ? t('useRescanHint')
               : currentFolderPath
-                ? "Create a subfolder or move files here"
-                : "Browse a page with videos and tap the download button"}
+                ? t('createSubfolderHint')
+                : t('browseVideoHint')}
           </Text>
         </View>
       ) : (
@@ -1190,8 +1192,8 @@ function DownloadsScreen() {
         visible={!!copyTask}
         title={
           copyTask?.source === "device"
-            ? "Copy file to private folder"
-            : "Copy file to device download"
+            ? t('copyToPrivateFolder')
+            : t('copyToDeviceDownload')
         }
         options={copyModalOptions}
         onClose={() => setCopyTask(null)}
@@ -1199,29 +1201,29 @@ function DownloadsScreen() {
 
       <FolderPickerModal
         visible={!!moveTaskInPrivate}
-        title="Move file to folder"
+        title={t('moveFileToFolder')}
         options={privateFolderPickerOptions(handleMoveInPrivateToFolder)}
         onClose={() => setMoveTaskInPrivate(null)}
       />
 
       <FolderPickerModal
         visible={bulkMoveModalVisible}
-        title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to folder`}
+        title={t('moveItemsToFolder', { count: selectedIds.size, s: selectedIds.size !== 1 ? 's' : '' })}
         options={privateFolderPickerOptions(handleBulkMoveTo)}
         onClose={() => setBulkMoveModalVisible(false)}
       />
 
       <FolderPickerModal
         visible={bulkMoveToPrivateModalVisible}
-        title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to private folder`}
+        title={t('moveItemsToPrivate', { count: selectedIds.size, s: selectedIds.size !== 1 ? 's' : '' })}
         options={privateFolderPickerOptions(handleBulkMoveToPrivate)}
         onClose={() => setBulkMoveToPrivateModalVisible(false)}
       />
 
       <FolderPickerModal
         visible={bulkMoveToDeviceModalVisible}
-        title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to device download`}
-        options={[{ label: "Device Download", onPress: handleBulkMoveToDevice }]}
+        title={t('moveItemsToDevice', { count: selectedIds.size, s: selectedIds.size !== 1 ? 's' : '' })}
+        options={[{ label: t('deviceDownload'), onPress: handleBulkMoveToDevice }]}
         onClose={() => setBulkMoveToDeviceModalVisible(false)}
       />
 

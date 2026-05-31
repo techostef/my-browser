@@ -9,6 +9,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useSettings } from '../store/settingsStore';
+import { useTranslation } from '../i18n';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 
 interface Props {
@@ -39,6 +40,7 @@ export default function AddressBar({
   onMenuAction,
 }: Props) {
   const { searchUrl, themeColors: c } = useSettings();
+  const { t } = useTranslation();
   const { history, saveEntry, deleteEntry } = useSearchHistory();
   const displayUrl = initialUrl === 'about:home' ? '' : initialUrl;
   const [text, setText] = useState(displayUrl);
@@ -124,7 +126,7 @@ export default function AddressBar({
           onBlur={() => {
             blurTimeoutRef.current = setTimeout(() => setFocused(false), 200);
           }}
-          placeholder="Enter URL or search..."
+          placeholder={t('enterUrlOrSearch')}
           placeholderTextColor={c.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}
@@ -187,7 +189,7 @@ export default function AddressBar({
                 style={styles.menuItem}
                 onPress={() => { setMenuOpen(false); onMenuAction('downloadManga'); }}
               >
-                <Text style={[styles.menuItemText, { color: c.text }]}>📥  Download Manga</Text>
+                <Text style={[styles.menuItemText, { color: c.text }]}>📥  {t('downloadManga')}</Text>
               </TouchableOpacity>
             </View>
           )}

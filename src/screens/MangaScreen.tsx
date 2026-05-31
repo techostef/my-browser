@@ -11,6 +11,7 @@ import { useManga } from '../store/mangaStore';
 import MangaCard from '../components/manga/MangaCard';
 import { useSettings } from '../store/settingsStore';
 import { RootStackParamList } from '../types/videoEditor';
+import { useTranslation } from '../i18n';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -18,22 +19,23 @@ function MangaScreen() {
   const { titles, removeTitle, updateTitle } = useManga();
   const navigation = useNavigation<Nav>();
   const { themeColors: c } = useSettings();
+  const { t } = useTranslation();
 
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
 
   const handleLongPress = useCallback((mangaId: string, currentTitle: string) => {
     Alert.alert(currentTitle, undefined, [
-      { text: 'Rename', onPress: () => { setRenameTarget(mangaId); setRenameText(currentTitle); } },
+      { text: t('rename'), onPress: () => { setRenameTarget(mangaId); setRenameText(currentTitle); } },
       {
-        text: 'Delete', style: 'destructive', onPress: () => {
-          Alert.alert('Delete manga?', 'This will delete all downloaded chapters.', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => removeTitle(mangaId) },
+        text: t('delete'), style: 'destructive', onPress: () => {
+          Alert.alert(t('deleteManga'), t('deleteMangaConfirm'), [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('delete'), style: 'destructive', onPress: () => removeTitle(mangaId) },
           ]);
         },
       },
-      { text: 'Cancel', style: 'cancel' },
+      { text: t('cancel'), style: 'cancel' },
     ]);
   }, [removeTitle]);
 
@@ -47,15 +49,15 @@ function MangaScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <Text style={[styles.headerTitle, { color: c.text }]}>Manga</Text>
+        <Text style={[styles.headerTitle, { color: c.text }]}>{t('manga')}</Text>
       </View>
 
       {titles.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>📚</Text>
-          <Text style={[styles.emptyTitle, { color: c.text }]}>No manga downloaded yet</Text>
+          <Text style={[styles.emptyTitle, { color: c.text }]}>{t('noMangaYet')}</Text>
           <Text style={[styles.emptySubtitle, { color: c.textSecondary }]}>
-            Browse to a manga chapter and tap ⋮ → Download Manga
+            {t('noMangaHint')}
           </Text>
         </View>
       ) : (
@@ -77,7 +79,7 @@ function MangaScreen() {
       <Modal visible={renameTarget !== null} transparent animationType="fade" onRequestClose={() => setRenameTarget(null)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: c.surface }]}>
-            <Text style={[styles.modalTitle, { color: c.text }]}>Rename Manga</Text>
+            <Text style={[styles.modalTitle, { color: c.text }]}>{t('renameManga')}</Text>
             <TextInput
               style={[styles.modalInput, { color: c.text, borderColor: c.border, backgroundColor: c.inputBackground }]}
               value={renameText}
@@ -87,10 +89,10 @@ function MangaScreen() {
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setRenameTarget(null)}>
-                <Text style={[styles.modalCancel, { color: c.textSecondary }]}>Cancel</Text>
+                <Text style={[styles.modalCancel, { color: c.textSecondary }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={confirmRename}>
-                <Text style={styles.modalConfirm}>Rename</Text>
+                <Text style={styles.modalConfirm}>{t('rename')}</Text>
               </TouchableOpacity>
             </View>
           </View>

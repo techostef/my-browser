@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import type { Segment } from '../../types/videoEditor';
 import { formatTime } from '../../utils/videoEditor/srt';
+import { useTranslation } from '../../i18n';
 
 type Props = {
   segment: Segment;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function SubtitleItem({ segment, onUpdate }: Props) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(segment.text);
 
@@ -32,7 +34,7 @@ export default function SubtitleItem({ segment, onUpdate }: Props) {
           autoFocus
         />
       ) : (
-        <Text style={styles.text}>{text || <Text style={styles.empty}>Empty</Text>}</Text>
+        <Text style={styles.text}>{text || <Text style={styles.empty}>{t('subtitleEmpty')}</Text>}</Text>
       )}
     </TouchableOpacity>
   );

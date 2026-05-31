@@ -21,6 +21,7 @@ import { segmentsToSrt } from '../../lib/videoEditor/srt';
 import { loadSession, saveSession } from '../../lib/videoEditor/editSession';
 import { rgbaFromStyle, resolveFontFamily } from '../../components/videoEditor/SubtitleStyleControls';
 import { SUBTITLE_FONT_SCALE } from '../../types/videoEditor';
+import { useTranslation } from '../../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubtitleEditor'>;
 
@@ -38,6 +39,7 @@ function fmtTime(secs: number): string {
 }
 
 function SubtitleEditorScreen({ navigation, route }: Props) {
+  const { t } = useTranslation();
   const { videoUri, segments: initial, timelineSegments, duration, subtitleStyle: initialStyle } = route.params;
 
   const [segments, setSegments] = useState<Segment[]>(initial);
@@ -72,7 +74,7 @@ function SubtitleEditorScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!sessionReady.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       loadSession(videoUri).then(existing => {
         saveSession({
           videoUri,
@@ -84,7 +86,7 @@ function SubtitleEditorScreen({ navigation, route }: Props) {
         });
       });
     }, 600);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [segments, subtitleStyle, videoUri]);
 
   // ─── Current subtitle ──────────────────────────────────────────────────────
@@ -217,7 +219,7 @@ function SubtitleEditorScreen({ navigation, route }: Props) {
           <TouchableOpacity style={styles.playBtn} onPress={togglePlay}>
             <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
           </TouchableOpacity>
-          <Text style={styles.captionCount}>{segments.length} captions</Text>
+          <Text style={styles.captionCount}>{t('captionsCount', { count: String(segments.length) })}</Text>
         </View>
 
         {/* ── Video frame timeline + subtitle chip row with shared playhead ── */}
@@ -285,21 +287,21 @@ function SubtitleEditorScreen({ navigation, route }: Props) {
               multiline
               selectionColor="#a89fff"
               placeholderTextColor="#555"
-              placeholder="Type subtitle text…"
+              placeholder={t('typeSubtitlePlaceholder')}
             />
             <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
-              <Text style={styles.editDoneText}>Done</Text>
+              <Text style={styles.editDoneText}>{t('done')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.editBarPlaceholder}>
-            <Text style={styles.editBarHint}>Tap a caption to edit</Text>
+            <Text style={styles.editBarHint}>{t('tapCaptionToEdit')}</Text>
           </View>
         )}
 
         {/* ── Export button ── */}
         <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
-          <Text style={styles.exportBtnText}>Export with Subtitles →</Text>
+          <Text style={styles.exportBtnText}>{t('exportWithSubtitles')}</Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>

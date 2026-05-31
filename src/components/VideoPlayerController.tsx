@@ -15,6 +15,7 @@ import {
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DetectedVideo, HlsVariant } from '../types';
 import { isPlayingVideo, isPlayingVideoM4S } from './VideoDetectedBanner';
+import { useTranslation } from '../i18n';
 
 function formatTime(secs: number): string {
   if (!isFinite(secs) || isNaN(secs) || secs < 0) return '0:00';
@@ -66,6 +67,7 @@ export default function VideoPlayerController({
   videos,
   onDownloadVariant,
 }: Props) {
+  const { t } = useTranslation();
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isVariantPickerVisible, setIsVariantPickerVisible] = useState(false);
   const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>([]);
@@ -403,7 +405,7 @@ export default function VideoPlayerController({
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Text style={styles.downloadIcon}>↓</Text>
-                  <Text style={styles.downloadLabel}>Save</Text>
+                  <Text style={styles.downloadLabel}>{t('save')}</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={styles.topSpacer} />
@@ -479,7 +481,7 @@ export default function VideoPlayerController({
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.dlBtnIcon}>↓</Text>
-                  <Text style={styles.dlBtnLabel}>Save</Text>
+                  <Text style={styles.dlBtnLabel}>{t('save')}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -505,7 +507,7 @@ export default function VideoPlayerController({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detected Videos</Text>
+              <Text style={styles.modalTitle}>{t('detectedVideos')}</Text>
               <TouchableOpacity
                 onPress={() => setIsVariantPickerVisible(false)}
                 style={styles.closeBtn}
@@ -535,10 +537,10 @@ export default function VideoPlayerController({
                         <View style={{ flex: 1 }}>
                           <Text style={styles.videoUrl} numberOfLines={1}>
                             {item.type === "hls"
-                              ? item.pageTitle || "HLS Stream"
+                              ? item.pageTitle || t('hlsStream')
                               : item.type === "dash"
-                              ? item.pageTitle || "DASH Stream"
-                              : item.videoWidth || item.pageTitle || "Video"}
+                              ? item.pageTitle || t('dashStream')
+                              : item.videoWidth || item.pageTitle || t('video')}
                           </Text>
                         </View>
                       </View>
@@ -549,14 +551,14 @@ export default function VideoPlayerController({
                             <View key={vi} style={styles.variantRow}>
                               <View style={styles.variantInfo}>
                                 <Text style={styles.variantResolution}>
-                                  {variant.resolution || "Unknown"}
+                                  {variant.resolution || t('unknownResolution')}
                                 </Text>
                               </View>
                               <TouchableOpacity
                                 style={styles.downloadVariantBtn}
                                 onPress={() => handlePickVariant(item, variant)}
                               >
-                                <Text style={styles.downloadVariantBtnText}>↓ Download</Text>
+                                <Text style={styles.downloadVariantBtnText}>{t('downloadBtn')}</Text>
                               </TouchableOpacity>
                             </View>
                           ))}
@@ -570,7 +572,7 @@ export default function VideoPlayerController({
               />
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No downloadable videos found</Text>
+                <Text style={styles.emptyStateText}>{t('noDownloadableVideos')}</Text>
               </View>
             )}
           </View>
