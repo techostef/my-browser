@@ -9,7 +9,7 @@
       "**/*"
     ],
     "android": {
-      "package": "com.mybrowser.app",
+      "package": "com.techoky.obrowser",
       "permissions": [
         "INTERNET",
         "READ_MEDIA_VIDEO",

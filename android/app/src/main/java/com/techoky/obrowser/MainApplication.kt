@@ -1,4 +1,4 @@
-package com.mybrowser.app
+package com.techoky.obrowser
 
 import android.app.Application
 import android.content.res.Configuration

@@ -1,7 +1,7 @@
 module.exports = {
   project: {
     android: {
-      packageName: 'com.mybrowser.app',
+      packageName: 'com.techoky.obrowser',
     },
   },
 };
