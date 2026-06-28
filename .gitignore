@@ -9,6 +9,9 @@ build/
 *.keystore
 !debug.keystore
 
+# Release signing secrets — never commit
+android/keystore.properties
+
 # iOS
 ios/Pods/
 ios/build/
