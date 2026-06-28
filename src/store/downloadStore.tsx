@@ -65,11 +65,17 @@ interface DownloadContextValue extends DownloadState {
   moveDownloadToFolder: (
     id: string,
     folderName?: string | null,
+    conflict?: "rename" | "replace",
   ) => Promise<string | null>;
   bulkMoveDownloadsToFolder: (
     ids: string[],
     folderName?: string | null,
+    conflict?: "rename" | "replace",
   ) => Promise<Record<string, string>>;
+  countMoveConflicts: (
+    ids: string[],
+    folderName?: string | null,
+  ) => Promise<number>;
   removeDownload: (id: string) => Promise<string | null>;
   deleteFromTrash: (id: string) => void;
   prefetchDeviceFileSizes: (ids: string[]) => void;
@@ -677,6 +683,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     async (
       ids: string[],
       folderName?: string | null,
+      conflict: "rename" | "replace" = "rename",
     ): Promise<Record<string, string>> => {
       const tasks = ids
         .map((id) => downloadsRef.current.find((d) => d.id === id))
@@ -704,6 +711,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
               folderName,
               task.fileName || undefined,
               assetId,
+              conflict,
             );
           } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
             await downloadManager.copyPrivateFileToDeviceDownload(
@@ -713,6 +721,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             const newPath = await downloadManager.movePrivateFileToFolder(
               task.filePath,
               folderName,
+              conflict,
             );
             idMapping[task.id] = `file_${newPath}`;
           }
@@ -749,7 +758,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   );
 
   const moveDownloadToFolder = useCallback(
-    async (id: string, folderName?: string | null): Promise<string | null> => {
+    async (
+      id: string,
+      folderName?: string | null,
+      conflict: "rename" | "replace" = "rename",
+    ): Promise<string | null> => {
       const task = downloadsRef.current.find((d) => d.id === id);
       if (!task?.filePath || task.status !== "completed") {
         return null;
@@ -766,6 +779,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             folderName,
             task.fileName || undefined,
             assetId,
+            conflict,
           );
         } else if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
           await downloadManager.copyPrivateFileToDeviceDownload(task.filePath);
@@ -773,6 +787,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           const newPath = await downloadManager.movePrivateFileToFolder(
             task.filePath,
             folderName,
+            conflict,
           );
           newId = `file_${newPath}`;
         }
@@ -785,6 +800,36 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [refreshDownloads, scanDeviceDownloadFolder],
+  );
+
+  const countMoveConflicts = useCallback(
+    async (ids: string[], folderName?: string | null): Promise<number> => {
+      // The private→device-download action uses MediaLibrary and is out of
+      // scope for the in-app conflict prompt.
+      if (folderName === DEVICE_DOWNLOAD_MOVE_TARGET) {
+        return 0;
+      }
+      const tasks = ids
+        .map((id) => downloadsRef.current.find((d) => d.id === id))
+        .filter(
+          (t): t is DownloadTask =>
+            !!t && !!t.filePath && t.status === "completed",
+        );
+
+      const results = await Promise.all(
+        tasks.map((task) =>
+          downloadManager
+            .checkMoveConflict(
+              task.filePath,
+              folderName,
+              task.fileName || undefined,
+            )
+            .catch(() => false),
+        ),
+      );
+      return results.filter(Boolean).length;
+    },
+    [],
   );
 
   const startDownload = useCallback(
@@ -1056,6 +1101,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       scanDeviceDownloadFolder,
       moveDownloadToFolder,
       bulkMoveDownloadsToFolder,
+      countMoveConflicts,
       removeDownload,
       deleteFromTrash,
       prefetchDeviceFileSizes,
@@ -1076,6 +1122,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       scanDeviceDownloadFolder,
       moveDownloadToFolder,
       bulkMoveDownloadsToFolder,
+      countMoveConflicts,
       removeDownload,
       deleteFromTrash,
       prefetchDeviceFileSizes,

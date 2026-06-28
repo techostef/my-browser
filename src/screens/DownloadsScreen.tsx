@@ -30,6 +30,7 @@ import { AdBanner } from "../components/AdBanner";
 import ActionsDropdown from "../components/downloads/ActionsDropdown";
 import BulkActionsDialog from "../components/downloads/BulkActionsDialog";
 import DeleteConfirmModal from "../components/downloads/DeleteConfirmModal";
+import FileConflictModal from "../components/downloads/FileConflictModal";
 import DownloadsHeader from "../components/downloads/DownloadsHeader";
 import DuplicateModePicker, {
   DuplicateMode,
@@ -77,6 +78,7 @@ function DownloadsScreen() {
     deleteFolder,
     moveDownloadToFolder,
     bulkMoveDownloadsToFolder,
+    countMoveConflicts,
     removeDownload,
     deleteFromTrash,
     prefetchDeviceFileSizes,
@@ -117,6 +119,11 @@ function DownloadsScreen() {
   const [moveProgress, setMoveProgress] = useState<{
     total: number;
     label: string;
+  } | null>(null);
+  const [pendingMove, setPendingMove] = useState<{
+    count: number;
+    fileName?: string;
+    run: (conflict: "rename" | "replace") => void;
   } | null>(null);
   const [duplicatePickerVisible, setDuplicatePickerVisible] = useState(false);
   const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>("both");
@@ -715,42 +722,66 @@ function DownloadsScreen() {
   }, []);
 
   const handleCopyToFolder = useCallback(
-    (folderName?: string | null) => {
+    async (folderName?: string | null) => {
       if (!copyTask) return;
       const task = copyTask;
       setCopyTask(null);
       const target =
         task.source === "private" ? DEVICE_DOWNLOAD_MOVE_TARGET : folderName;
-      moveDownloadToFolder(task.id, target).catch((err) => {
-        Alert.alert(
-          t("copyError"),
-          err instanceof Error ? err.message : t("unableToMoveFile"),
-        );
-      });
-    },
-    [copyTask, moveDownloadToFolder],
-  );
-
-  const handleMoveInPrivateToFolder = useCallback(
-    (folderName?: string | null) => {
-      if (!moveTaskInPrivate) return;
-      const taskId = moveTaskInPrivate.id;
-      setMoveTaskInPrivate(null);
-      moveDownloadToFolder(taskId, folderName)
-        .then((newId) => {
-          if (newId) {
-            migrateLabels({ [taskId]: newId });
-            migrateHidden({ [taskId]: newId });
-          }
-        })
-        .catch((err) => {
+      const runMove = (conflict: "rename" | "replace") => {
+        moveDownloadToFolder(task.id, target, conflict).catch((err) => {
           Alert.alert(
-            t("moveError"),
+            t("copyError"),
             err instanceof Error ? err.message : t("unableToMoveFile"),
           );
         });
+      };
+      const conflicts = await countMoveConflicts([task.id], target);
+      if (conflicts > 0) {
+        setPendingMove({ count: conflicts, fileName: task.fileName, run: runMove });
+      } else {
+        runMove("rename");
+      }
     },
-    [moveDownloadToFolder, moveTaskInPrivate, migrateLabels, migrateHidden],
+    [copyTask, moveDownloadToFolder, countMoveConflicts, t],
+  );
+
+  const handleMoveInPrivateToFolder = useCallback(
+    async (folderName?: string | null) => {
+      if (!moveTaskInPrivate) return;
+      const task = moveTaskInPrivate;
+      const taskId = task.id;
+      setMoveTaskInPrivate(null);
+      const runMove = (conflict: "rename" | "replace") => {
+        moveDownloadToFolder(taskId, folderName, conflict)
+          .then((newId) => {
+            if (newId) {
+              migrateLabels({ [taskId]: newId });
+              migrateHidden({ [taskId]: newId });
+            }
+          })
+          .catch((err) => {
+            Alert.alert(
+              t("moveError"),
+              err instanceof Error ? err.message : t("unableToMoveFile"),
+            );
+          });
+      };
+      const conflicts = await countMoveConflicts([taskId], folderName);
+      if (conflicts > 0) {
+        setPendingMove({ count: conflicts, fileName: task.fileName, run: runMove });
+      } else {
+        runMove("rename");
+      }
+    },
+    [
+      moveDownloadToFolder,
+      moveTaskInPrivate,
+      migrateLabels,
+      migrateHidden,
+      countMoveConflicts,
+      t,
+    ],
   );
 
   // ── selection ──────────────────────────────────────────────────────────────
@@ -797,51 +828,81 @@ function DownloadsScreen() {
     );
 
   const handleBulkMoveTo = useCallback(
-    (folderPath?: string | null) => {
+    async (folderPath?: string | null) => {
       const ids = Array.from(selectedIds);
       setBulkMoveModalVisible(false);
-      setSelectedIds(new Set());
-      setMoveProgress({ total: ids.length, label: t("movingFiles") });
-      bulkMoveDownloadsToFolder(ids, folderPath)
-        .then((idMapping) => {
-          if (Object.keys(idMapping).length > 0) {
-            migrateLabels(idMapping);
-            migrateHidden(idMapping);
-          }
-        })
-        .catch((err) => {
-          Alert.alert(
-            t("moveError"),
-            err instanceof Error ? err.message : t("unableToMoveSomeFiles"),
-          );
-        })
-        .finally(() => setMoveProgress(null));
+      const runMove = (conflict: "rename" | "replace") => {
+        setSelectedIds(new Set());
+        setMoveProgress({ total: ids.length, label: t("movingFiles") });
+        bulkMoveDownloadsToFolder(ids, folderPath, conflict)
+          .then((idMapping) => {
+            if (Object.keys(idMapping).length > 0) {
+              migrateLabels(idMapping);
+              migrateHidden(idMapping);
+            }
+          })
+          .catch((err) => {
+            Alert.alert(
+              t("moveError"),
+              err instanceof Error ? err.message : t("unableToMoveSomeFiles"),
+            );
+          })
+          .finally(() => setMoveProgress(null));
+      };
+      const conflicts = await countMoveConflicts(ids, folderPath);
+      if (conflicts > 0) {
+        setPendingMove({ count: conflicts, run: runMove });
+      } else {
+        runMove("rename");
+      }
     },
-    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden],
+    [
+      bulkMoveDownloadsToFolder,
+      selectedIds,
+      migrateLabels,
+      migrateHidden,
+      countMoveConflicts,
+      t,
+    ],
   );
 
   const handleBulkMoveToPrivate = useCallback(
-    (folderPath?: string | null) => {
+    async (folderPath?: string | null) => {
       const ids = Array.from(selectedIds);
       setBulkMoveToPrivateModalVisible(false);
-      setSelectedIds(new Set());
-      setMoveProgress({ total: ids.length, label: t("movingToPrivate") });
-      bulkMoveDownloadsToFolder(ids, folderPath ?? null)
-        .then((idMapping) => {
-          if (Object.keys(idMapping).length > 0) {
-            migrateLabels(idMapping);
-            migrateHidden(idMapping);
-          }
-        })
-        .catch((err) => {
-          Alert.alert(
-            t("moveError"),
-            err instanceof Error ? err.message : t("unableToMoveSomeFiles"),
-          );
-        })
-        .finally(() => setMoveProgress(null));
+      const runMove = (conflict: "rename" | "replace") => {
+        setSelectedIds(new Set());
+        setMoveProgress({ total: ids.length, label: t("movingToPrivate") });
+        bulkMoveDownloadsToFolder(ids, folderPath ?? null, conflict)
+          .then((idMapping) => {
+            if (Object.keys(idMapping).length > 0) {
+              migrateLabels(idMapping);
+              migrateHidden(idMapping);
+            }
+          })
+          .catch((err) => {
+            Alert.alert(
+              t("moveError"),
+              err instanceof Error ? err.message : t("unableToMoveSomeFiles"),
+            );
+          })
+          .finally(() => setMoveProgress(null));
+      };
+      const conflicts = await countMoveConflicts(ids, folderPath ?? null);
+      if (conflicts > 0) {
+        setPendingMove({ count: conflicts, run: runMove });
+      } else {
+        runMove("rename");
+      }
     },
-    [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden],
+    [
+      bulkMoveDownloadsToFolder,
+      selectedIds,
+      migrateLabels,
+      migrateHidden,
+      countMoveConflicts,
+      t,
+    ],
   );
 
   const handleBulkMoveToDevice = useCallback(() => {
@@ -1554,6 +1615,21 @@ function DownloadsScreen() {
           setDeletePermanent(false);
         }}
         onConfirm={handleConfirmDelete}
+      />
+
+      <FileConflictModal
+        visible={!!pendingMove}
+        count={pendingMove?.count ?? 0}
+        fileName={pendingMove?.fileName}
+        onCancel={() => setPendingMove(null)}
+        onKeepBoth={() => {
+          pendingMove?.run("rename");
+          setPendingMove(null);
+        }}
+        onReplace={() => {
+          pendingMove?.run("replace");
+          setPendingMove(null);
+        }}
       />
 
       <BulkActionsDialog

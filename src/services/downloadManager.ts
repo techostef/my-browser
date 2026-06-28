@@ -860,26 +860,70 @@ class DownloadManager {
     }
   }
 
-  async movePrivateFileToFolder(filePath: string, folderPath?: string | null): Promise<string> {
+  /**
+   * Resolve the target directory for a move/copy into a private folder. Returns
+   * the absolute directory path (with trailing slash). Does not create it.
+   */
+  private async resolveTargetDir(folderPath?: string | null): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
-    const fileName = filePath.split('/').pop();
-    if (!fileName) {
-      throw new Error('Invalid file path');
-    }
-
-    let targetDir = privateDir;
     if (folderPath && folderPath.trim()) {
       const safeFolderPath = this.sanitizeFolderPath(folderPath);
       if (!safeFolderPath) {
         throw new Error('Folder name cannot be empty');
       }
-      targetDir = `${privateDir}${safeFolderPath}/`;
-      await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
+      return `${privateDir}${safeFolderPath}/`;
+    }
+    return privateDir;
+  }
+
+  /**
+   * Returns true if moving/copying the given file into the target folder would
+   * collide with an existing same-named file (a different file at that path).
+   */
+  async checkMoveConflict(
+    filePath: string,
+    folderPath?: string | null,
+    fileName?: string,
+  ): Promise<boolean> {
+    const name = fileName || filePath.split('/').pop();
+    if (!name) {
+      return false;
+    }
+    const targetDir = await this.resolveTargetDir(folderPath);
+    const targetPath = `${targetDir}${name}`;
+    if (targetPath === filePath) {
+      return false;
+    }
+    const info = await FileSystem.getInfoAsync(targetPath);
+    return info.exists;
+  }
+
+  async movePrivateFileToFolder(
+    filePath: string,
+    folderPath?: string | null,
+    conflict: 'rename' | 'replace' = 'rename',
+  ): Promise<string> {
+    const fileName = filePath.split('/').pop();
+    if (!fileName) {
+      throw new Error('Invalid file path');
     }
 
-    const targetPath = await this.getUniqueFilePath(`${targetDir}${fileName}`);
-    if (targetPath === filePath) {
-      return filePath;
+    const targetDir = await this.resolveTargetDir(folderPath);
+    await FileSystem.makeDirectoryAsync(targetDir, { intermediates: true });
+
+    const desiredPath = `${targetDir}${fileName}`;
+    let targetPath: string;
+    if (conflict === 'replace') {
+      targetPath = desiredPath;
+      if (targetPath === filePath) {
+        return filePath;
+      }
+      await FileSystem.deleteAsync(targetPath, { idempotent: true });
+    } else {
+      targetPath = await this.getUniqueFilePath(desiredPath);
+      if (targetPath === filePath) {
+        return filePath;
+      }
     }
 
     await FileSystem.moveAsync({ from: filePath, to: targetPath });
@@ -891,6 +935,7 @@ class DownloadManager {
     folderPath?: string | null,
     fileName?: string,
     assetId?: string | null,
+    conflict: 'rename' | 'replace' = 'rename',
   ): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
     // filePath may be a content:// URI (e.g. content://media/external/video/media/12345)
@@ -927,7 +972,14 @@ class DownloadManager {
       }
     }
 
-    const targetPath = await this.getUniqueFilePath(`${targetDir}${resolvedFileName}`);
+    const desiredPath = `${targetDir}${resolvedFileName}`;
+    let targetPath: string;
+    if (conflict === 'replace') {
+      targetPath = desiredPath;
+      await FileSystem.deleteAsync(targetPath, { idempotent: true });
+    } else {
+      targetPath = await this.getUniqueFilePath(desiredPath);
+    }
     await FileSystem.copyAsync({ from: sourcePath, to: targetPath });
     return targetPath;
   }
@@ -972,9 +1024,15 @@ class DownloadManager {
   }
 
   async renamePrivateFile(filePath: string, newFileName: string): Promise<string> {
-    const privateDir = await this.ensurePrivateFolder();
     const safeName = this.sanitizeProvidedFileName(newFileName);
-    const newPath = `${privateDir}${safeName}`;
+    // Keep the file in its current directory (e.g. a subfolder) instead of
+    // moving it back to the private root.
+    const slashIndex = filePath.lastIndexOf('/');
+    const dirPath = slashIndex >= 0 ? filePath.substring(0, slashIndex + 1) : '';
+    const newPath = `${dirPath}${safeName}`;
+    if (newPath === filePath) {
+      return filePath;
+    }
     await FileSystem.moveAsync({ from: filePath, to: newPath });
     return newPath;
   }
