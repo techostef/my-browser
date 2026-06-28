@@ -1,12 +1,10 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import {
-  Animated,
   Dimensions,
   FlatList,
   Modal,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -28,8 +26,6 @@ interface Props {
   onDownload: (video: DetectedVideo, variant?: HlsVariant) => void;
   onDismiss: () => void;
   onToggleFullscreen?: () => void;
-  onSeekForward?: (seconds: number) => void;
-  onSeekBackward?: (seconds: number) => void;
   onChangePosition?: (position: VideoBannerPosition) => void;
 }
 
@@ -82,9 +78,6 @@ export function isPlayingVideoM4S(
   return null;
 }
 
-const SEEK_SECONDS = 10;
-const DOUBLE_TAP_MS = 300;
-
 export default function VideoDetectedBanner({
   videos,
   visible = true,
@@ -95,8 +88,6 @@ export default function VideoDetectedBanner({
   onDownload,
   onDismiss,
   onToggleFullscreen,
-  onSeekForward,
-  onSeekBackward,
   onChangePosition,
 }: Props) {
   const { t } = useTranslation();
@@ -104,13 +95,6 @@ export default function VideoDetectedBanner({
   const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
     [],
   );
-
-  const lastLeftTap = useRef(0);
-  const lastRightTap = useRef(0);
-  const leftOpacity = useRef(new Animated.Value(0)).current;
-  const rightOpacity = useRef(new Animated.Value(0)).current;
-  const leftScale = useRef(new Animated.Value(0.75)).current;
-  const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
     let playingUrlM4S = "";
@@ -136,62 +120,6 @@ export default function VideoDetectedBanner({
       setFilteredVideos(videos.filter((v) => isPlayingVideo(v, playingUrl)));
     }
   }, [videos, playingUrl]);
-
-  const flashIndicator = (opacity: Animated.Value, scale: Animated.Value) => {
-    opacity.stopAnimation();
-    scale.stopAnimation();
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.delay(650),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 280,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.sequence([
-        Animated.spring(scale, {
-          toValue: 1,
-          speed: 24,
-          bounciness: 6,
-          useNativeDriver: true,
-        }),
-        Animated.delay(750),
-        Animated.timing(scale, {
-          toValue: 0.75,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-  };
-
-  const handleLeftTap = () => {
-    const now = Date.now();
-    if (now - lastLeftTap.current < DOUBLE_TAP_MS) {
-      onSeekBackward?.(SEEK_SECONDS);
-      flashIndicator(leftOpacity, leftScale);
-      lastLeftTap.current = 0;
-    } else {
-      lastLeftTap.current = now;
-    }
-  };
-
-  const handleRightTap = () => {
-    const now = Date.now();
-    if (now - lastRightTap.current < DOUBLE_TAP_MS) {
-      onSeekForward?.(SEEK_SECONDS);
-      flashIndicator(rightOpacity, rightScale);
-      lastRightTap.current = 0;
-    } else {
-      lastRightTap.current = now;
-    }
-  };
 
   const handlePreviewFromDetail = (video: DetectedVideo) => {
     setIsDetailVisible(false);
@@ -282,38 +210,6 @@ export default function VideoDetectedBanner({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-
-      {/* ── Seek zones (transparent, below banner) ── */}
-      <View style={styles.seekRow} pointerEvents="box-none">
-        {/* Left → backward */}
-        <Pressable style={styles.seekZone} onPress={handleLeftTap}>
-          <Animated.View
-            style={[
-              styles.seekIndicator,
-              { opacity: leftOpacity, transform: [{ scale: leftScale }] },
-            ]}
-          >
-            <Text style={styles.seekIcon}>{"◀◀"}</Text>
-            <Text style={styles.seekLabel}>-{SEEK_SECONDS}s</Text>
-          </Animated.View>
-        </Pressable>
-
-        {/* Centre → pass through to WebView */}
-        <View style={styles.seekMiddle} pointerEvents="none" />
-
-        {/* Right → forward */}
-        <Pressable style={styles.seekZone} onPress={handleRightTap}>
-          <Animated.View
-            style={[
-              styles.seekIndicator,
-              { opacity: rightOpacity, transform: [{ scale: rightScale }] },
-            ]}
-          >
-            <Text style={styles.seekIcon}>{"▶▶"}</Text>
-            <Text style={styles.seekLabel}>+{SEEK_SECONDS}s</Text>
-          </Animated.View>
-        </Pressable>
       </View>
 
       {/* ── Details modal ── */}
@@ -546,41 +442,6 @@ const styles = StyleSheet.create({
   },
   positionIcon: {
     fontSize: 14,
-  },
-
-  /* ── Seek zones ── */
-  seekRow: {
-    flexDirection: "row",
-    height: 168,
-  },
-  seekZone: {
-    flex: 3,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  seekMiddle: {
-    flex: 4,
-  },
-  seekIndicator: {
-    backgroundColor: "rgba(10,10,24,0.72)",
-    borderRadius: 44,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(78,205,196,0.35)",
-  },
-  seekIcon: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    lineHeight: 24,
-  },
-  seekLabel: {
-    color: "#4ECDC4",
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 5,
-    letterSpacing: 0.3,
   },
 
   /* ── Details modal ── */
