@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { AppState } from "react-native";
+import { Alert, AppState } from "react-native";
 import {
   AdEventType,
   RewardedAdEventType,
@@ -10,18 +10,19 @@ import { useAdActions, useAdState } from "../store/adStore";
 
 export function AdController() {
   const { pendingInterstitial } = useAdState();
-  const { markAdCompleted } = useAdActions();
+  const { markAdCompleted, cancelPendingDownload } = useAdActions();
 
   // Refs so callbacks never capture stale values
   const pendingRef = useRef(pendingInterstitial);
   pendingRef.current = pendingInterstitial;
   const markAdCompletedRef = useRef(markAdCompleted);
   markAdCompletedRef.current = markAdCompleted;
+  const cancelPendingDownloadRef = useRef(cancelPendingDownload);
+  cancelPendingDownloadRef.current = cancelPendingDownload;
 
   const isLoadingRef = useRef(false);
   const rewardEarnedRef = useRef(false);
   const retryCountRef = useRef(0);
-  const dismissCountRef = useRef(0);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadAndShow = useCallback(() => {
@@ -56,14 +57,15 @@ export function AdController() {
     unsubs.push(
       ad.addAdEventListener(AdEventType.CLOSED, () => {
         cleanup();
+        // Closed without earning the reward = the user skipped. Block the
+        // download and tell them to watch the ad. The trigger is re-armed so
+        // tapping download again re-shows the ad.
         if (!rewardEarnedRef.current && pendingRef.current) {
-          if (dismissCountRef.current < 2) {
-            dismissCountRef.current++;
-            pendingTimerRef.current = setTimeout(loadAndShow, 500);
-          } else {
-            dismissCountRef.current = 0;
-            markAdCompletedRef.current();
-          }
+          cancelPendingDownloadRef.current();
+          Alert.alert(
+            "Watch the ad",
+            "Please watch the full ad to start your download.",
+          );
         }
       }),
     );
@@ -90,7 +92,6 @@ export function AdController() {
   useEffect(() => {
     if (pendingInterstitial) {
       retryCountRef.current = 0;
-      dismissCountRef.current = 0;
       loadAndShow();
     }
   }, [pendingInterstitial, loadAndShow]);

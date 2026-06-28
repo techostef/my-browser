@@ -18,13 +18,19 @@ interface AdState {
 
 interface AdActions {
   // Call this instead of startDownload directly. On every 3rd press the ad
-  // shows first and startFn runs after the ad is dismissed/rewarded.
+  // shows first and startFn runs only after the reward is earned.
   // On other presses startFn runs immediately.
   requestDownload: (startFn: () => void) => void;
   markAdCompleted: () => void;
+  // Discard the pending download when the user skips the ad without earning
+  // the reward. Re-arms the trigger so the next request re-shows the ad.
+  cancelPendingDownload: () => void;
 }
 
-type AdAction = { type: "INCREMENT_DOWNLOAD" } | { type: "MARK_AD_COMPLETED" };
+type AdAction =
+  | { type: "INCREMENT_DOWNLOAD" }
+  | { type: "MARK_AD_COMPLETED" }
+  | { type: "CANCEL_PENDING_DOWNLOAD" };
 
 function adReducer(state: AdState, action: AdAction): AdState {
   switch (action.type) {
@@ -40,6 +46,11 @@ function adReducer(state: AdState, action: AdAction): AdState {
     }
     case "MARK_AD_COMPLETED":
       return { ...state, pendingInterstitial: false };
+    case "CANCEL_PENDING_DOWNLOAD":
+      return {
+        downloadCount: Math.max(0, state.downloadCount - 1),
+        pendingInterstitial: false,
+      };
     default:
       return state;
   }
@@ -75,6 +86,15 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const cancelPendingDownload = useCallback(() => {
+    pendingDownloadRef.current = null;
+    // Roll back the synchronous counter so the next requestDownload lands on
+    // the trigger again and re-shows the ad. Kept in sync with the reducer's
+    // downloadCount via CANCEL_PENDING_DOWNLOAD.
+    countRef.current = Math.max(0, countRef.current - 1);
+    dispatch({ type: "CANCEL_PENDING_DOWNLOAD" });
+  }, []);
+
   const requestDownload = useCallback((startFn: () => void) => {
     countRef.current += 1;
     const triggersAd = countRef.current % AD_TRIGGER_FREQUENCY === 0;
@@ -88,8 +108,8 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const actions = useMemo<AdActions>(
-    () => ({ requestDownload, markAdCompleted }),
-    [requestDownload, markAdCompleted],
+    () => ({ requestDownload, markAdCompleted, cancelPendingDownload }),
+    [requestDownload, markAdCompleted, cancelPendingDownload],
   );
 
   return (
