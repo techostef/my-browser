@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "../../i18n";
 
 type Props = {
@@ -26,11 +26,20 @@ export default function BulkActionsDialog({
   const { t } = useTranslation();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
         <View style={styles.dialog}>
-          <Text style={styles.title}>{t('bulkActions')}</Text>
-          
+          <Text style={styles.title}>{t("bulkActions")}</Text>
+
           {canBulkMove && (
             <>
               <TouchableOpacity
@@ -40,7 +49,9 @@ export default function BulkActionsDialog({
                   onBulkMove();
                 }}
               >
-                <Text style={styles.optionText}>📁 {t('moveToPrivateFolder')}</Text>
+                <Text style={styles.optionText}>
+                  📁 {t("moveToPrivateFolder")}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.option}
@@ -49,7 +60,9 @@ export default function BulkActionsDialog({
                   onBulkMoveToDevice();
                 }}
               >
-                <Text style={styles.optionText}>📱 {t('moveToDeviceDownload')}</Text>
+                <Text style={styles.optionText}>
+                  📱 {t("moveToDeviceDownload")}
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -62,7 +75,9 @@ export default function BulkActionsDialog({
                 onBulkMoveToPrivate();
               }}
             >
-              <Text style={styles.optionText}>📁 {t('moveToPrivateFolder')}</Text>
+              <Text style={styles.optionText}>
+                📁 {t("moveToPrivateFolder")}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -73,11 +88,13 @@ export default function BulkActionsDialog({
               onBulkDelete();
             }}
           >
-            <Text style={[styles.optionText, styles.deleteText]}>🗑 {t('delete')}</Text>
+            <Text style={[styles.optionText, styles.deleteText]}>
+              🗑 {t("delete")}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-            <Text style={styles.cancelText}>{t('cancel')}</Text>
+            <Text style={styles.cancelText}>{t("cancel")}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>

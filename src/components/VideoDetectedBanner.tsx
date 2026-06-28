@@ -2,21 +2,21 @@
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
 import React, { useEffect, useRef } from "react";
 import {
+  Animated,
+  Dimensions,
+  FlatList,
   Modal,
-  View,
+  Pressable,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  FlatList,
-  Animated,
-  Pressable,
-  Dimensions,
+  View,
 } from "react-native";
-import { DetectedVideo, HlsVariant } from "../types";
-import type { VideoBannerPosition } from "../store/settingsStore";
 import { useTranslation } from "../i18n";
+import type { VideoBannerPosition } from "../store/settingsStore";
+import { DetectedVideo, HlsVariant } from "../types";
 
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface Props {
   videos: DetectedVideo[];
@@ -53,13 +53,27 @@ export function isPlayingVideoM4S(
   const lastSegment = playingUrl.split("/").pop()?.split("?")[0];
   if (lastSegment) {
     // if m4s format
-    if (lastSegment.endsWith('.m4s')) {
-      const selected = videos.find((v) => v.hlsInfo?.mediaSegments?.find((segment) => segment.uri.includes(lastSegment))) || null;
+    if (lastSegment.endsWith(".m4s")) {
+      const selected =
+        videos.find((v) =>
+          v.hlsInfo?.mediaSegments?.find((segment) =>
+            segment.uri.includes(lastSegment),
+          ),
+        ) || null;
       if (selected) {
         return isPlayingVideoM4S(videos, selected.url);
       }
     }
-    const selectedVideo = videos.find((v) => v.hlsInfo?.variants?.find((variant) => variant.uri.includes(lastSegment)) || v.hlsInfo?.audioTracks?.find((track) => track.uri?.includes(lastSegment))) || null;
+    const selectedVideo =
+      videos.find(
+        (v) =>
+          v.hlsInfo?.variants?.find((variant) =>
+            variant.uri.includes(lastSegment),
+          ) ||
+          v.hlsInfo?.audioTracks?.find((track) =>
+            track.uri?.includes(lastSegment),
+          ),
+      ) || null;
     if (selectedVideo && selectedVideo.hlsInfo?.isMaster) {
       return selectedVideo;
     }
@@ -76,7 +90,7 @@ export default function VideoDetectedBanner({
   visible = true,
   playingUrl = "",
   segmentBlob = {},
-  position = 'top',
+  position = "top",
   onPreview,
   onDownload,
   onDismiss,
@@ -99,9 +113,9 @@ export default function VideoDetectedBanner({
   const rightScale = useRef(new Animated.Value(0.75)).current;
 
   useEffect(() => {
-    let playingUrlM4S = ''
+    let playingUrlM4S = "";
     if (playingUrl.includes("blob") && segmentBlob) {
-      playingUrlM4S = segmentBlob[playingUrl]
+      playingUrlM4S = segmentBlob[playingUrl];
     }
     if (playingUrlM4S) {
       const playingVideo = isPlayingVideoM4S(videos, playingUrlM4S);
@@ -111,7 +125,9 @@ export default function VideoDetectedBanner({
       }
     }
     const hslCount = videos.filter((v) => v.type === "hls").length;
-    const masterCount = videos.filter((v) => v.hlsInfo?.isMaster === true).length;
+    const masterCount = videos.filter(
+      (v) => v.hlsInfo?.isMaster === true,
+    ).length;
     if (hslCount === 1) {
       setFilteredVideos(videos.filter((v) => v.type === "hls"));
     } else if (masterCount === 1) {
@@ -192,7 +208,7 @@ export default function VideoDetectedBanner({
 
   const cyclePosition = () => {
     if (!onChangePosition) return;
-    const positions: VideoBannerPosition[] = ['top', 'left', 'right'];
+    const positions: VideoBannerPosition[] = ["top", "left", "right"];
     const currentIndex = positions.indexOf(position);
     const nextIndex = (currentIndex + 1) % positions.length;
     onChangePosition(positions[nextIndex]);
@@ -200,15 +216,15 @@ export default function VideoDetectedBanner({
 
   const containerStyle = [
     styles.overlay,
-    position === 'top' && { justifyContent: 'flex-start' as const },
-    position === 'left' && { alignItems: 'flex-start' as const },
-    position === 'right' && { alignItems: 'flex-end' as const },
+    position === "top" && { justifyContent: "flex-start" as const },
+    position === "left" && { alignItems: "flex-start" as const },
+    position === "right" && { alignItems: "flex-end" as const },
   ];
   const bannerStyle = [
     styles.banner,
-    position === 'top' && styles.bannerTop,
-    position === 'left' && styles.bannerLeft,
-    position === 'right' && styles.bannerRight,
+    position === "top" && styles.bannerTop,
+    position === "left" && styles.bannerLeft,
+    position === "right" && styles.bannerRight,
   ];
 
   if (filteredVideos.length === 0) return null;
@@ -224,7 +240,10 @@ export default function VideoDetectedBanner({
           <View style={styles.titleRow}>
             <View style={styles.liveDot} />
             <Text style={styles.title}>
-              {t('videosDetected', { count: String(filteredVideos.length), s: filteredVideos.length > 1 ? 's' : '' })}
+              {t("videosDetected", {
+                count: String(filteredVideos.length),
+                s: filteredVideos.length > 1 ? "s" : "",
+              })}
             </Text>
           </View>
 
@@ -307,7 +326,7 @@ export default function VideoDetectedBanner({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('detectedVideos')}</Text>
+              <Text style={styles.modalTitle}>{t("detectedVideos")}</Text>
               <TouchableOpacity
                 onPress={() => setIsDetailVisible(false)}
                 style={styles.closeBtn}
@@ -338,10 +357,12 @@ export default function VideoDetectedBanner({
                         <View style={{ flex: 1 }}>
                           <Text style={styles.videoUrl} numberOfLines={1}>
                             {item.type === "hls"
-                              ? item.pageTitle || t('hlsStream')
+                              ? item.pageTitle || t("hlsStream")
                               : item.type === "dash"
-                                ? item.pageTitle || t('dashStream')
-                                : item.videoWidth || item.pageTitle || t('video')}
+                                ? item.pageTitle || t("dashStream")
+                                : item.videoWidth ||
+                                  item.pageTitle ||
+                                  t("video")}
                           </Text>
                         </View>
                       </View>
@@ -352,7 +373,7 @@ export default function VideoDetectedBanner({
                             <View key={vi} style={styles.variantRow}>
                               <View style={styles.variantInfo}>
                                 <Text style={styles.variantResolution}>
-                                  {variant.resolution || t('unknownResolution')}
+                                  {variant.resolution || t("unknownResolution")}
                                 </Text>
                               </View>
                               <TouchableOpacity
@@ -362,7 +383,7 @@ export default function VideoDetectedBanner({
                                 }
                               >
                                 <Text style={styles.downloadVariantBtnText}>
-                                  {t('downloadBtn')}
+                                  {t("downloadBtn")}
                                 </Text>
                               </TouchableOpacity>
                             </View>
@@ -372,7 +393,8 @@ export default function VideoDetectedBanner({
                             onPress={() => handlePreviewFromDetail(item)}
                           >
                             <Text style={styles.previewBtnRowText}>
-                              {'▶ '}{t('preview')}
+                              {"▶ "}
+                              {t("preview")}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -395,7 +417,7 @@ export default function VideoDetectedBanner({
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>
-                  {t('noDownloadableVideos')}
+                  {t("noDownloadableVideos")}
                 </Text>
               </View>
             )}
@@ -433,21 +455,21 @@ const styles = StyleSheet.create({
   bannerLeft: {
     borderRightWidth: 1,
     borderRightColor: "#2A2A45",
-    width: (SCREEN_HEIGHT*0.82),
-    position: 'absolute',
+    width: SCREEN_HEIGHT * 0.82,
+    position: "absolute",
     top: -46,
-    transformOrigin: 'bottom left',
-    transform: [{ rotate: '90deg' }],
+    transformOrigin: "bottom left",
+    transform: [{ rotate: "90deg" }],
   },
   bannerRight: {
     borderLeftWidth: 1,
     borderLeftColor: "#2A2A45",
-    width: (SCREEN_HEIGHT*0.75) + (SCREEN_WIDTH * 0.17),
-    position: 'absolute',
-    top: (SCREEN_HEIGHT*0.75),
-    left: -SCREEN_WIDTH+(SCREEN_WIDTH*0.06),
-    transformOrigin: 'bottom right',
-    transform: [{ rotate: '90deg' }, { translateX: 20 }],
+    width: SCREEN_HEIGHT * 0.75 + SCREEN_WIDTH * 0.17,
+    position: "absolute",
+    top: SCREEN_HEIGHT * 0.75,
+    left: -SCREEN_WIDTH + SCREEN_WIDTH * 0.06,
+    transformOrigin: "bottom right",
+    transform: [{ rotate: "90deg" }, { translateX: 20 }],
   },
   header: {
     flexDirection: "row",

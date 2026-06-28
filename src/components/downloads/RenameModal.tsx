@@ -1,13 +1,7 @@
 import React from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-} from "react-native";
-import { sharedStyles as s } from "./sharedStyles";
+import { Modal, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "../../i18n";
+import { sharedStyles as s } from "./sharedStyles";
 
 type Props = {
   visible: boolean;
@@ -34,7 +28,7 @@ export default function RenameModal({
     >
       <View style={s.modalBackdrop}>
         <View style={s.modalCard}>
-          <Text style={s.modalTitle}>{t('renameFile')}</Text>
+          <Text style={s.modalTitle}>{t("renameFile")}</Text>
           <TextInput
             style={s.modalInput}
             value={renameText}
@@ -42,18 +36,18 @@ export default function RenameModal({
             autoFocus
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder={t('enterNewFileName')}
+            placeholder={t("enterNewFileName")}
           />
           <View style={s.modalActions}>
             <TouchableOpacity style={s.modalBtn} onPress={onCancel}>
-              <Text style={s.modalBtnText}>{t('cancel')}</Text>
+              <Text style={s.modalBtnText}>{t("cancel")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.modalBtn, s.modalPrimaryBtn]}
               onPress={onSubmit}
             >
               <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>
-                {t('rename')}
+                {t("rename")}
               </Text>
             </TouchableOpacity>
           </View>

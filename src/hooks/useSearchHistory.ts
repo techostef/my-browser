@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
 const HISTORY_KEY = '@search_history_v1';
 const MAX_HISTORY = 50;

@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  Modal,
-  View,
-  Text,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from "react-native";
 import { useTranslation } from "../../i18n";
 
 type Props = {
@@ -24,9 +18,9 @@ export default function MoveProgressModal({ progress }: Props) {
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <ActivityIndicator size="large" color="#1A73E8" />
-          <Text style={styles.label}>{progress?.label ?? t('working')}</Text>
+          <Text style={styles.label}>{progress?.label ?? t("working")}</Text>
           <Text style={styles.sub}>
-            {progress?.total ?? 0} {t('items')} · {t('pleaseWait')}
+            {progress?.total ?? 0} {t("items")} · {t("pleaseWait")}
           </Text>
         </View>
       </View>

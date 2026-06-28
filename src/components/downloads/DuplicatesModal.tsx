@@ -1,19 +1,19 @@
+import * as VideoThumbnails from "expo-video-thumbnails";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Modal,
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
   Alert,
+  FlatList,
   Image,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as VideoThumbnails from "expo-video-thumbnails";
+import { useTranslation } from "../../i18n";
 import { DownloadTask } from "../../types";
 import { DuplicateMode } from "./DuplicateModePicker";
-import { useTranslation } from "../../i18n";
 
 type Props = {
   visible: boolean;
@@ -49,7 +49,8 @@ function formatDuration(ms: number): string {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -68,9 +69,9 @@ function finalizeGroup(
   index: number,
 ): Group | null {
   if (files.length < 2) return null;
-  const sorted = files.slice().sort((a, b) =>
-    (a.fileName || "").localeCompare(b.fileName || ""),
-  );
+  const sorted = files
+    .slice()
+    .sort((a, b) => (a.fileName || "").localeCompare(b.fileName || ""));
   let sizeMin = Infinity;
   let sizeMax = 0;
   for (const f of sorted) {
@@ -112,7 +113,10 @@ function clusterBySize(items: DownloadTask[], keyPrefix: string): Group[] {
   return groups;
 }
 
-function computeGroups(downloads: DownloadTask[], mode: DuplicateMode): Group[] {
+function computeGroups(
+  downloads: DownloadTask[],
+  mode: DuplicateMode,
+): Group[] {
   const candidates: DownloadTask[] = [];
   for (const t of downloads) {
     if (t.status !== "completed") continue;
@@ -176,7 +180,10 @@ export default function DuplicatesModal({
   onDelete,
 }: Props) {
   const { t } = useTranslation();
-  const groups = useMemo(() => computeGroups(downloads, mode), [downloads, mode]);
+  const groups = useMemo(
+    () => computeGroups(downloads, mode),
+    [downloads, mode],
+  );
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -219,12 +226,15 @@ export default function DuplicatesModal({
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     Alert.alert(
-      t('moveToTrashTitle', { count: ids.length, s: ids.length !== 1 ? 's' : '' }),
-      t('moveToTrashDesc'),
+      t("moveToTrashTitle", {
+        count: ids.length,
+        s: ids.length !== 1 ? "s" : "",
+      }),
+      t("moveToTrashDesc"),
       [
-        { text: t('cancel'), style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: t('delete'),
+          text: t("delete"),
           style: "destructive",
           onPress: () => {
             onDelete(ids);
@@ -247,11 +257,11 @@ export default function DuplicatesModal({
             <Text style={styles.backText}>‹</Text>
           </TouchableOpacity>
           <View style={styles.titleWrap}>
-            <Text style={styles.title}>{t('duplicates')}</Text>
+            <Text style={styles.title}>{t("duplicates")}</Text>
             <Text style={styles.subtitle}>
               {groups.length === 0
-                ? t('noGroups')
-                : `${groups.length} ${t('group')}${groups.length !== 1 ? "s" : ""} · ${totalFiles} ${t('items')}`}
+                ? t("noGroups")
+                : `${groups.length} ${t("group")}${groups.length !== 1 ? "s" : ""} · ${totalFiles} ${t("items")}`}
             </Text>
           </View>
           <TouchableOpacity
@@ -268,7 +278,7 @@ export default function DuplicatesModal({
                 selectedCount === 0 && styles.deleteBtnTextDisabled,
               ]}
             >
-              {t('delete')} ({selectedCount})
+              {t("delete")} ({selectedCount})
             </Text>
           </TouchableOpacity>
         </View>
@@ -276,16 +286,19 @@ export default function DuplicatesModal({
         {groups.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🎉</Text>
-            <Text style={styles.emptyText}>{t('noDuplicatesFound')}</Text>
+            <Text style={styles.emptyText}>{t("noDuplicatesFound")}</Text>
           </View>
         ) : (
           <>
             <View style={styles.toolbar}>
               <Text style={styles.toolbarHint}>
-                {selectedCount} {t('selected')}
+                {selectedCount} {t("selected")}
               </Text>
               <TouchableOpacity
-                style={[styles.toolbarBtn, selectedCount === 0 && styles.toolbarBtnDisabled]}
+                style={[
+                  styles.toolbarBtn,
+                  selectedCount === 0 && styles.toolbarBtnDisabled,
+                ]}
                 disabled={selectedCount === 0}
                 onPress={clearAll}
               >
@@ -295,7 +308,7 @@ export default function DuplicatesModal({
                     selectedCount === 0 && styles.toolbarBtnTextDisabled,
                   ]}
                 >
-                  {t('clearAll')}
+                  {t("clearAll")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -350,12 +363,15 @@ function GroupCard({
       <View style={styles.groupHeader}>
         <View style={{ flex: 1 }}>
           <Text style={styles.groupTitle}>
-            {t('group')} {index + 1} · {group.files.length} {t('items')}
+            {t("group")} {index + 1} · {group.files.length} {t("items")}
           </Text>
           {!!meta && <Text style={styles.groupMeta}>{meta}</Text>}
         </View>
-        <TouchableOpacity onPress={onSelectAllButFirst} style={styles.helperBtn}>
-          <Text style={styles.helperBtnText}>{t('allButFirst')}</Text>
+        <TouchableOpacity
+          onPress={onSelectAllButFirst}
+          style={styles.helperBtn}
+        >
+          <Text style={styles.helperBtnText}>{t("allButFirst")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -379,7 +395,7 @@ type FileRowProps = {
 
 function FileRow({ file, selected, onToggle }: FileRowProps) {
   const [thumb, setThumb] = useState<string | null>(
-    file.filePath ? thumbCache.get(file.filePath) ?? null : null,
+    file.filePath ? (thumbCache.get(file.filePath) ?? null) : null,
   );
 
   useEffect(() => {
@@ -401,7 +417,7 @@ function FileRow({ file, selected, onToggle }: FileRowProps) {
     };
   }, [file.filePath]);
 
-  const folderLabel = file.folderPath ? file.folderPath : "Root";  // Root here is a folder name fallback, not UI text
+  const folderLabel = file.folderPath ? file.folderPath : "Root"; // Root here is a folder name fallback, not UI text
   const fileSize = formatBytes(file.totalBytes);
 
   return (

@@ -1,21 +1,21 @@
 import React, { useRef, useState } from "react";
 import {
-  View,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  FlatList,
+  View,
 } from "react-native";
-import { useSettings, useThemeColors, Shortcut } from "../store/settingsStore";
-import { useTranslation } from "../i18n";
 import { useSearchHistory } from "../hooks/useSearchHistory";
+import { useTranslation } from "../i18n";
+import { Shortcut, useSettings, useThemeColors } from "../store/settingsStore";
 
 const SHORTCUT_SIZE = 64;
 
@@ -25,9 +25,18 @@ function faviconLetter(shortcut: Shortcut): string {
 }
 
 function faviconBg(url: string): string {
-  const colors = ["#E8F4FD", "#FEF3C7", "#D1FAE5", "#FCE7F3", "#EDE9FE", "#FEE2E2", "#DBEAFE"];
+  const colors = [
+    "#E8F4FD",
+    "#FEF3C7",
+    "#D1FAE5",
+    "#FCE7F3",
+    "#EDE9FE",
+    "#FEE2E2",
+    "#DBEAFE",
+  ];
   let hash = 0;
-  for (let i = 0; i < url.length; i++) hash = url.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < url.length; i++)
+    hash = url.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
 }
 
@@ -36,7 +45,8 @@ interface Props {
 }
 
 export default function HomePage({ onNavigate }: Props) {
-  const { settings, history, searchUrl, addShortcut, removeShortcut } = useSettings();
+  const { settings, history, searchUrl, addShortcut, removeShortcut } =
+    useSettings();
   const c = useThemeColors();
   const { t } = useTranslation();
   const { history: searchHistory, saveEntry, deleteEntry } = useSearchHistory();
@@ -70,7 +80,9 @@ export default function HomePage({ onNavigate }: Props) {
 
   const filteredHistory = focused
     ? (query.trim()
-        ? searchHistory.filter((h) => h.toLowerCase().includes(query.toLowerCase()))
+        ? searchHistory.filter((h) =>
+            h.toLowerCase().includes(query.toLowerCase()),
+          )
         : searchHistory
       ).slice(0, 10)
     : [];
@@ -93,9 +105,13 @@ export default function HomePage({ onNavigate }: Props) {
 
   const handleLongPressShortcut = (shortcut: Shortcut) => {
     Alert.alert(shortcut.title, shortcut.url, [
-      { text: t('open'), onPress: () => onNavigate(shortcut.url) },
-      { text: t('remove'), style: "destructive", onPress: () => removeShortcut(shortcut.id) },
-      { text: t('cancel'), style: "cancel" },
+      { text: t("open"), onPress: () => onNavigate(shortcut.url) },
+      {
+        text: t("remove"),
+        style: "destructive",
+        onPress: () => removeShortcut(shortcut.id),
+      },
+      { text: t("cancel"), style: "cancel" },
     ]);
   };
 
@@ -104,161 +120,250 @@ export default function HomePage({ onNavigate }: Props) {
 
   return (
     <>
-    <ScrollView
-      style={[styles.root, { backgroundColor: c.background }]}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}>
-
-      {/* Search engine logo */}
-      <View style={styles.logoWrap}>
-        <Text style={[styles.logoText, { color: c.text }]}>{engineName}</Text>
-      </View>
-
-      {/* Search bar */}
-      <View style={styles.searchWrap}>
-        <View style={[styles.searchBar, { backgroundColor: c.inputBackground, borderColor: c.inputBorder }]}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={[styles.searchInput, { color: c.text }]}
-            placeholder={t('searchOrType', { engine: engineName })}
-            placeholderTextColor={c.textSecondary}
-            value={query}
-            onChangeText={setQuery}
-            onSubmitEditing={handleSearch}
-            onFocus={() => {
-              if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-              setFocused(true);
-            }}
-            onBlur={() => {
-              blurTimeoutRef.current = setTimeout(() => setFocused(false), 200);
-            }}
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={[styles.clearBtn, { color: c.textSecondary }]}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {filteredHistory.length > 0 && (
-          <View style={[styles.dropdown, { backgroundColor: c.inputBackground, borderColor: c.inputBorder }]}>
-            <FlatList
-              data={filteredHistory}
-              keyExtractor={(item, idx) => `${item}_${idx}`}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <View style={styles.historyDropdownRow}>
-                  <TouchableOpacity
-                    style={styles.historyDropdownItem}
-                    onPress={() => handlePickHistory(item)}
-                  >
-                    <Text style={[styles.historyDropdownText, { color: c.text }]} numberOfLines={1}>{item}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.historyDropdownDelete}
-                    onPress={() => deleteEntry(item)}
-                  >
-                    <Text style={[styles.historyDropdownDeleteText, { color: c.textSecondary }]}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            />
-          </View>
-        )}
-      </View>
-
-      {/* Shortcuts */}
-      <View style={styles.shortcutsGrid}>
-        {settings.shortcuts.map((s) => (
-          <TouchableOpacity
-            key={s.id}
-            style={styles.shortcutItem}
-            onPress={() => onNavigate(s.url)}
-            onLongPress={() => handleLongPressShortcut(s)}
-            activeOpacity={0.75}>
-            <View style={[styles.shortcutIcon, { backgroundColor: faviconBg(s.url) }]}>
-              <Text style={styles.shortcutEmoji}>{faviconLetter(s)}</Text>
-            </View>
-            <Text style={[styles.shortcutLabel, { color: c.textSecondary }]} numberOfLines={1}>{s.title}</Text>
-          </TouchableOpacity>
-        ))}
-
-        {/* Add shortcut button */}
-        <TouchableOpacity style={styles.shortcutItem} onPress={handleAddShortcut} activeOpacity={0.75}>
-          <View style={[styles.shortcutIcon, styles.shortcutAddIcon, { backgroundColor: c.surfaceSecondary, borderColor: c.border }]}>
-            <Text style={[styles.shortcutAddText, { color: c.textSecondary }]}>+</Text>
-          </View>
-          <Text style={[styles.shortcutLabel, { color: c.textSecondary }]}>{t('addShortcut')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Recent history */}
-      {recentHistory.length > 0 && (
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>{t('recent')}</Text>
-          {recentHistory.map((entry) => (
-            <TouchableOpacity
-              key={entry.id}
-              style={[styles.historyRow, { borderBottomColor: c.border }]}
-              onPress={() => onNavigate(entry.url)}
-              activeOpacity={0.7}>
-              <View style={[styles.historyIconWrap, { backgroundColor: c.surfaceSecondary }]}>
-                <Text style={styles.historyIcon}>🕐</Text>
-              </View>
-              <View style={styles.historyText}>
-                <Text style={[styles.historyTitle, { color: c.text }]} numberOfLines={1}>{entry.title}</Text>
-                <Text style={[styles.historyUrl, { color: c.textSecondary }]} numberOfLines={1}>
-                  {entry.url.replace(/^https?:\/\//, "")}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </ScrollView>
-
-    {/* Add Shortcut Modal */}
-    <Modal
-      visible={addModalVisible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setAddModalVisible(false)}
-    >
-      <KeyboardAvoidingView
-        style={styles.modalKAV}
-        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      <ScrollView
+        style={[styles.root, { backgroundColor: c.background }]}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setAddModalVisible(false)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>{t('addShortcut')}</Text>
+        {/* Search engine logo */}
+        <View style={styles.logoWrap}>
+          <Text style={[styles.logoText, { color: c.text }]}>{engineName}</Text>
+        </View>
+
+        {/* Search bar */}
+        <View style={styles.searchWrap}>
+          <View
+            style={[
+              styles.searchBar,
+              {
+                backgroundColor: c.inputBackground,
+                borderColor: c.inputBorder,
+              },
+            ]}
+          >
+            <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
-              style={styles.modalInput}
-              placeholder="https://example.com"
-              placeholderTextColor="#9CA3AF"
-              value={addUrl}
-              onChangeText={setAddUrl}
+              style={[styles.searchInput, { color: c.text }]}
+              placeholder={t("searchOrType", { engine: engineName })}
+              placeholderTextColor={c.textSecondary}
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={handleSearch}
+              onFocus={() => {
+                if (blurTimeoutRef.current)
+                  clearTimeout(blurTimeoutRef.current);
+                setFocused(true);
+              }}
+              onBlur={() => {
+                blurTimeoutRef.current = setTimeout(
+                  () => setFocused(false),
+                  200,
+                );
+              }}
+              returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="url"
-              returnKeyType="done"
-              onSubmitEditing={handleConfirmShortcut}
-              autoFocus
             />
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setAddModalVisible(false)}>
-                <Text style={styles.modalCancelText}>{t('cancel')}</Text>
+            {query.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setQuery("")}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.clearBtn, { color: c.textSecondary }]}>
+                  ✕
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalAddBtn} onPress={handleConfirmShortcut}>
-                <Text style={styles.modalAddText}>{t('add')}</Text>
-              </TouchableOpacity>
+            )}
+          </View>
+          {filteredHistory.length > 0 && (
+            <View
+              style={[
+                styles.dropdown,
+                {
+                  backgroundColor: c.inputBackground,
+                  borderColor: c.inputBorder,
+                },
+              ]}
+            >
+              <FlatList
+                data={filteredHistory}
+                keyExtractor={(item, idx) => `${item}_${idx}`}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <View style={styles.historyDropdownRow}>
+                    <TouchableOpacity
+                      style={styles.historyDropdownItem}
+                      onPress={() => handlePickHistory(item)}
+                    >
+                      <Text
+                        style={[styles.historyDropdownText, { color: c.text }]}
+                        numberOfLines={1}
+                      >
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.historyDropdownDelete}
+                      onPress={() => deleteEntry(item)}
+                    >
+                      <Text
+                        style={[
+                          styles.historyDropdownDeleteText,
+                          { color: c.textSecondary },
+                        ]}
+                      >
+                        ✕
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              />
             </View>
+          )}
+        </View>
+
+        {/* Shortcuts */}
+        <View style={styles.shortcutsGrid}>
+          {settings.shortcuts.map((s) => (
+            <TouchableOpacity
+              key={s.id}
+              style={styles.shortcutItem}
+              onPress={() => onNavigate(s.url)}
+              onLongPress={() => handleLongPressShortcut(s)}
+              activeOpacity={0.75}
+            >
+              <View
+                style={[
+                  styles.shortcutIcon,
+                  { backgroundColor: faviconBg(s.url) },
+                ]}
+              >
+                <Text style={styles.shortcutEmoji}>{faviconLetter(s)}</Text>
+              </View>
+              <Text
+                style={[styles.shortcutLabel, { color: c.textSecondary }]}
+                numberOfLines={1}
+              >
+                {s.title}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* Add shortcut button */}
+          <TouchableOpacity
+            style={styles.shortcutItem}
+            onPress={handleAddShortcut}
+            activeOpacity={0.75}
+          >
+            <View
+              style={[
+                styles.shortcutIcon,
+                styles.shortcutAddIcon,
+                { backgroundColor: c.surfaceSecondary, borderColor: c.border },
+              ]}
+            >
+              <Text
+                style={[styles.shortcutAddText, { color: c.textSecondary }]}
+              >
+                +
+              </Text>
+            </View>
+            <Text style={[styles.shortcutLabel, { color: c.textSecondary }]}>
+              {t("addShortcut")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Recent history */}
+        {recentHistory.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
+              {t("recent")}
+            </Text>
+            {recentHistory.map((entry) => (
+              <TouchableOpacity
+                key={entry.id}
+                style={[styles.historyRow, { borderBottomColor: c.border }]}
+                onPress={() => onNavigate(entry.url)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.historyIconWrap,
+                    { backgroundColor: c.surfaceSecondary },
+                  ]}
+                >
+                  <Text style={styles.historyIcon}>🕐</Text>
+                </View>
+                <View style={styles.historyText}>
+                  <Text
+                    style={[styles.historyTitle, { color: c.text }]}
+                    numberOfLines={1}
+                  >
+                    {entry.title}
+                  </Text>
+                  <Text
+                    style={[styles.historyUrl, { color: c.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {entry.url.replace(/^https?:\/\//, "")}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Add Shortcut Modal */}
+      <Modal
+        visible={addModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAddModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalKAV}
+          behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setAddModalVisible(false)}
+          >
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>{t("addShortcut")}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="https://example.com"
+                placeholderTextColor="#9CA3AF"
+                value={addUrl}
+                onChangeText={setAddUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="done"
+                onSubmitEditing={handleConfirmShortcut}
+                autoFocus
+              />
+              <View style={styles.modalBtnRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setAddModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelText}>{t("cancel")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalAddBtn}
+                  onPress={handleConfirmShortcut}
+                >
+                  <Text style={styles.modalAddText}>{t("add")}</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }

@@ -1,57 +1,79 @@
-import React, { useRef, useState, useEffect, useCallback, useMemo, useImperativeHandle } from 'react';
-import { withErrorBoundary } from '../../components/ErrorBoundary';
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useVideoPlayer, VideoPlayer, VideoView } from "expo-video";
+import React, {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
-  ScrollView,
-  TextInput,
-  KeyboardAvoidingView,
-  Keyboard,
-  Platform,
+  Alert,
   Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
-} from 'react-native';
-import { VideoView, useVideoPlayer, VideoPlayer } from 'expo-video';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList, SubtitleStyle } from '../../types/videoEditor';
-import { DEFAULT_SUBTITLE_STYLE } from '../../types/videoEditor';
-import SubtitleStyleControls, { rgbaFromStyle, resolveFontFamily } from '../../components/videoEditor/SubtitleStyleControls';
-import { SUBTITLE_FONT_SCALE } from '../../types/videoEditor';
-import VideoTimeline from '../../components/videoEditor/VideoTimeline';
-import type { TimelineSegment } from '../../components/videoEditor/VideoTimeline';
-import { isFullVideo, filterSegments } from '../../utils/videoEditor/videoProcessor';
-import { parseSrt, segmentsToSrt } from '../../lib/videoEditor/srt';
-import type { Segment as SubtitleSegment } from '../../lib/videoEditor/srt';
-import { getSubtitles } from '../../lib/videoEditor/subtitles';
-import { transcribeVideo } from '../../lib/videoEditor/whisper';
-import { translateSegments } from '../../lib/videoEditor/translate';
-import { loadSubtitles, saveSubtitles, clearSubtitles } from '../../lib/videoEditor/subtitleCache';
-import { getOpenAIKey } from '../../lib/openaiKey';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import {
-  loadSession,
-  saveSession,
+  AdEventType,
+  RewardedAdEventType,
+  RewardedInterstitialAd,
+} from "react-native-google-mobile-ads";
+import { withErrorBoundary } from "../../components/ErrorBoundary";
+import SubtitleStyleControls, {
+  resolveFontFamily,
+  rgbaFromStyle,
+} from "../../components/videoEditor/SubtitleStyleControls";
+import type { TimelineSegment } from "../../components/videoEditor/VideoTimeline";
+import VideoTimeline from "../../components/videoEditor/VideoTimeline";
+import { ENABLE_AI_CAPTIONS } from "../../config";
+import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../../config/admob";
+import { useTranslation } from "../../i18n";
+import { getOpenAIKey } from "../../lib/openaiKey";
+import {
   clearSession,
   loadLastSubtitleStyle,
+  loadSession,
   saveLastSubtitleStyle,
-} from '../../lib/videoEditor/editSession';
-import { ENABLE_AI_CAPTIONS } from '../../config';
-import { useTranslation } from '../../i18n';
+  saveSession,
+} from "../../lib/videoEditor/editSession";
+import type { Segment as SubtitleSegment } from "../../lib/videoEditor/srt";
+import { parseSrt, segmentsToSrt } from "../../lib/videoEditor/srt";
 import {
-  RewardedInterstitialAd,
-  RewardedAdEventType,
-  AdEventType,
-} from 'react-native-google-mobile-ads';
-import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from '../../config/admob';
+  clearSubtitles,
+  loadSubtitles,
+  saveSubtitles,
+} from "../../lib/videoEditor/subtitleCache";
+import { getSubtitles } from "../../lib/videoEditor/subtitles";
+import { translateSegments } from "../../lib/videoEditor/translate";
+import { transcribeVideo } from "../../lib/videoEditor/whisper";
+import type {
+  RootStackParamList,
+  SubtitleStyle,
+} from "../../types/videoEditor";
+import {
+  DEFAULT_SUBTITLE_STYLE,
+  SUBTITLE_FONT_SCALE,
+} from "../../types/videoEditor";
+import {
+  filterSegments,
+  isFullVideo,
+} from "../../utils/videoEditor/videoProcessor";
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Trim'>;
+type Props = NativeStackScreenProps<RootStackParamList, "Trim">;
 
 const MIN_SPLIT_GAP = 0.5;
-const SCREEN_W = Dimensions.get('window').width;
+const SCREEN_W = Dimensions.get("window").width;
 const PX_PER_SEC = 80;
 const CHIP_H = 36;
 const CHIP_ROW_H = 52;
@@ -73,7 +95,17 @@ interface ChipRowProps {
 
 const SubtitleChipRow = React.memo(
   React.forwardRef<ChipRowHandle, ChipRowProps>(
-    ({ subtitleSegments, activeSubtitleId, editingId, chipContentW, onChipPress, onChipDelete }, ref) => {
+    (
+      {
+        subtitleSegments,
+        activeSubtitleId,
+        editingId,
+        chipContentW,
+        onChipPress,
+        onChipDelete,
+      },
+      ref,
+    ) => {
       const scrollViewRef = useRef<ScrollView>(null);
       const [scrollX, setScrollX] = useState(0);
 
@@ -87,7 +119,7 @@ const SubtitleChipRow = React.memo(
         const l = scrollX - CHIP_RENDER_BUFFER;
         const r = scrollX + SCREEN_W + CHIP_RENDER_BUFFER;
         return subtitleSegments.filter(
-          seg => seg.end * PX_PER_SEC >= l && seg.start * PX_PER_SEC <= r,
+          (seg) => seg.end * PX_PER_SEC >= l && seg.start * PX_PER_SEC <= r,
         );
       }, [subtitleSegments, scrollX]);
 
@@ -99,12 +131,21 @@ const SubtitleChipRow = React.memo(
             showsHorizontalScrollIndicator={false}
             scrollEventThrottle={16}
             contentContainerStyle={{ paddingHorizontal: SCREEN_W / 2 }}
-            onScroll={e => setScrollX(e.nativeEvent.contentOffset.x)}
+            onScroll={(e) => setScrollX(e.nativeEvent.contentOffset.x)}
           >
-            <View style={{ width: chipContentW, height: CHIP_ROW_H, position: 'relative' }}>
-              {visibleChips.map(seg => {
+            <View
+              style={{
+                width: chipContentW,
+                height: CHIP_ROW_H,
+                position: "relative",
+              }}
+            >
+              {visibleChips.map((seg) => {
                 const left = seg.start * PX_PER_SEC;
-                const chipWidth = Math.max((seg.end - seg.start) * PX_PER_SEC - 2, 28);
+                const chipWidth = Math.max(
+                  (seg.end - seg.start) * PX_PER_SEC - 2,
+                  28,
+                );
                 return (
                   <TouchableOpacity
                     key={seg.id}
@@ -118,7 +159,7 @@ const SubtitleChipRow = React.memo(
                     ]}
                   >
                     <Text style={chipRowStyles.chipText} numberOfLines={1}>
-                      {seg.text || '…'}
+                      {seg.text || "…"}
                     </Text>
                     <TouchableOpacity
                       onPress={() => onChipDelete(seg)}
@@ -141,36 +182,36 @@ const SubtitleChipRow = React.memo(
 const chipRowStyles = StyleSheet.create({
   wrapper: {
     height: CHIP_ROW_H,
-    backgroundColor: '#111',
+    backgroundColor: "#111",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#222',
+    borderTopColor: "#222",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#222',
+    borderBottomColor: "#222",
   },
   chip: {
-    position: 'absolute',
+    position: "absolute",
     top: (CHIP_ROW_H - CHIP_H) / 2,
     height: CHIP_H,
-    backgroundColor: '#4a3f28',
+    backgroundColor: "#4a3f28",
     borderRadius: 6,
     paddingHorizontal: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1.5,
-    borderColor: '#6b5a38',
+    borderColor: "#6b5a38",
   },
   chipActive: {
-    backgroundColor: '#5c4e32',
-    borderColor: '#c89b4e',
+    backgroundColor: "#5c4e32",
+    borderColor: "#c89b4e",
   },
   chipSelected: {
-    backgroundColor: '#2a2060',
-    borderColor: '#6c63ff',
+    backgroundColor: "#2a2060",
+    borderColor: "#6c63ff",
   },
   chipText: {
-    color: '#f0d9a0',
+    color: "#f0d9a0",
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: "500",
     flex: 1,
   },
   chipDeleteBtn: {
@@ -178,14 +219,14 @@ const chipRowStyles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: 'rgba(255,82,82,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,82,82,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   chipDeleteText: {
-    color: '#ff5252',
+    color: "#ff5252",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     lineHeight: 16,
   },
 });
@@ -199,67 +240,74 @@ interface VideoWithSubtitleProps {
   subtitleFontSize: number;
 }
 
-const VideoWithSubtitle = React.memo((
-  { player, subtitleText, subtitleBg, subtitleColor, subtitleFontFamily, subtitleFontSize }: VideoWithSubtitleProps,
-) => (
-  <View style={videoStyles.container}>
-    <VideoView
-      player={player}
-      style={videoStyles.video}
-      contentFit="contain"
-      nativeControls={false}
-    />
-    {subtitleText ? (
-      <View style={videoStyles.subtitleOverlay} pointerEvents="none">
-        <Text
-          style={[
-            videoStyles.subtitleText,
-            {
-              backgroundColor: subtitleBg,
-              color: subtitleColor,
-              fontFamily: subtitleFontFamily,
-              fontSize: subtitleFontSize,
-            },
-          ]}
-        >
-          {subtitleText}
-        </Text>
-      </View>
-    ) : null}
-  </View>
-));
+const VideoWithSubtitle = React.memo(
+  ({
+    player,
+    subtitleText,
+    subtitleBg,
+    subtitleColor,
+    subtitleFontFamily,
+    subtitleFontSize,
+  }: VideoWithSubtitleProps) => (
+    <View style={videoStyles.container}>
+      <VideoView
+        player={player}
+        style={videoStyles.video}
+        contentFit="contain"
+        nativeControls={false}
+      />
+      {subtitleText ? (
+        <View style={videoStyles.subtitleOverlay} pointerEvents="none">
+          <Text
+            style={[
+              videoStyles.subtitleText,
+              {
+                backgroundColor: subtitleBg,
+                color: subtitleColor,
+                fontFamily: subtitleFontFamily,
+                fontSize: subtitleFontSize,
+              },
+            ]}
+          >
+            {subtitleText}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  ),
+);
 
 const videoStyles = StyleSheet.create({
   container: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 16 / 9,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   video: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   subtitleOverlay: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 12,
     left: 0,
     right: 0,
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: 16,
   },
   subtitleText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.9)',
+    fontWeight: "600",
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.9)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: "rgba(0,0,0,0.5)",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 });
 
@@ -268,14 +316,14 @@ function fmtCompact(secs: number): string {
   const m = Math.floor(safe / 60);
   const s = Math.floor(safe % 60);
   const ms = Math.floor((safe % 1) * 100);
-  return `${m}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
 }
 
 // Accepts "M:SS", "M:SS.ms", or plain seconds
 function parseTimeSec(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
-  const colonIdx = s.indexOf(':');
+  const colonIdx = s.indexOf(":");
   if (colonIdx !== -1) {
     const minutes = parseInt(s.slice(0, colonIdx), 10);
     const seconds = parseFloat(s.slice(colonIdx + 1));
@@ -290,35 +338,45 @@ function TrimScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const { videoUri, duration: paramDuration } = route.params;
 
-  const player = useVideoPlayer({ uri: videoUri }, p => {
+  const player = useVideoPlayer({ uri: videoUri }, (p) => {
     p.loop = false;
     // expo-video default is 0 (disabled); without this the timeUpdate event
     // never fires and the playhead time stays stuck at 0:00.
     p.timeUpdateEventInterval = 0.1;
   });
-  const [duration, setDuration] = useState(paramDuration > 0 ? paramDuration : 0);
+  const [duration, setDuration] = useState(
+    paramDuration > 0 ? paramDuration : 0,
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('');
-  const [subtitleSegments, setSubtitleSegments] = useState<SubtitleSegment[]>([]);
+  const [statusMsg, setStatusMsg] = useState("");
+  const [subtitleSegments, setSubtitleSegments] = useState<SubtitleSegment[]>(
+    [],
+  );
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState('');
-  const [editStartDraft, setEditStartDraft] = useState('');
-  const [editEndDraft, setEditEndDraft] = useState('');
+  const [editDraft, setEditDraft] = useState("");
+  const [editStartDraft, setEditStartDraft] = useState("");
+  const [editEndDraft, setEditEndDraft] = useState("");
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [captionMenuOpen, setCaptionMenuOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [manualCaptionOpen, setManualCaptionOpen] = useState(false);
-  const [manualStart, setManualStart] = useState('');
-  const [manualEnd, setManualEnd] = useState('');
-  const [manualText, setManualText] = useState('');
-  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(DEFAULT_SUBTITLE_STYLE);
-  const [setupSource, setSetupSource] = useState<'ai' | 'local' | 'edit' | null>(null);
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+  const [manualText, setManualText] = useState("");
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(
+    DEFAULT_SUBTITLE_STYLE,
+  );
+  const [setupSource, setSetupSource] = useState<
+    "ai" | "local" | "edit" | null
+  >(null);
 
   // Split-based editing state
   const [splitPoints, setSplitPoints] = useState<number[]>([]);
-  const [deletedSegments, setDeletedSegments] = useState<Set<number>>(new Set());
+  const [deletedSegments, setDeletedSegments] = useState<Set<number>>(
+    new Set(),
+  );
   const [selectedSegment, setSelectedSegment] = useState<number | null>(null);
   const [sessionRestored, setSessionRestored] = useState(false);
   const sessionReady = useRef(false);
@@ -326,15 +384,24 @@ function TrimScreen({ navigation, route }: Props) {
   const lastScrolledTime = useRef(-1);
 
   const durationRef = useRef(paramDuration > 0 ? paramDuration : 0);
-  useEffect(() => { durationRef.current = duration; }, [duration]);
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
 
   // ─── Track keyboard height so the inline edit bar can float above it ────────
   useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvt, e => setKeyboardHeight(e.endCoordinates.height));
+    const showEvt =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvt, (e) =>
+      setKeyboardHeight(e.endCoordinates.height),
+    );
     const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardHeight(0));
-    return () => { showSub.remove(); hideSub.remove(); };
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   // ─── Restore session on mount ────────────────────────────────────────────────
@@ -342,7 +409,10 @@ function TrimScreen({ navigation, route }: Props) {
   useEffect(() => {
     (async () => {
       const session = await loadSession(videoUri);
-      if (session && (session.splitPoints.length > 0 || session.deletedSegments.length > 0)) {
+      if (
+        session &&
+        (session.splitPoints.length > 0 || session.deletedSegments.length > 0)
+      ) {
         setSplitPoints(session.splitPoints);
         setDeletedSegments(new Set(session.deletedSegments));
         setSessionRestored(true);
@@ -357,7 +427,10 @@ function TrimScreen({ navigation, route }: Props) {
         if (cached) setSubtitleSegments(cached);
       }
       if (session?.subtitleStyle) {
-        setSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, ...session.subtitleStyle });
+        setSubtitleStyle({
+          ...DEFAULT_SUBTITLE_STYLE,
+          ...session.subtitleStyle,
+        });
       } else {
         // No per-video style yet — fall back to the last-used global default so
         // the user's preferred styling persists across export/session-clear and
@@ -378,7 +451,8 @@ function TrimScreen({ navigation, route }: Props) {
         videoUri,
         splitPoints,
         deletedSegments: [...deletedSegments],
-        subtitleSegments: subtitleSegments.length > 0 ? subtitleSegments : undefined,
+        subtitleSegments:
+          subtitleSegments.length > 0 ? subtitleSegments : undefined,
         subtitleStyle,
         updatedAt: Date.now(),
       });
@@ -409,7 +483,9 @@ function TrimScreen({ navigation, route }: Props) {
 
   // Ref for playback callback (avoids stale closure)
   const segmentsRef = useRef(segments);
-  useEffect(() => { segmentsRef.current = segments; }, [segments]);
+  useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
 
   // ─── Auto-select segment based on playhead position ─────────────────────────
 
@@ -430,21 +506,24 @@ function TrimScreen({ navigation, route }: Props) {
   useEffect(() => {
     // Handle the case where the player was already ready before listeners
     // attached — statusChange won't re-fire, so seed duration directly.
-    if (player.duration > 0 && Math.abs(player.duration - durationRef.current) > 0.5) {
+    if (
+      player.duration > 0 &&
+      Math.abs(player.duration - durationRef.current) > 0.5
+    ) {
       setDuration(player.duration);
     }
-    const statusSub = player.addListener('statusChange', ({ status }) => {
-      if (status === 'readyToPlay' && player.duration > 0) {
+    const statusSub = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay" && player.duration > 0) {
         const realDur = player.duration;
         if (Math.abs(realDur - durationRef.current) > 0.5) {
           setDuration(realDur);
         }
       }
     });
-    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+    const playingSub = player.addListener("playingChange", ({ isPlaying }) => {
       setIsPlaying(isPlaying);
     });
-    const timeSub = player.addListener('timeUpdate', ({ currentTime }) => {
+    const timeSub = player.addListener("timeUpdate", ({ currentTime }) => {
       if (!player.playing) return;
       setCurrentTime(currentTime);
 
@@ -452,15 +531,15 @@ function TrimScreen({ navigation, route }: Props) {
       const frac = currentTime / durationRef.current;
       const segs = segmentsRef.current;
 
-      const curSeg = segs.find(s => frac >= s.startFrac && frac < s.endFrac);
+      const curSeg = segs.find((s) => frac >= s.startFrac && frac < s.endFrac);
       if (curSeg && !curSeg.kept) {
         const curIdx = segs.indexOf(curSeg);
-        const nextKept = segs.slice(curIdx + 1).find(s => s.kept);
+        const nextKept = segs.slice(curIdx + 1).find((s) => s.kept);
         if (nextKept) {
           player.currentTime = nextKept.startFrac * durationRef.current;
         } else {
           player.pause();
-          const firstKept = segs.find(s => s.kept);
+          const firstKept = segs.find((s) => s.kept);
           if (firstKept) {
             player.currentTime = firstKept.startFrac * durationRef.current;
           }
@@ -468,10 +547,10 @@ function TrimScreen({ navigation, route }: Props) {
         return;
       }
 
-      const lastKept = [...segs].reverse().find(s => s.kept);
+      const lastKept = [...segs].reverse().find((s) => s.kept);
       if (lastKept && frac >= lastKept.endFrac - 0.005) {
         player.pause();
-        const firstKept = segs.find(s => s.kept);
+        const firstKept = segs.find((s) => s.kept);
         if (firstKept) {
           player.currentTime = firstKept.startFrac * durationRef.current;
         }
@@ -491,9 +570,11 @@ function TrimScreen({ navigation, route }: Props) {
       const dur = durationRef.current;
       const frac = currentTime / dur;
       const segs = segmentsRef.current;
-      const curSeg = segs.find(s => frac >= s.startFrac && frac < s.endFrac);
+      const curSeg = segs.find((s) => frac >= s.startFrac && frac < s.endFrac);
       if (curSeg && !curSeg.kept) {
-        const nextKept = segs.find(s => s.startFrac >= curSeg.startFrac && s.kept);
+        const nextKept = segs.find(
+          (s) => s.startFrac >= curSeg.startFrac && s.kept,
+        );
         if (nextKept) {
           player.currentTime = nextKept.startFrac * dur;
         }
@@ -504,12 +585,15 @@ function TrimScreen({ navigation, route }: Props) {
 
   // ─── Seek from timeline ─────────────────────────────────────────────────────
 
-  const handleSeek = useCallback((seconds: number) => {
-    setCurrentTime(seconds);
-    chipRowRef.current?.scrollTo(seconds * PX_PER_SEC, false);
-    lastScrolledTime.current = seconds;
-    player.currentTime = seconds;
-  }, [player]);
+  const handleSeek = useCallback(
+    (seconds: number) => {
+      setCurrentTime(seconds);
+      chipRowRef.current?.scrollTo(seconds * PX_PER_SEC, false);
+      lastScrolledTime.current = seconds;
+      player.currentTime = seconds;
+    },
+    [player],
+  );
 
   // ─── Split at playhead ──────────────────────────────────────────────────────
 
@@ -519,7 +603,7 @@ function TrimScreen({ navigation, route }: Props) {
 
     const frac = currentTime / dur;
     if (frac <= 0.01 || frac >= 0.99) {
-      Alert.alert(t('cannotSplit'), t('cannotSplitMsg'));
+      Alert.alert(t("cannotSplit"), t("cannotSplitMsg"));
       return;
     }
 
@@ -528,7 +612,7 @@ function TrimScreen({ navigation, route }: Props) {
       (sp) => Math.abs(sp - frac) < MIN_SPLIT_GAP / dur,
     );
     if (tooClose) {
-      Alert.alert(t('tooClose'), t('tooCloseMsg'));
+      Alert.alert(t("tooClose"), t("tooCloseMsg"));
       return;
     }
 
@@ -550,7 +634,7 @@ function TrimScreen({ navigation, route }: Props) {
         (s, i) => i !== selectedSegment && s.kept,
       );
       if (wouldKeep.length === 0) {
-        Alert.alert(t('cannotDeleteSection'), t('cannotDeleteMsg'));
+        Alert.alert(t("cannotDeleteSection"), t("cannotDeleteMsg"));
         return;
       }
       newDeleted.add(selectedSegment);
@@ -571,7 +655,10 @@ function TrimScreen({ navigation, route }: Props) {
   // ─── Subtitle editing ────────────────────────────────────────────────────────
 
   const currentSubtitle = useMemo(
-    () => subtitleSegments.find(s => currentTime >= s.start && currentTime < s.end) ?? null,
+    () =>
+      subtitleSegments.find(
+        (s) => currentTime >= s.start && currentTime < s.end,
+      ) ?? null,
     [subtitleSegments, currentTime],
   );
 
@@ -582,19 +669,22 @@ function TrimScreen({ navigation, route }: Props) {
     chipRowRef.current?.scrollTo(currentTime * PX_PER_SEC, false);
   }, [currentTime, subtitleSegments.length]);
 
-  const handleChipPress = useCallback((seg: SubtitleSegment) => {
-    setEditingId(seg.id);
-    setEditDraft(seg.text);
-    setEditStartDraft(fmtCompact(seg.start));
-    setEditEndDraft(fmtCompact(seg.end));
-    player.pause();
-    player.currentTime = seg.start;
-    chipRowRef.current?.scrollTo(seg.start * PX_PER_SEC, true);
-  }, [player]);
+  const handleChipPress = useCallback(
+    (seg: SubtitleSegment) => {
+      setEditingId(seg.id);
+      setEditDraft(seg.text);
+      setEditStartDraft(fmtCompact(seg.start));
+      setEditEndDraft(fmtCompact(seg.end));
+      player.pause();
+      player.currentTime = seg.start;
+      chipRowRef.current?.scrollTo(seg.start * PX_PER_SEC, true);
+    },
+    [player],
+  );
 
   const commitStartTime = useCallback(() => {
     if (editingId === null) return;
-    const seg = subtitleSegments.find(s => s.id === editingId);
+    const seg = subtitleSegments.find((s) => s.id === editingId);
     if (!seg) return;
     const parsed = parseTimeSec(editStartDraft);
     if (parsed === null || parsed < 0 || parsed >= seg.end) {
@@ -602,16 +692,16 @@ function TrimScreen({ navigation, route }: Props) {
       return;
     }
     if (Math.abs(parsed - seg.start) < 0.001) return;
-    setSubtitleSegments(prev =>
+    setSubtitleSegments((prev) =>
       prev
-        .map(s => (s.id === editingId ? { ...s, start: parsed } : s))
+        .map((s) => (s.id === editingId ? { ...s, start: parsed } : s))
         .sort((a, b) => a.start - b.start),
     );
   }, [editingId, editStartDraft, subtitleSegments]);
 
   const commitEndTime = useCallback(() => {
     if (editingId === null) return;
-    const seg = subtitleSegments.find(s => s.id === editingId);
+    const seg = subtitleSegments.find((s) => s.id === editingId);
     if (!seg) return;
     const parsed = parseTimeSec(editEndDraft);
     if (parsed === null || parsed <= seg.start) {
@@ -619,24 +709,33 @@ function TrimScreen({ navigation, route }: Props) {
       return;
     }
     if (Math.abs(parsed - seg.end) < 0.001) return;
-    setSubtitleSegments(prev =>
-      prev.map(s => (s.id === editingId ? { ...s, end: parsed } : s)),
+    setSubtitleSegments((prev) =>
+      prev.map((s) => (s.id === editingId ? { ...s, end: parsed } : s)),
     );
   }, [editingId, editEndDraft, subtitleSegments]);
 
-  const handleChipDelete = useCallback((seg: SubtitleSegment) => {
-    Alert.alert(t('deleteSubtitleTitle'), t('deleteSubtitleConfirm', { text: seg.text }), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('delete'),
-        style: 'destructive',
-        onPress: () => {
-          setSubtitleSegments(prev => prev.filter(s => s.id !== seg.id));
-          if (editingId === seg.id) setEditingId(null);
-        },
-      },
-    ]);
-  }, [editingId]);
+  const handleChipDelete = useCallback(
+    (seg: SubtitleSegment) => {
+      Alert.alert(
+        t("deleteSubtitleTitle"),
+        t("deleteSubtitleConfirm", { text: seg.text }),
+        [
+          { text: t("cancel"), style: "cancel" },
+          {
+            text: t("delete"),
+            style: "destructive",
+            onPress: () => {
+              setSubtitleSegments((prev) =>
+                prev.filter((s) => s.id !== seg.id),
+              );
+              if (editingId === seg.id) setEditingId(null);
+            },
+          },
+        ],
+      );
+    },
+    [editingId],
+  );
 
   const handleEditDone = useCallback(() => {
     commitStartTime();
@@ -646,37 +745,42 @@ function TrimScreen({ navigation, route }: Props) {
 
   const handleDeleteSubtitle = useCallback(() => {
     if (editingId === null) return;
-    Alert.alert(t('deleteSubtitleTitle'), t('removeSubtitleSegment'), [
-      { text: t('cancel'), style: 'cancel' },
+    Alert.alert(t("deleteSubtitleTitle"), t("removeSubtitleSegment"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: t('delete'),
-        style: 'destructive',
+        text: t("delete"),
+        style: "destructive",
         onPress: () => {
-          setSubtitleSegments(prev => prev.filter(s => s.id !== editingId));
+          setSubtitleSegments((prev) => prev.filter((s) => s.id !== editingId));
           setEditingId(null);
         },
       },
     ]);
   }, [editingId]);
 
-  const handleTextChange = useCallback((text: string) => {
-    setEditDraft(text);
-    setSubtitleSegments(prev => prev.map(s => (s.id === editingId ? { ...s, text } : s)));
-  }, [editingId]);
+  const handleTextChange = useCallback(
+    (text: string) => {
+      setEditDraft(text);
+      setSubtitleSegments((prev) =>
+        prev.map((s) => (s.id === editingId ? { ...s, text } : s)),
+      );
+    },
+    [editingId],
+  );
 
   const handleAddManualCaption = useCallback(() => {
     const start = parseTimeSec(manualStart);
     const end = parseTimeSec(manualEnd);
     if (start === null || end === null) {
-      Alert.alert(t('invalidTime'), t('invalidTimeMsg'));
+      Alert.alert(t("invalidTime"), t("invalidTimeMsg"));
       return;
     }
     if (end <= start) {
-      Alert.alert(t('invalidRange'), t('invalidRangeMsg'));
+      Alert.alert(t("invalidRange"), t("invalidRangeMsg"));
       return;
     }
     if (!manualText.trim()) {
-      Alert.alert(t('emptyCaption'), t('emptyCaptionMsg'));
+      Alert.alert(t("emptyCaption"), t("emptyCaptionMsg"));
       return;
     }
     const newSeg: SubtitleSegment = {
@@ -685,21 +789,21 @@ function TrimScreen({ navigation, route }: Props) {
       end,
       text: manualText.trim(),
     };
-    setSubtitleSegments(prev => {
+    setSubtitleSegments((prev) => {
       const updated = [...prev, newSeg].sort((a, b) => a.start - b.start);
       saveSubtitles(videoUri, updated);
       return updated;
     });
-    setManualStart('');
-    setManualEnd('');
-    setManualText('');
+    setManualStart("");
+    setManualEnd("");
+    setManualText("");
     setManualCaptionOpen(false);
   }, [manualStart, manualEnd, manualText, videoUri]);
 
   // ─── Export ──────────────────────────────────────────────────────────────────
 
   const handleExport = () => {
-    navigation.navigate('Export', {
+    navigation.navigate("Export", {
       videoUri,
       timelineSegments: segments,
       duration: durationRef.current,
@@ -711,15 +815,36 @@ function TrimScreen({ navigation, route }: Props) {
   };
 
   const handleExportWithAd = useCallback(() => {
-    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
+    const ad = RewardedInterstitialAd.createForAdRequest(
+      REWARDED_INTERSTITIAL_AD_UNIT_ID,
+    );
     const unsubs: Array<() => void> = [];
     let rewardEarned = false;
-    const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
+    const cleanup = () => {
+      unsubs.forEach((fn) => fn());
+      unsubs.length = 0;
+    };
 
-    unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
-    unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
-    unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => { cleanup(); if (rewardEarned) handleExport(); }));
-    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); handleExport(); }));
+    unsubs.push(
+      ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()),
+    );
+    unsubs.push(
+      ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+        rewardEarned = true;
+      }),
+    );
+    unsubs.push(
+      ad.addAdEventListener(AdEventType.CLOSED, () => {
+        cleanup();
+        if (rewardEarned) handleExport();
+      }),
+    );
+    unsubs.push(
+      ad.addAdEventListener(AdEventType.ERROR, () => {
+        cleanup();
+        handleExport();
+      }),
+    );
 
     ad.load();
   }, [handleExport]);
@@ -730,7 +855,7 @@ function TrimScreen({ navigation, route }: Props) {
     if (subtitleSegments.length === 0) return;
     setLoading(true);
     try {
-      setStatusMsg(t('statusTranslating', { language: targetLanguage }));
+      setStatusMsg(t("statusTranslating", { language: targetLanguage }));
       const translated = await translateSegments(
         subtitleSegments,
         targetLanguage,
@@ -741,15 +866,15 @@ function TrimScreen({ navigation, route }: Props) {
       await saveSubtitles(videoUri, translated);
       setSubtitleSegments(translated);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('translationFailed');
-      Alert.alert(t('translationFailed'), msg);
+      const msg = err instanceof Error ? err.message : t("translationFailed");
+      Alert.alert(t("translationFailed"), msg);
     } finally {
-      setStatusMsg('');
+      setStatusMsg("");
       setLoading(false);
     }
   };
 
-  const handleContinue = async (source: 'ai' | 'local' = 'ai') => {
+  const handleContinue = async (source: "ai" | "local" = "ai") => {
     setLoading(true);
     try {
       const dur = durationRef.current;
@@ -758,18 +883,22 @@ function TrimScreen({ navigation, route }: Props) {
       if (subtitleSegments.length > 0) return;
 
       // No saved subtitles — extract fresh
-      setStatusMsg(t('statusLookingForSubtitles'));
+      setStatusMsg(t("statusLookingForSubtitles"));
       let rawSrt = await getSubtitles(videoUri);
 
       if (!rawSrt) {
-        if (source === 'ai') {
+        if (source === "ai") {
           const apiKey = await getOpenAIKey();
           if (!apiKey) {
-            Alert.alert(t('noSubtitlesFound'), t('noSubtitlesFoundMsg'));
+            Alert.alert(t("noSubtitlesFound"), t("noSubtitlesFoundMsg"));
             return;
           }
         }
-        setStatusMsg(source === 'local' ? t('statusTranscribingLocal') : t('statusTranscribingAI'));
+        setStatusMsg(
+          source === "local"
+            ? t("statusTranscribingLocal")
+            : t("statusTranscribingAI"),
+        );
         const result = await transcribeVideo(videoUri, setStatusMsg, source);
         rawSrt = result.srt;
       }
@@ -784,16 +913,16 @@ function TrimScreen({ navigation, route }: Props) {
 
       let finalSegments = allSrtSegments;
       if (!isFullVideo(segments)) {
-        setStatusMsg(t('statusFiltering'));
+        setStatusMsg(t("statusFiltering"));
         const filtered = filterSegments(allSrtSegments, segments, dur);
         finalSegments = filtered.segments;
       }
 
       setSubtitleSegments(finalSegments);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('errorLabel');
-      Alert.alert(t('errorLabel'), msg);
-      setStatusMsg('');
+      const msg = err instanceof Error ? err.message : t("errorLabel");
+      Alert.alert(t("errorLabel"), msg);
+      setStatusMsg("");
     } finally {
       setLoading(false);
     }
@@ -813,19 +942,25 @@ function TrimScreen({ navigation, route }: Props) {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   const chipContentW = Math.max(duration * PX_PER_SEC, SCREEN_W);
-  const editingSeg = editingId !== null ? subtitleSegments.find(s => s.id === editingId) : null;
+  const editingSeg =
+    editingId !== null
+      ? subtitleSegments.find((s) => s.id === editingId)
+      : null;
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* ── Resume banner ── */}
       {sessionRestored && (
         <View style={styles.resumeBanner}>
-          <Text style={styles.resumeText}>{t('continuingEdit')}</Text>
-          <TouchableOpacity onPress={handleReset} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.resumeDismiss}>{t('resetDismissBtn')}</Text>
+          <Text style={styles.resumeText}>{t("continuingEdit")}</Text>
+          <TouchableOpacity
+            onPress={handleReset}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.resumeDismiss}>{t("resetDismissBtn")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -837,7 +972,9 @@ function TrimScreen({ navigation, route }: Props) {
         subtitleBg={rgbaFromStyle(subtitleStyle)}
         subtitleColor={subtitleStyle.textColor}
         subtitleFontFamily={resolveFontFamily(subtitleStyle.fontFamily)}
-        subtitleFontSize={Math.round(16 * SUBTITLE_FONT_SCALE[subtitleStyle.fontSize])}
+        subtitleFontSize={Math.round(
+          16 * SUBTITLE_FONT_SCALE[subtitleStyle.fontSize],
+        )}
       />
 
       {/* ── Controls bar ── */}
@@ -855,12 +992,14 @@ function TrimScreen({ navigation, route }: Props) {
           disabled={loading}
           activeOpacity={0.7}
         >
-          <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
+          <Text style={styles.playIcon}>{isPlaying ? "⏸" : "▶"}</Text>
         </TouchableOpacity>
 
         <View style={[styles.controlsSide, styles.controlsSideRight]}>
           <Text style={styles.keptBadge}>
-            {hasDeleted ? t('keptBadge', { time: fmtCompact(keptDuration) }) : fmtCompact(duration)}
+            {hasDeleted
+              ? t("keptBadge", { time: fmtCompact(keptDuration) })
+              : fmtCompact(duration)}
           </Text>
         </View>
       </View>
@@ -895,18 +1034,17 @@ function TrimScreen({ navigation, route }: Props) {
       <View style={styles.infoRow}>
         {hasSplits && selectedSegment !== null && selSeg ? (
           <Text style={styles.infoText}>
-            {t('sectionLabel')} {selectedSegment + 1}/{segments.length}
-            {'  •  '}
-            {fmtCompact(selSeg.startFrac * duration)} → {fmtCompact(selSeg.endFrac * duration)}
-            {'  •  '}
-            <Text style={{ color: selIsDeleted ? '#ff5252' : '#4caf50' }}>
-              {selIsDeleted ? t('sectionDeletedLabel') : t('sectionKeptLabel')}
+            {t("sectionLabel")} {selectedSegment + 1}/{segments.length}
+            {"  •  "}
+            {fmtCompact(selSeg.startFrac * duration)} →{" "}
+            {fmtCompact(selSeg.endFrac * duration)}
+            {"  •  "}
+            <Text style={{ color: selIsDeleted ? "#ff5252" : "#4caf50" }}>
+              {selIsDeleted ? t("sectionDeletedLabel") : t("sectionKeptLabel")}
             </Text>
           </Text>
         ) : (
-          <Text style={styles.hintText}>
-            {t('scrollToSplitHint')}
-          </Text>
+          <Text style={styles.hintText}>{t("scrollToSplitHint")}</Text>
         )}
       </View>
 
@@ -940,11 +1078,17 @@ function TrimScreen({ navigation, route }: Props) {
               placeholderTextColor="#555"
             />
             <View style={styles.editTimeSpacer} />
-            <TouchableOpacity style={styles.editDeleteBtn} onPress={handleDeleteSubtitle}>
-              <Text style={styles.editDeleteText}>{t('delete')}</Text>
+            <TouchableOpacity
+              style={styles.editDeleteBtn}
+              onPress={handleDeleteSubtitle}
+            >
+              <Text style={styles.editDeleteText}>{t("delete")}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.editDoneBtn} onPress={handleEditDone}>
-              <Text style={styles.editDoneText}>{t('done')}</Text>
+            <TouchableOpacity
+              style={styles.editDoneBtn}
+              onPress={handleEditDone}
+            >
+              <Text style={styles.editDoneText}>{t("done")}</Text>
             </TouchableOpacity>
           </View>
           <TextInput
@@ -955,7 +1099,7 @@ function TrimScreen({ navigation, route }: Props) {
             multiline
             selectionColor="#a89fff"
             placeholderTextColor="#555"
-            placeholder={t('typeSubtitlePlaceholder')}
+            placeholder={t("typeSubtitlePlaceholder")}
           />
         </View>
       ) : null}
@@ -978,8 +1122,12 @@ function TrimScreen({ navigation, route }: Props) {
             onPress={handleReset}
             disabled={loading || !hasSplits}
           >
-            <Text style={[styles.toolbarIcon, !hasSplits && styles.iconDim]}>↺</Text>
-            <Text style={[styles.toolbarLabel, !hasSplits && styles.labelDim]}>{t('resetBtn')}</Text>
+            <Text style={[styles.toolbarIcon, !hasSplits && styles.iconDim]}>
+              ↺
+            </Text>
+            <Text style={[styles.toolbarLabel, !hasSplits && styles.labelDim]}>
+              {t("resetBtn")}
+            </Text>
           </TouchableOpacity>
 
           {/* Split */}
@@ -989,7 +1137,9 @@ function TrimScreen({ navigation, route }: Props) {
             disabled={loading}
           >
             <Text style={styles.toolbarIcon}>✂️</Text>
-            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>{t('splitBtn')}</Text>
+            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>
+              {t("splitBtn")}
+            </Text>
           </TouchableOpacity>
 
           {/* Delete / Restore */}
@@ -998,11 +1148,11 @@ function TrimScreen({ navigation, route }: Props) {
             onPress={handleDeleteSegment}
             disabled={loading || selectedSegment === null || !hasSplits}
           >
-            <Text style={[styles.toolbarIcon, (!hasSplits) && styles.iconDim]}>
-              {selIsDeleted ? '↩' : '🗑️'}
+            <Text style={[styles.toolbarIcon, !hasSplits && styles.iconDim]}>
+              {selIsDeleted ? "↩" : "🗑️"}
             </Text>
-            <Text style={[styles.toolbarLabel, (!hasSplits) && styles.labelDim]}>
-              {selIsDeleted ? t('restoreBtn') : t('delete')}
+            <Text style={[styles.toolbarLabel, !hasSplits && styles.labelDim]}>
+              {selIsDeleted ? t("restoreBtn") : t("delete")}
             </Text>
           </TouchableOpacity>
 
@@ -1013,11 +1163,15 @@ function TrimScreen({ navigation, route }: Props) {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" size="small" style={{ height: 26 }} />
+              <ActivityIndicator
+                color="#fff"
+                size="small"
+                style={{ height: 26 }}
+              />
             ) : (
               <Text style={styles.toolbarIcon}>💬</Text>
             )}
-            <Text style={styles.toolbarLabel}>{t('captionBtn')}</Text>
+            <Text style={styles.toolbarLabel}>{t("captionBtn")}</Text>
           </TouchableOpacity>
 
           {/* Export → ExportScreen (no subtitles) */}
@@ -1027,7 +1181,9 @@ function TrimScreen({ navigation, route }: Props) {
             disabled={loading}
           >
             <Text style={styles.toolbarIcon}>⬇️</Text>
-            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>{t('exportBtn')}</Text>
+            <Text style={[styles.toolbarLabel, styles.toolbarLabelActive]}>
+              {t("exportBtn")}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1039,21 +1195,28 @@ function TrimScreen({ navigation, route }: Props) {
         animationType="fade"
         onRequestClose={() => setCaptionMenuOpen(false)}
       >
-        <Pressable style={styles.menuBackdrop} onPress={() => setCaptionMenuOpen(false)}>
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setCaptionMenuOpen(false)}
+        >
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            <Text style={styles.menuTitle}>{t('captionBtn')}</Text>
+            <Text style={styles.menuTitle}>{t("captionBtn")}</Text>
             {ENABLE_AI_CAPTIONS && (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
                   setCaptionMenuOpen(false);
-                  setSetupSource('ai');
+                  setSetupSource("ai");
                 }}
               >
                 <Text style={styles.menuItemIcon}>📝</Text>
                 <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemLabel}>{t('generateCaptionAI')}</Text>
-                  <Text style={styles.menuItemDetail}>{t('generateCaptionAIDetail')}</Text>
+                  <Text style={styles.menuItemLabel}>
+                    {t("generateCaptionAI")}
+                  </Text>
+                  <Text style={styles.menuItemDetail}>
+                    {t("generateCaptionAIDetail")}
+                  </Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -1061,13 +1224,17 @@ function TrimScreen({ navigation, route }: Props) {
               style={styles.menuItem}
               onPress={() => {
                 setCaptionMenuOpen(false);
-                setSetupSource('local');
+                setSetupSource("local");
               }}
             >
               <Text style={styles.menuItemIcon}>📱</Text>
               <View style={styles.menuItemBody}>
-                <Text style={styles.menuItemLabel}>{t('generateCaptionLocal')}</Text>
-                <Text style={styles.menuItemDetail}>{t('generateCaptionLocalDetail')}</Text>
+                <Text style={styles.menuItemLabel}>
+                  {t("generateCaptionLocal")}
+                </Text>
+                <Text style={styles.menuItemDetail}>
+                  {t("generateCaptionLocalDetail")}
+                </Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1079,8 +1246,12 @@ function TrimScreen({ navigation, route }: Props) {
             >
               <Text style={styles.menuItemIcon}>✏️</Text>
               <View style={styles.menuItemBody}>
-                <Text style={styles.menuItemLabel}>{t('addManualCaptionMenu')}</Text>
-                <Text style={styles.menuItemDetail}>{t('addManualCaptionDetail')}</Text>
+                <Text style={styles.menuItemLabel}>
+                  {t("addManualCaptionMenu")}
+                </Text>
+                <Text style={styles.menuItemDetail}>
+                  {t("addManualCaptionDetail")}
+                </Text>
               </View>
             </TouchableOpacity>
             {subtitleSegments.length > 0 && (
@@ -1088,13 +1259,17 @@ function TrimScreen({ navigation, route }: Props) {
                 style={styles.menuItem}
                 onPress={() => {
                   setCaptionMenuOpen(false);
-                  setSetupSource('edit');
+                  setSetupSource("edit");
                 }}
               >
                 <Text style={styles.menuItemIcon}>🎨</Text>
                 <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemLabel}>{t('changeSubtitleStyle')}</Text>
-                  <Text style={styles.menuItemDetail}>{t('changeSubtitleStyleDetail')}</Text>
+                  <Text style={styles.menuItemLabel}>
+                    {t("changeSubtitleStyle")}
+                  </Text>
+                  <Text style={styles.menuItemDetail}>
+                    {t("changeSubtitleStyleDetail")}
+                  </Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -1104,12 +1279,14 @@ function TrimScreen({ navigation, route }: Props) {
                 onPress={() => {
                   setCaptionMenuOpen(false);
                   Alert.alert(
-                    t('deleteSubtitlesMenu'),
-                    t('deleteSubtitlesBody'),
+                    t("deleteSubtitlesMenu"),
+                    t("deleteSubtitlesBody"),
                     [
-                      { text: t('cancel'), style: 'cancel' },
+                      { text: t("cancel"), style: "cancel" },
                       {
-                        text: t('delete'), style: 'destructive', onPress: async () => {
+                        text: t("delete"),
+                        style: "destructive",
+                        onPress: async () => {
                           await clearSubtitles(videoUri);
                           setSubtitleSegments([]);
                         },
@@ -1120,32 +1297,48 @@ function TrimScreen({ navigation, route }: Props) {
               >
                 <Text style={styles.menuItemIcon}>🗑️</Text>
                 <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemLabel}>{t('deleteSubtitlesMenu')}</Text>
-                  <Text style={styles.menuItemDetail}>{t('deleteSubtitlesMenuDetail')}</Text>
+                  <Text style={styles.menuItemLabel}>
+                    {t("deleteSubtitlesMenu")}
+                  </Text>
+                  <Text style={styles.menuItemDetail}>
+                    {t("deleteSubtitlesMenuDetail")}
+                  </Text>
                 </View>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.menuItem, subtitleSegments.length === 0 && styles.menuItemDisabled]}
+              style={[
+                styles.menuItem,
+                subtitleSegments.length === 0 && styles.menuItemDisabled,
+              ]}
               disabled={subtitleSegments.length === 0}
               onPress={() => {
                 setCaptionMenuOpen(false);
                 setLangPickerOpen(true);
               }}
             >
-              <Text style={[
-                styles.menuItemIcon,
-                subtitleSegments.length === 0 && styles.menuItemIconDisabled,
-              ]}>🌐</Text>
+              <Text
+                style={[
+                  styles.menuItemIcon,
+                  subtitleSegments.length === 0 && styles.menuItemIconDisabled,
+                ]}
+              >
+                🌐
+              </Text>
               <View style={styles.menuItemBody}>
-                <Text style={[
-                  styles.menuItemLabel,
-                  subtitleSegments.length === 0 && styles.menuItemLabelDisabled,
-                ]}>{t('translateCaptionMenu')}</Text>
+                <Text
+                  style={[
+                    styles.menuItemLabel,
+                    subtitleSegments.length === 0 &&
+                      styles.menuItemLabelDisabled,
+                  ]}
+                >
+                  {t("translateCaptionMenu")}
+                </Text>
                 <Text style={styles.menuItemDetail}>
                   {subtitleSegments.length === 0
-                    ? t('generateCaptionsFirst')
-                    : t('translateCaptionDetail')}
+                    ? t("generateCaptionsFirst")
+                    : t("translateCaptionDetail")}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1160,27 +1353,36 @@ function TrimScreen({ navigation, route }: Props) {
         animationType="slide"
         onRequestClose={() => setSetupSource(null)}
       >
-        <Pressable style={styles.sheetBackdrop} onPress={() => setSetupSource(null)}>
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setSetupSource(null)}
+        >
           <Pressable style={styles.sheetCard} onPress={() => {}}>
             <View style={styles.sheetGrabber} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{t('subtitleStyleTitle')}</Text>
-              <TouchableOpacity onPress={() => setSetupSource(null)} hitSlop={10}>
+              <Text style={styles.sheetTitle}>{t("subtitleStyleTitle")}</Text>
+              <TouchableOpacity
+                onPress={() => setSetupSource(null)}
+                hitSlop={10}
+              >
                 <Text style={styles.sheetClose}>✕</Text>
               </TouchableOpacity>
             </View>
-            <SubtitleStyleControls value={subtitleStyle} onChange={setSubtitleStyle} />
+            <SubtitleStyleControls
+              value={subtitleStyle}
+              onChange={setSubtitleStyle}
+            />
             <View style={styles.sheetFooter}>
               <TouchableOpacity
                 style={styles.generateBtn}
                 onPress={() => {
                   const src = setupSource;
                   setSetupSource(null);
-                  if (src === 'ai' || src === 'local') handleContinue(src);
+                  if (src === "ai" || src === "local") handleContinue(src);
                 }}
               >
                 <Text style={styles.generateBtnText}>
-                  {setupSource === 'edit' ? t('done') : t('generateBtn')}
+                  {setupSource === "edit" ? t("done") : t("generateBtn")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1195,12 +1397,15 @@ function TrimScreen({ navigation, route }: Props) {
         animationType="fade"
         onRequestClose={() => setManualCaptionOpen(false)}
       >
-        <Pressable style={styles.menuBackdrop} onPress={() => setManualCaptionOpen(false)}>
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setManualCaptionOpen(false)}
+        >
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            <Text style={styles.menuTitle}>{t('addManualCaptionTitle')}</Text>
+            <Text style={styles.menuTitle}>{t("addManualCaptionTitle")}</Text>
             <View style={styles.manualRow}>
               <View style={styles.manualTimeField}>
-                <Text style={styles.manualLabel}>{t('startLabel')}</Text>
+                <Text style={styles.manualLabel}>{t("startLabel")}</Text>
                 <TextInput
                   style={styles.manualInput}
                   value={manualStart}
@@ -1213,7 +1418,7 @@ function TrimScreen({ navigation, route }: Props) {
               </View>
               <Text style={styles.manualArrow}>→</Text>
               <View style={styles.manualTimeField}>
-                <Text style={styles.manualLabel}>{t('endLabel')}</Text>
+                <Text style={styles.manualLabel}>{t("endLabel")}</Text>
                 <TextInput
                   style={styles.manualInput}
                   value={manualEnd}
@@ -1225,12 +1430,12 @@ function TrimScreen({ navigation, route }: Props) {
                 />
               </View>
             </View>
-            <Text style={styles.manualLabel}>{t('captionTextLabel')}</Text>
+            <Text style={styles.manualLabel}>{t("captionTextLabel")}</Text>
             <TextInput
               style={[styles.manualInput, styles.manualTextInput]}
               value={manualText}
               onChangeText={setManualText}
-              placeholder={t('typeCaptionPlaceholder')}
+              placeholder={t("typeCaptionPlaceholder")}
               placeholderTextColor="#bbb"
               multiline
               returnKeyType="done"
@@ -1240,13 +1445,13 @@ function TrimScreen({ navigation, route }: Props) {
                 style={styles.manualCancelBtn}
                 onPress={() => setManualCaptionOpen(false)}
               >
-                <Text style={styles.manualCancelText}>{t('cancel')}</Text>
+                <Text style={styles.manualCancelText}>{t("cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.manualAddBtn}
                 onPress={handleAddManualCaption}
               >
-                <Text style={styles.manualAddText}>{t('add')}</Text>
+                <Text style={styles.manualAddText}>{t("add")}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -1260,11 +1465,14 @@ function TrimScreen({ navigation, route }: Props) {
         animationType="fade"
         onRequestClose={() => setLangPickerOpen(false)}
       >
-        <Pressable style={styles.menuBackdrop} onPress={() => setLangPickerOpen(false)}>
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setLangPickerOpen(false)}
+        >
           <Pressable style={styles.menuCard} onPress={() => {}}>
-            <Text style={styles.menuTitle}>{t('translateToTitle')}</Text>
+            <Text style={styles.menuTitle}>{t("translateToTitle")}</Text>
             <ScrollView style={styles.langScroll}>
-              {TRANSLATION_LANGUAGES.map(lang => (
+              {TRANSLATION_LANGUAGES.map((lang) => (
                 <TouchableOpacity
                   key={lang}
                   style={styles.langRow}
@@ -1285,22 +1493,22 @@ function TrimScreen({ navigation, route }: Props) {
 }
 
 const TRANSLATION_LANGUAGES = [
-  'English',
-  'Indonesian',
-  'Spanish',
-  'French',
-  'German',
-  'Italian',
-  'Portuguese',
-  'Vietnamese',
-  'Chinese (Simplified)',
-  'Chinese (Traditional)',
-  'Japanese',
-  'Korean',
-  'Hindi',
-  'Arabic',
-  'Russian',
-  'Thai',
+  "English",
+  "Indonesian",
+  "Spanish",
+  "French",
+  "German",
+  "Italian",
+  "Portuguese",
+  "Vietnamese",
+  "Chinese (Simplified)",
+  "Chinese (Traditional)",
+  "Japanese",
+  "Korean",
+  "Hindi",
+  "Arabic",
+  "Russian",
+  "Thai",
 ];
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -1308,81 +1516,81 @@ const TRANSLATION_LANGUAGES = [
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: "#0d0d0d",
   },
   // Caption menu (Chrome-style dropdown card)
   menuBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   menuCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 360,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 14,
     paddingVertical: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
   },
   menuTitle: {
-    color: '#222',
+    color: "#222",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#e3e3e8',
+    backgroundColor: "#e3e3e8",
     marginHorizontal: 16,
     marginVertical: 4,
   },
   sheetBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
   },
   sheetCard: {
-    backgroundColor: '#1a1a23',
+    backgroundColor: "#1a1a23",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     paddingBottom: 24,
-    maxHeight: '90%',
+    maxHeight: "90%",
   },
   sheetGrabber: {
     width: 42,
     height: 4,
-    backgroundColor: '#3a3a4a',
+    backgroundColor: "#3a3a4a",
     borderRadius: 2,
-    alignSelf: 'center',
+    alignSelf: "center",
     marginTop: 10,
     marginBottom: 6,
   },
   sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 18,
     paddingVertical: 10,
   },
   sheetTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   sheetClose: {
-    color: '#888',
+    color: "#888",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     paddingHorizontal: 6,
   },
   sheetFooter: {
@@ -1391,19 +1599,19 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   generateBtn: {
-    backgroundColor: '#6c63ff',
+    backgroundColor: "#6c63ff",
     borderRadius: 12,
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
   },
   generateBtnText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 14,
@@ -1414,7 +1622,7 @@ const styles = StyleSheet.create({
   menuItemIcon: {
     fontSize: 22,
     width: 28,
-    textAlign: 'center',
+    textAlign: "center",
   },
   menuItemIconDisabled: {
     opacity: 0.6,
@@ -1423,15 +1631,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuItemLabel: {
-    color: '#222',
+    color: "#222",
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   menuItemLabelDisabled: {
-    color: '#888',
+    color: "#888",
   },
   menuItemDetail: {
-    color: '#777',
+    color: "#777",
     fontSize: 12,
     marginTop: 2,
   },
@@ -1442,17 +1650,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 13,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#eee',
+    borderTopColor: "#eee",
   },
   langText: {
-    color: '#222',
+    color: "#222",
     fontSize: 15,
   },
   // Controls bar
   controlsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
@@ -1460,101 +1668,101 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   controlsSideRight: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   timeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
+    fontWeight: "500",
+    fontVariant: ["tabular-nums"],
   },
   timeDim: {
-    color: '#666',
-    fontWeight: '400',
+    color: "#666",
+    fontWeight: "400",
   },
   playBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   playIcon: {
     fontSize: 20,
-    color: '#fff',
+    color: "#fff",
   },
   keptBadge: {
-    color: '#888',
+    color: "#888",
     fontSize: 12,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
 
   // Info row
   infoRow: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     paddingHorizontal: 16,
   },
   infoText: {
-    color: '#bbb',
+    color: "#bbb",
     fontSize: 12,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   hintText: {
-    color: '#555',
+    color: "#555",
     fontSize: 12,
   },
 
   // Loading
   loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     marginTop: 12,
   },
   statusText: {
-    color: '#aaa',
+    color: "#aaa",
     fontSize: 12,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 
   // Bottom toolbar
   bottomToolbar: {
-    marginTop: 'auto',
+    marginTop: "auto",
     paddingBottom: 16,
   },
   toolbarDivider: {
     height: 0.5,
-    backgroundColor: '#2a2a2a',
+    backgroundColor: "#2a2a2a",
     marginBottom: 8,
   },
   toolbarRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   toolbarItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 10,
     paddingVertical: 6,
     minWidth: 56,
   },
   toolbarIcon: {
     fontSize: 22,
-    color: '#fff',
+    color: "#fff",
     marginBottom: 4,
   },
   toolbarLabel: {
-    color: '#888',
+    color: "#888",
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   toolbarLabelActive: {
-    color: '#fff',
+    color: "#fff",
   },
   iconDim: {
     opacity: 0.3,
@@ -1566,45 +1774,45 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   resumeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1e1a3a',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#1e1a3a",
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
   resumeText: {
-    color: '#a89fff',
+    color: "#a89fff",
     fontSize: 12,
   },
   resumeDismiss: {
-    color: '#6c63ff',
+    color: "#6c63ff",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Timeline stack
   timelineStack: {
-    position: 'relative',
+    position: "relative",
   },
   extendedLine: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     left: SCREEN_W / 2 - 1,
     width: 2,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     zIndex: 10,
   },
 
   // Inline edit bar (floats above keyboard)
   editBar: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: "#1a1a2e",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#2a2250',
+    borderTopColor: "#2a2250",
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 8,
@@ -1614,68 +1822,68 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   editTimeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   editTimeInput: {
     width: 84,
-    color: '#a89fff',
+    color: "#a89fff",
     fontSize: 12,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
     borderWidth: 1,
-    borderColor: '#3a2c70',
+    borderColor: "#3a2c70",
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: '#0e0c20',
+    backgroundColor: "#0e0c20",
   },
   editTimeArrow: {
-    color: '#888',
+    color: "#888",
     fontSize: 12,
   },
   editTimeSpacer: {
     flex: 1,
   },
   editInput: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
     borderBottomWidth: 1.5,
-    borderBottomColor: '#6c63ff',
+    borderBottomColor: "#6c63ff",
     paddingVertical: 4,
     minHeight: 36,
     maxHeight: 80,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   editDeleteBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#3a1a1a',
+    backgroundColor: "#3a1a1a",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ff5252',
+    borderColor: "#ff5252",
   },
   editDeleteText: {
-    color: '#ff5252',
+    color: "#ff5252",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   editDoneBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#6c63ff',
+    backgroundColor: "#6c63ff",
     borderRadius: 8,
   },
   editDoneText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 
   // Manual caption modal
   manualRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 12,
     gap: 8,
   },
@@ -1683,33 +1891,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   manualArrow: {
-    color: '#888',
+    color: "#888",
     fontSize: 16,
     marginTop: 16,
   },
   manualLabel: {
-    color: '#555',
+    color: "#555",
     fontSize: 12,
     marginBottom: 4,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   manualInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 14,
-    color: '#222',
-    backgroundColor: '#f9f9f9',
+    color: "#222",
+    backgroundColor: "#f9f9f9",
   },
   manualTextInput: {
     minHeight: 72,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
     marginBottom: 16,
   },
   manualBtnRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
   },
   manualCancelBtn: {
@@ -1717,25 +1925,25 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
+    borderColor: "#ddd",
+    alignItems: "center",
   },
   manualCancelText: {
-    color: '#555',
+    color: "#555",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   manualAddBtn: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#6c63ff',
-    alignItems: 'center',
+    backgroundColor: "#6c63ff",
+    alignItems: "center",
   },
   manualAddText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 

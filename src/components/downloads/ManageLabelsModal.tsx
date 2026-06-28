@@ -1,14 +1,14 @@
 import React from "react";
 import {
   Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
   StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { sharedStyles as s } from "./sharedStyles";
 import { useTranslation } from "../../i18n";
+import { sharedStyles as s } from "./sharedStyles";
 
 type Props = {
   visible: boolean;
@@ -48,10 +48,14 @@ export default function ManageLabelsModal({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity activeOpacity={1} style={s.modalCard} onPress={() => {}}>
-          <Text style={s.modalTitle}>{t('manageLabels')}</Text>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.modalCard}
+          onPress={() => {}}
+        >
+          <Text style={s.modalTitle}>{t("manageLabels")}</Text>
           {labelDefs.length === 0 && (
-            <Text style={s.labelPickerEmpty}>{t('noLabelsYet')}</Text>
+            <Text style={s.labelPickerEmpty}>{t("noLabelsYet")}</Text>
           )}
           {labelDefs.map((lbl) => (
             <View key={lbl} style={styles.row}>
@@ -67,7 +71,7 @@ export default function ManageLabelsModal({
           <View style={s.labelPickerAddRow}>
             <TextInput
               style={s.labelPickerInput}
-              placeholder={t('newLabel')}
+              placeholder={t("newLabel")}
               value={newLabelText}
               onChangeText={onChangeNewLabel}
               autoCapitalize="none"
@@ -76,7 +80,7 @@ export default function ManageLabelsModal({
               onSubmitEditing={handleAdd}
             />
             <TouchableOpacity style={s.labelPickerAddBtn} onPress={handleAdd}>
-              <Text style={s.labelPickerAddBtnText}>{t('add')}</Text>
+              <Text style={s.labelPickerAddBtnText}>{t("add")}</Text>
             </TouchableOpacity>
           </View>
           <View style={s.modalActions}>
@@ -84,7 +88,9 @@ export default function ManageLabelsModal({
               style={[s.modalBtn, s.modalPrimaryBtn]}
               onPress={onClose}
             >
-              <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>{t('done')}</Text>
+              <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>
+                {t("done")}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

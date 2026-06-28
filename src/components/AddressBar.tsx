@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  TextInput,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
   ActivityIndicator,
   FlatList,
-} from 'react-native';
-import { useSettings } from '../store/settingsStore';
-import { useTranslation } from '../i18n';
-import { useSearchHistory } from '../hooks/useSearchHistory';
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSearchHistory } from "../hooks/useSearchHistory";
+import { useTranslation } from "../i18n";
+import { useSettings } from "../store/settingsStore";
 
 interface Props {
   initialUrl: string;
@@ -23,7 +23,7 @@ interface Props {
   loading: boolean;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
-  onMenuAction?: (action: 'downloadManga') => void;
+  onMenuAction?: (action: "downloadManga") => void;
 }
 
 export default function AddressBar({
@@ -42,14 +42,14 @@ export default function AddressBar({
   const { searchUrl, themeColors: c } = useSettings();
   const { t } = useTranslation();
   const { history, saveEntry, deleteEntry } = useSearchHistory();
-  const displayUrl = initialUrl === 'about:home' ? '' : initialUrl;
+  const displayUrl = initialUrl === "about:home" ? "" : initialUrl;
   const [text, setText] = useState(displayUrl);
   const [focused, setFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setText(initialUrl === 'about:home' ? '' : initialUrl);
+    setText(initialUrl === "about:home" ? "" : initialUrl);
   }, [initialUrl]);
 
   const filteredHistory = focused
@@ -67,7 +67,7 @@ export default function AddressBar({
 
     if (!/^https?:\/\//i.test(url)) {
       if (/^[\w-]+(\.[\w-]+)+/.test(url)) {
-        url = 'https://' + url;
+        url = "https://" + url;
       } else {
         url = searchUrl(url);
       }
@@ -84,7 +84,7 @@ export default function AddressBar({
     let url = item.trim();
     if (!/^https?:\/\//i.test(url)) {
       if (/^[\w-]+(\.[\w-]+)+/.test(url)) {
-        url = 'https://' + url;
+        url = "https://" + url;
       } else {
         url = searchUrl(url);
       }
@@ -97,25 +97,47 @@ export default function AddressBar({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: c.addressBar, borderBottomColor: c.border }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: c.addressBar, borderBottomColor: c.border },
+      ]}
+    >
       <View style={styles.navButtons}>
         <TouchableOpacity
           onPress={onGoBack}
           disabled={!canGoBack}
-          style={[styles.navBtn, { backgroundColor: c.navButton }, !canGoBack && styles.navBtnDisabled]}>
-          <Text style={[styles.navBtnText, { color: c.text }]}>{'<'}</Text>
+          style={[
+            styles.navBtn,
+            { backgroundColor: c.navButton },
+            !canGoBack && styles.navBtnDisabled,
+          ]}
+        >
+          <Text style={[styles.navBtnText, { color: c.text }]}>{"<"}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={onGoForward}
           disabled={!canGoForward}
-          style={[styles.navBtn, { backgroundColor: c.navButton }, !canGoForward && styles.navBtnDisabled]}>
-          <Text style={[styles.navBtnText, { color: c.text }]}>{'>'}</Text>
+          style={[
+            styles.navBtn,
+            { backgroundColor: c.navButton },
+            !canGoForward && styles.navBtnDisabled,
+          ]}
+        >
+          <Text style={[styles.navBtnText, { color: c.text }]}>{">"}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.inputWrapper}>
         <TextInput
-          style={[styles.input, { backgroundColor: c.inputBackground, borderColor: c.inputBorder, color: c.text }]}
+          style={[
+            styles.input,
+            {
+              backgroundColor: c.inputBackground,
+              borderColor: c.inputBorder,
+              color: c.text,
+            },
+          ]}
           value={text}
           onChangeText={setText}
           onSubmitEditing={handleSubmit}
@@ -126,7 +148,7 @@ export default function AddressBar({
           onBlur={() => {
             blurTimeoutRef.current = setTimeout(() => setFocused(false), 200);
           }}
-          placeholder={t('enterUrlOrSearch')}
+          placeholder={t("enterUrlOrSearch")}
           placeholderTextColor={c.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}
@@ -135,7 +157,15 @@ export default function AddressBar({
           selectTextOnFocus
         />
         {filteredHistory.length > 0 && (
-          <View style={[styles.dropdown, { backgroundColor: c.inputBackground, borderColor: c.inputBorder }]}>
+          <View
+            style={[
+              styles.dropdown,
+              {
+                backgroundColor: c.inputBackground,
+                borderColor: c.inputBorder,
+              },
+            ]}
+          >
             <FlatList
               data={filteredHistory}
               keyExtractor={(item, idx) => `${item}_${idx}`}
@@ -146,7 +176,12 @@ export default function AddressBar({
                     style={styles.historyItem}
                     onPress={() => handlePickHistory(item)}
                   >
-                    <Text style={[styles.historyText, { color: c.text }]} numberOfLines={1}>{item}</Text>
+                    <Text
+                      style={[styles.historyText, { color: c.text }]}
+                      numberOfLines={1}
+                    >
+                      {item}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.historyDelete}
@@ -161,7 +196,10 @@ export default function AddressBar({
         )}
       </View>
 
-      <TouchableOpacity onPress={onReload} style={[styles.navBtn, { backgroundColor: c.navButton }]}>
+      <TouchableOpacity
+        onPress={onReload}
+        style={[styles.navBtn, { backgroundColor: c.navButton }]}
+      >
         {loading ? (
           <ActivityIndicator size="small" color="#007AFF" />
         ) : (
@@ -169,27 +207,45 @@ export default function AddressBar({
         )}
       </TouchableOpacity>
       {onToggleBookmark && (
-        <TouchableOpacity onPress={onToggleBookmark} style={[styles.navBtn, { backgroundColor: c.navButton }]}>
-          <Text style={[styles.navBtnText, { color: isBookmarked ? '#FFD60A' : c.text }]}>
-            {isBookmarked ? '★' : '☆'}
+        <TouchableOpacity
+          onPress={onToggleBookmark}
+          style={[styles.navBtn, { backgroundColor: c.navButton }]}
+        >
+          <Text
+            style={[
+              styles.navBtnText,
+              { color: isBookmarked ? "#FFD60A" : c.text },
+            ]}
+          >
+            {isBookmarked ? "★" : "☆"}
           </Text>
         </TouchableOpacity>
       )}
       {onMenuAction && (
         <View style={styles.menuWrap}>
           <TouchableOpacity
-            onPress={() => setMenuOpen(v => !v)}
+            onPress={() => setMenuOpen((v) => !v)}
             style={[styles.navBtn, { backgroundColor: c.navButton }]}
           >
             <Text style={[styles.navBtnText, { color: c.text }]}>⋮</Text>
           </TouchableOpacity>
           {menuOpen && (
-            <View style={[styles.menuDropdown, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <View
+              style={[
+                styles.menuDropdown,
+                { backgroundColor: c.surface, borderColor: c.border },
+              ]}
+            >
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => { setMenuOpen(false); onMenuAction('downloadManga'); }}
+                onPress={() => {
+                  setMenuOpen(false);
+                  onMenuAction("downloadManga");
+                }}
               >
-                <Text style={[styles.menuItemText, { color: c.text }]}>📥  {t('downloadManga')}</Text>
+                <Text style={[styles.menuItemText, { color: c.text }]}>
+                  📥 {t("downloadManga")}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -201,25 +257,25 @@ export default function AddressBar({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 6,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: "#F8F8F8",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#CCC',
+    borderBottomColor: "#CCC",
   },
   navButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginRight: 6,
   },
   navBtn: {
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#E8E8E8',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#E8E8E8",
+    alignItems: "center",
+    justifyContent: "center",
     marginHorizontal: 2,
   },
   navBtnDisabled: {
@@ -227,40 +283,40 @@ const styles = StyleSheet.create({
   },
   navBtnText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   inputWrapper: {
     flex: 1,
-    position: 'relative',
+    position: "relative",
     marginHorizontal: 6,
   },
   input: {
     height: 36,
     borderRadius: 8,
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: "#DDD",
     paddingHorizontal: 10,
     fontSize: 14,
-    color: '#333',
+    color: "#333",
   },
   dropdown: {
-    position: 'absolute',
+    position: "absolute",
     top: 38,
     left: 0,
     right: 0,
     maxHeight: 220,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#DDD',
+    borderColor: "#DDD",
     zIndex: 999,
     elevation: 5,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   historyItem: {
     flex: 1,
@@ -276,13 +332,13 @@ const styles = StyleSheet.create({
   },
   historyDeleteText: {
     fontSize: 13,
-    color: '#999',
+    color: "#999",
   },
   menuWrap: {
-    position: 'relative',
+    position: "relative",
   },
   menuDropdown: {
-    position: 'absolute',
+    position: "absolute",
     top: 36,
     right: 0,
     minWidth: 180,
@@ -290,7 +346,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     zIndex: 1000,
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,

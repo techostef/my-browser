@@ -1,17 +1,23 @@
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import * as VideoThumbnails from "expo-video-thumbnails";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
   Dimensions,
+  Image,
   LayoutChangeEvent,
-  NativeSyntheticEvent,
   NativeScrollEvent,
-} from 'react-native';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+  NativeSyntheticEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const THUMB_HEIGHT = 56;
@@ -19,7 +25,7 @@ const TICK_ROW_HEIGHT = 22;
 const PX_PER_SEC = 80;
 const MAX_ZOOM = 20;
 const RENDER_BUFFER = 300;
-const SCREEN_W = Dimensions.get('window').width;
+const SCREEN_W = Dimensions.get("window").width;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,24 +33,24 @@ function fmtTime(secs: number, showMs: boolean): string {
   const safe = Math.max(0, secs);
   const m = Math.floor(safe / 60);
   const s = Math.floor(safe % 60);
-  const base = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const base = `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   if (!showMs) return base;
   return `${base}.${Math.floor((safe % 1) * 1000)
     .toString()
-    .padStart(3, '0')}`;
+    .padStart(3, "0")}`;
 }
 
 function getTickConfig(zoom: number) {
   const pps = PX_PER_SEC * zoom; // actual pixels per second
-  if (pps >= 960)  return { interval: 0.1,   labelEvery: 0.5,   showMs: true  };
-  if (pps >= 480)  return { interval: 0.25,  labelEvery: 1,     showMs: true  };
-  if (pps >= 240)  return { interval: 0.5,   labelEvery: 2,     showMs: false };
-  if (pps >= 80)   return { interval: 1,     labelEvery: 5,     showMs: false };
-  if (pps >= 16)   return { interval: 5,     labelEvery: 30,    showMs: false };
-  if (pps >= 3.2)  return { interval: 30,    labelEvery: 120,   showMs: false };
-  if (pps >= 0.6)  return { interval: 120,   labelEvery: 600,   showMs: false };
-  if (pps >= 0.15) return { interval: 600,   labelEvery: 1800,  showMs: false };
-                   return { interval: 1800,  labelEvery: 3600,  showMs: false };
+  if (pps >= 960) return { interval: 0.1, labelEvery: 0.5, showMs: true };
+  if (pps >= 480) return { interval: 0.25, labelEvery: 1, showMs: true };
+  if (pps >= 240) return { interval: 0.5, labelEvery: 2, showMs: false };
+  if (pps >= 80) return { interval: 1, labelEvery: 5, showMs: false };
+  if (pps >= 16) return { interval: 5, labelEvery: 30, showMs: false };
+  if (pps >= 3.2) return { interval: 30, labelEvery: 120, showMs: false };
+  if (pps >= 0.6) return { interval: 120, labelEvery: 600, showMs: false };
+  if (pps >= 0.15) return { interval: 600, labelEvery: 1800, showMs: false };
+  return { interval: 1800, labelEvery: 3600, showMs: false };
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -81,11 +87,16 @@ export default function VideoTimeline({
   // Minimum zoom: shrink until the full video fits in the container.
   // For a 2-hour video at PX_PER_SEC=80 this would be ~0.0006 instead of 1.
   const minZoom = useMemo(
-    () => (duration > 0 ? Math.min(0.2, containerW / Math.max(1, duration * PX_PER_SEC)) : 0.2),
+    () =>
+      duration > 0
+        ? Math.min(0.2, containerW / Math.max(1, duration * PX_PER_SEC))
+        : 0.2,
     [containerW, duration],
   );
   const [scrollX, setScrollX] = useState(0);
-  const [thumbnails, setThumbnails] = useState<{ time: number; uri: string }[]>([]);
+  const [thumbnails, setThumbnails] = useState<{ time: number; uri: string }[]>(
+    [],
+  );
 
   const isUserScrolling = useRef(false);
   const scrollEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,7 +130,9 @@ export default function VideoTimeline({
       }
       if (!cancelled) setThumbnails(res);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [videoUri, duration]);
 
   // ─── Auto-scroll to playhead when video is playing ──────────────────────────
@@ -168,8 +181,14 @@ export default function VideoTimeline({
   }, []);
 
   // ─── Zoom ───────────────────────────────────────────────────────────────────
-  const zoomIn = useCallback(() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.5)), []);
-  const zoomOut = useCallback(() => setZoom((z) => Math.max(minZoom, z / 1.5)), [minZoom]);
+  const zoomIn = useCallback(
+    () => setZoom((z) => Math.min(MAX_ZOOM, z * 1.5)),
+    [],
+  );
+  const zoomOut = useCallback(
+    () => setZoom((z) => Math.max(minZoom, z / 1.5)),
+    [minZoom],
+  );
 
   // ─── Visible range (film-relative px) for virtualization ────────────────────
   const vL = scrollX - RENDER_BUFFER;
@@ -206,7 +225,9 @@ export default function VideoTimeline({
 
   // ─── Derived ────────────────────────────────────────────────────────────────
   const curSec =
-    duration > 0 ? Math.max(0, Math.min(duration, (scrollX / filmW) * duration)) : 0;
+    duration > 0
+      ? Math.max(0, Math.min(duration, (scrollX / filmW) * duration))
+      : 0;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -262,7 +283,7 @@ export default function VideoTimeline({
                   key={t.idx}
                   source={{ uri: t.uri }}
                   style={{
-                    position: 'absolute' as const,
+                    position: "absolute" as const,
                     left: t.x,
                     width: thumbW + 1,
                     height: THUMB_HEIGHT,
@@ -281,21 +302,11 @@ export default function VideoTimeline({
                   <React.Fragment key={`seg-${i}`}>
                     {/* Deleted segment: red-tinted dim overlay */}
                     {isDeleted && (
-                      <View
-                        style={[
-                          styles.deletedOverlay,
-                          { left, width },
-                        ]}
-                      />
+                      <View style={[styles.deletedOverlay, { left, width }]} />
                     )}
                     {/* Selected segment: highlight border */}
                     {isSelected && (
-                      <View
-                        style={[
-                          styles.selectedOverlay,
-                          { left, width },
-                        ]}
-                      />
+                      <View style={[styles.selectedOverlay, { left, width }]} />
                     )}
                   </React.Fragment>
                 );
@@ -323,7 +334,16 @@ export default function VideoTimeline({
           <TouchableOpacity style={styles.zoomBtn} onPress={zoomOut}>
             <Text style={styles.zBtnTxt}>−</Text>
           </TouchableOpacity>
-          <Text style={styles.zLbl}>{zoom >= 10 ? zoom.toFixed(0) : zoom >= 1 ? zoom.toFixed(1) : zoom >= 0.1 ? zoom.toFixed(2) : zoom.toFixed(3)}×</Text>
+          <Text style={styles.zLbl}>
+            {zoom >= 10
+              ? zoom.toFixed(0)
+              : zoom >= 1
+                ? zoom.toFixed(1)
+                : zoom >= 0.1
+                  ? zoom.toFixed(2)
+                  : zoom.toFixed(3)}
+            ×
+          </Text>
           <TouchableOpacity style={styles.zoomBtn} onPress={zoomIn}>
             <Text style={styles.zBtnTxt}>+</Text>
           </TouchableOpacity>
@@ -343,17 +363,17 @@ const styles = StyleSheet.create({
   // Timeline area wrapper (holds playhead + scroll)
   timelineArea: {
     height: TICK_ROW_HEIGHT + THUMB_HEIGHT,
-    position: 'relative',
+    position: "relative",
   },
 
   // Fixed playhead
   playheadFixed: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 2,
     zIndex: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   phTriangle: {
     width: 0,
@@ -361,113 +381,113 @@ const styles = StyleSheet.create({
     borderLeftWidth: 6,
     borderRightWidth: 6,
     borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#fff',
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderTopColor: "#fff",
   },
   phLine: {
     flex: 1,
     width: 2,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
 
   // Tick row
   tickRow: {
     height: TICK_ROW_HEIGHT,
-    position: 'relative',
+    position: "relative",
   },
   tick: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
-    alignItems: 'center',
+    alignItems: "center",
   },
   tickMark: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: "rgba(255,255,255,0.4)",
   },
   tickLbl: {
-    color: 'rgba(255,255,255,0.5)',
+    color: "rgba(255,255,255,0.5)",
     fontSize: 9,
     marginTop: 1,
-    textAlign: 'center',
+    textAlign: "center",
     width: 48,
   },
 
   // Filmstrip
   filmstrip: {
     height: THUMB_HEIGHT,
-    position: 'relative',
+    position: "relative",
     borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#222',
+    overflow: "hidden",
+    backgroundColor: "#222",
   },
 
   // Segment overlays
   deletedOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 50, 50, 0.45)',
+    backgroundColor: "rgba(255, 50, 50, 0.45)",
     zIndex: 3,
   },
   selectedOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
     borderRadius: 4,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     zIndex: 4,
   },
 
   // Split lines
   splitLine: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     bottom: 0,
     width: 2,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     zIndex: 5,
   },
 
   // Bottom bar
   bottomBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 8,
     paddingHorizontal: 4,
   },
   curTime: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
   zoomCtrl: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   zoomBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2a2a2a',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#2a2a2a",
+    alignItems: "center",
+    justifyContent: "center",
   },
   zBtnTxt: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   zLbl: {
-    color: '#888',
+    color: "#888",
     fontSize: 11,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
     minWidth: 32,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

@@ -1,15 +1,15 @@
 import React from "react";
 import {
   Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
   StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { sharedStyles as s } from "./sharedStyles";
-import { DownloadTask } from "../../types";
 import { useTranslation } from "../../i18n";
+import { DownloadTask } from "../../types";
+import { sharedStyles as s } from "./sharedStyles";
 
 type Props = {
   task: DownloadTask | null;
@@ -51,10 +51,14 @@ export default function LabelPickerModal({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity activeOpacity={1} style={s.modalCard} onPress={() => {}}>
-          <Text style={s.modalTitle}>🏷 {t('labels')}</Text>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.modalCard}
+          onPress={() => {}}
+        >
+          <Text style={s.modalTitle}>🏷 {t("labels")}</Text>
           {labelDefs.length === 0 && (
-            <Text style={s.labelPickerEmpty}>{t('noLabelsYet')}</Text>
+            <Text style={s.labelPickerEmpty}>{t("noLabelsYet")}</Text>
           )}
           {labelDefs.map((lbl) => {
             const checked = (fileLabels[task?.id ?? ""] || []).includes(lbl);
@@ -64,9 +68,7 @@ export default function LabelPickerModal({
                 style={styles.row}
                 onPress={() => task && onToggle(task.id, lbl)}
               >
-                <View
-                  style={[styles.check, checked && styles.checkActive]}
-                >
+                <View style={[styles.check, checked && styles.checkActive]}>
                   {checked && <Text style={styles.checkMark}>✓</Text>}
                 </View>
                 <Text style={styles.labelName}>{lbl}</Text>
@@ -76,7 +78,7 @@ export default function LabelPickerModal({
           <View style={s.labelPickerAddRow}>
             <TextInput
               style={s.labelPickerInput}
-              placeholder={t('newLabel')}
+              placeholder={t("newLabel")}
               value={newLabelText}
               onChangeText={onChangeNewLabel}
               autoCapitalize="none"
@@ -85,7 +87,7 @@ export default function LabelPickerModal({
               onSubmitEditing={handleAdd}
             />
             <TouchableOpacity style={s.labelPickerAddBtn} onPress={handleAdd}>
-              <Text style={s.labelPickerAddBtnText}>{t('add')}</Text>
+              <Text style={s.labelPickerAddBtnText}>{t("add")}</Text>
             </TouchableOpacity>
           </View>
           <View style={s.modalActions}>
@@ -93,7 +95,9 @@ export default function LabelPickerModal({
               style={[s.modalBtn, s.modalPrimaryBtn]}
               onPress={onClose}
             >
-              <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>{t('done')}</Text>
+              <Text style={[s.modalBtnText, s.modalPrimaryBtnText]}>
+                {t("done")}
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

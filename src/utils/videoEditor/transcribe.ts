@@ -1,5 +1,5 @@
-import type { Segment } from '../../types/videoEditor';
 import { parseSrt } from '../../lib/videoEditor/srt';
+import type { Segment } from '../../types/videoEditor';
 
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY ?? '';
 

@@ -1,19 +1,19 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
-  View,
+  StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  StatusBar,
-} from 'react-native';
-import { WebView } from 'react-native-webview';
-import { DetectedVideo } from '../types';
-import VideoPlayerController from './VideoPlayerController';
-import { useTranslation } from '../i18n';
+  View,
+} from "react-native";
+import { WebView } from "react-native-webview";
+import { useTranslation } from "../i18n";
+import { DetectedVideo } from "../types";
+import VideoPlayerController from "./VideoPlayerController";
 
-const TAG = '[VideoPreview]';
+const TAG = "[VideoPreview]";
 
 interface Props {
   visible: boolean;
@@ -25,18 +25,22 @@ interface Props {
 const IS_USE_LOG = true;
 
 function buildPlayerHtml(videoUrl: string, videoType: string): string {
-  const mimeType = videoType === 'webm' ? 'video/webm' : 'video/mp4';
+  const mimeType = videoType === "webm" ? "video/webm" : "video/mp4";
   const scriptLog = `
 <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
-      ${IS_USE_LOG ? `
+      ${
+        IS_USE_LOG
+          ? `
         var ts = new Date().toISOString().substr(11, 12);
         var line = ts + ' ' + msg;
         debugEl.innerHTML += line + '<br>';
         debugEl.scrollTop = debugEl.scrollHeight;
         window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
-      ` : ''}
+      `
+          : ""
+      }
     }
 
     log('[INIT] Video URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 200)}');
@@ -86,7 +90,7 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
       .then(function(r) { log('[FETCH HEAD] status=' + r.status + ' type=' + r.type); })
       .catch(function(e) { log('[FETCH HEAD ERROR] ' + e.message); });
   </script>  
-`
+`;
   return `
 <!DOCTYPE html>
 <html>
@@ -127,13 +131,17 @@ function buildPlayerHtml(videoUrl: string, videoType: string): string {
   <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
-      ${IS_USE_LOG ? `
+      ${
+        IS_USE_LOG
+          ? `
       var ts = new Date().toISOString().substr(11, 12);
       var line = ts + ' ' + msg;
       debugEl.innerHTML += line + '<br>';
       debugEl.scrollTop = debugEl.scrollHeight;
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
-      ` : ''}
+      `
+          : ""
+      }
     }
 
     log('[INIT] Video URL: ${videoUrl.replace(/'/g, "\\'").substring(0, 200)}');
@@ -313,13 +321,17 @@ function buildHlsPlayerHtml(videoUrl: string, startTime: number): string {
   <script>
     var debugEl = document.getElementById('debugLog');
     function log(msg) {
-      ${IS_USE_LOG ? `
+      ${
+        IS_USE_LOG
+          ? `
       var ts = new Date().toISOString().substr(11, 12);
       var line = ts + ' ' + msg;
       debugEl.innerHTML += line + '<br>';
       debugEl.scrollTop = debugEl.scrollHeight;
       window.ReactNativeWebView.postMessage(JSON.stringify({type:'LOG', message: line}));
-      ` : ''}
+      `
+          : ""
+      }
     }
 
     var videoUrl = '${escapedUrl}';
@@ -464,36 +476,44 @@ export default function VideoPreviewModal({
     );
   }, []);
 
-  const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === 'LOG') {
-        // console.log(`${TAG} [Player] ${msg.message}`);
-      } else if (msg.type === 'LOADED') {
-        setIsLoading(false);
-        setHasError(false);
-      } else if (msg.type === 'ERROR') {
-        console.error(`${TAG} Video playback error: code=${msg.code} msg=${msg.message}`);
-        setIsLoading(false);
-        setHasError(true);
-      } else if (msg.type === 'VIDEO_STATE') {
-        const seekAge = Date.now() - seekTsRef.current;
-        const diff = Math.abs(msg.currentTime - seekTargetRef.current);
-        if (seekAge < 1500 && diff > 2) {
-          setVideoDuration(msg.duration);
-          setVideoIsPaused(msg.paused);
-          setVideoIsMuted(msg.muted);
-        } else {
-          setVideoCurrentTime(msg.currentTime);
-          setVideoDuration(msg.duration);
-          setVideoIsPaused(msg.paused);
-          setVideoIsMuted(msg.muted);
+  const handleMessage = useCallback(
+    (event: { nativeEvent: { data: string } }) => {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === "LOG") {
+          // console.log(`${TAG} [Player] ${msg.message}`);
+        } else if (msg.type === "LOADED") {
+          setIsLoading(false);
+          setHasError(false);
+        } else if (msg.type === "ERROR") {
+          console.error(
+            `${TAG} Video playback error: code=${msg.code} msg=${msg.message}`,
+          );
+          setIsLoading(false);
+          setHasError(true);
+        } else if (msg.type === "VIDEO_STATE") {
+          const seekAge = Date.now() - seekTsRef.current;
+          const diff = Math.abs(msg.currentTime - seekTargetRef.current);
+          if (seekAge < 1500 && diff > 2) {
+            setVideoDuration(msg.duration);
+            setVideoIsPaused(msg.paused);
+            setVideoIsMuted(msg.muted);
+          } else {
+            setVideoCurrentTime(msg.currentTime);
+            setVideoDuration(msg.duration);
+            setVideoIsPaused(msg.paused);
+            setVideoIsMuted(msg.muted);
+          }
         }
+      } catch (e) {
+        console.warn(
+          `${TAG} Non-JSON message from player:`,
+          event.nativeEvent.data,
+        );
       }
-    } catch (e) {
-      console.warn(`${TAG} Non-JSON message from player:`, event.nativeEvent.data);
-    }
-  }, []);
+    },
+    [],
+  );
 
   const handleDownload = useCallback(() => {
     if (video) {
@@ -515,27 +535,31 @@ export default function VideoPreviewModal({
   if (!video) return null;
 
   const blobNeedsExtraction =
-    (video.type === 'blob' || video.type === 'blob-ready') && !video.localUri;
+    (video.type === "blob" || video.type === "blob-ready") && !video.localUri;
   const startTime = video.startTime ?? 0;
   // For blob types we play the extracted file from cache (file://...). For
   // everything else we use the original URL.
   const playbackUrl = video.localUri ? video.localUri : video.url;
   const playbackType = video.localUri
-    ? (video.type === 'webm' ? 'webm' : 'mp4')
+    ? video.type === "webm"
+      ? "webm"
+      : "mp4"
     : video.type;
-  const html = playbackType === 'hls'
-    ? buildHlsPlayerHtml(playbackUrl, startTime)
-    : playbackType === 'dash'
-      ? buildDashPlayerHtml(playbackUrl, startTime)
-      : buildPlayerHtml(playbackUrl, playbackType);
+  const html =
+    playbackType === "hls"
+      ? buildHlsPlayerHtml(playbackUrl, startTime)
+      : playbackType === "dash"
+        ? buildDashPlayerHtml(playbackUrl, startTime)
+        : buildPlayerHtml(playbackUrl, playbackType);
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
-      supportedOrientations={['portrait', 'landscape']}
-      onRequestClose={handleClose}>
+      supportedOrientations={["portrait", "landscape"]}
+      onRequestClose={handleClose}
+    >
       <View style={styles.container}>
         <StatusBar hidden />
 
@@ -547,7 +571,7 @@ export default function VideoPreviewModal({
           <View style={styles.headerInfo}>
             <Text style={styles.headerType}>{video.type.toUpperCase()}</Text>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {video.pageTitle || t('videoPreview')}
+              {video.pageTitle || t("videoPreview")}
             </Text>
           </View>
           <View style={styles.headerSpacer} />
@@ -559,7 +583,7 @@ export default function VideoPreviewModal({
             {isLoading && !hasError && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#4ECDC4" />
-                <Text style={styles.loadingText}>{t('loadingVideo')}</Text>
+                <Text style={styles.loadingText}>{t("loadingVideo")}</Text>
               </View>
             )}
 
@@ -572,7 +596,7 @@ export default function VideoPreviewModal({
                 // is allowed to load it. For remote URLs, keep the original
                 // page origin so cookies/CORS continue to work.
                 baseUrl: video.localUri
-                  ? video.localUri.replace(/[^/]+$/, '')
+                  ? video.localUri.replace(/[^/]+$/, "")
                   : video.pageUrl,
               }}
               style={styles.webview}
@@ -585,7 +609,9 @@ export default function VideoPreviewModal({
               }}
               onHttpError={(syntheticEvent) => {
                 const { nativeEvent } = syntheticEvent;
-                console.error(`${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`);
+                console.error(
+                  `${TAG} WebView HTTP error: status=${nativeEvent.statusCode} url=${nativeEvent.url}`,
+                );
               }}
               onLoadEnd={() => {
                 // console.log(`${TAG} WebView HTML loaded`);
@@ -598,7 +624,7 @@ export default function VideoPreviewModal({
               allowsFullscreenVideo
               thirdPartyCookiesEnabled
               sharedCookiesEnabled
-              originWhitelist={['*']}
+              originWhitelist={["*"]}
               allowFileAccess
               allowFileAccessFromFileURLs
               allowUniversalAccessFromFileURLs
@@ -625,7 +651,7 @@ export default function VideoPreviewModal({
         {/* Bottom Actions */}
         <View style={styles.actions}>
           <TouchableOpacity style={styles.downloadBtn} onPress={handleDownload}>
-            <Text style={styles.downloadBtnText}>{t('downloadVideoBtn')}</Text>
+            <Text style={styles.downloadBtnText}>{t("downloadVideoBtn")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -636,11 +662,11 @@ export default function VideoPreviewModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 8,
@@ -649,35 +675,35 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   closeBtnText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   headerInfo: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginLeft: 12,
   },
   headerType: {
-    backgroundColor: '#4ECDC4',
-    color: '#1A1A2E',
+    backgroundColor: "#4ECDC4",
+    color: "#1A1A2E",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginRight: 8,
   },
   headerTitle: {
     flex: 1,
-    color: '#CCC',
+    color: "#CCC",
     fontSize: 14,
   },
   headerSpacer: {
@@ -688,16 +714,16 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 1,
   },
   loadingText: {
-    color: '#999',
+    color: "#999",
     fontSize: 14,
     marginTop: 12,
   },
@@ -707,20 +733,20 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   downloadBtn: {
-    backgroundColor: '#4ECDC4',
+    backgroundColor: "#4ECDC4",
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   downloadBtnText: {
-    color: '#1A1A2E',
-    fontWeight: '700',
+    color: "#1A1A2E",
+    fontWeight: "700",
     fontSize: 16,
   },
   blobUnsupported: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 32,
   },
   blobIcon: {
@@ -728,16 +754,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   blobTitle: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   blobBody: {
-    color: '#999',
+    color: "#999",
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 20,
   },
 });

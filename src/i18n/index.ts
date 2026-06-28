@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useSettings, LANGUAGE_CODES } from '../store/settingsStore';
+import { LANGUAGE_CODES, useSettings } from '../store/settingsStore';
 import { translationsByCode, type TranslationKey } from './translations';
 
 /**

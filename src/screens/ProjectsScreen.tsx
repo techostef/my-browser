@@ -1,35 +1,35 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { withErrorBoundary } from '../components/ErrorBoundary';
+import { useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
   Alert,
   BackHandler,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import {
-  RewardedInterstitialAd,
-  RewardedAdEventType,
   AdEventType,
-} from 'react-native-google-mobile-ads';
-import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from '../config/admob';
-import { useProjects, type Project } from '../store/projectStore';
-import { loadSession } from '../lib/videoEditor/editSession';
-import { useThemeColors } from '../store/settingsStore';
-import { AdBanner } from '../components/AdBanner';
-import { useTranslation } from '../i18n';
+  RewardedAdEventType,
+  RewardedInterstitialAd,
+} from "react-native-google-mobile-ads";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AdBanner } from "../components/AdBanner";
+import { withErrorBoundary } from "../components/ErrorBoundary";
+import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../config/admob";
+import { useTranslation } from "../i18n";
+import { loadSession } from "../lib/videoEditor/editSession";
+import { useProjects, type Project } from "../store/projectStore";
+import { useThemeColors } from "../store/settingsStore";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -37,10 +37,10 @@ function timeAgo(ts: number): string {
 }
 
 function fmtDuration(secs: number): string {
-  if (!secs) return '';
+  if (!secs) return "";
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 // ─── Project card ─────────────────────────────────────────────────────────────
@@ -57,7 +57,17 @@ type CardProps = {
   onToggleSelect: () => void;
 };
 
-function ProjectCard({ project, hasSession, isSelectionMode, isSelected, inProgressLabel, onOpen, onDelete, onLongPress, onToggleSelect }: CardProps) {
+function ProjectCard({
+  project,
+  hasSession,
+  isSelectionMode,
+  isSelected,
+  inProgressLabel,
+  onOpen,
+  onDelete,
+  onLongPress,
+  onToggleSelect,
+}: CardProps) {
   const handlePress = isSelectionMode ? onToggleSelect : onOpen;
 
   return (
@@ -70,7 +80,11 @@ function ProjectCard({ project, hasSession, isSelectionMode, isSelected, inProgr
       {/* Thumbnail */}
       <View style={styles.thumb}>
         {project.thumbnailUri ? (
-          <Image source={{ uri: project.thumbnailUri }} style={styles.thumbImg} resizeMode="cover" />
+          <Image
+            source={{ uri: project.thumbnailUri }}
+            style={styles.thumbImg}
+            resizeMode="cover"
+          />
         ) : (
           <View style={styles.thumbPlaceholder}>
             <Text style={styles.thumbIcon}>🎬</Text>
@@ -78,14 +92,18 @@ function ProjectCard({ project, hasSession, isSelectionMode, isSelected, inProgr
         )}
         {project.duration > 0 && (
           <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>{fmtDuration(project.duration)}</Text>
+            <Text style={styles.durationText}>
+              {fmtDuration(project.duration)}
+            </Text>
           </View>
         )}
       </View>
 
       {/* Info */}
       <View style={styles.cardInfo}>
-        <Text style={styles.cardName} numberOfLines={1}>{project.videoName}</Text>
+        <Text style={styles.cardName} numberOfLines={1}>
+          {project.videoName}
+        </Text>
         <View style={styles.cardMeta}>
           {hasSession && (
             <View style={styles.inProgressBadge}>
@@ -102,7 +120,11 @@ function ProjectCard({ project, hasSession, isSelectionMode, isSelected, inProgr
           {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
       ) : (
-        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={onDelete}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Text style={styles.deleteIcon}>✕</Text>
         </TouchableOpacity>
       )}
@@ -126,16 +148,24 @@ function ProjectsScreen() {
   // Check which projects have active sessions
   useEffect(() => {
     Promise.all(
-      projects.map(async p => {
+      projects.map(async (p) => {
         const session = await loadSession(p.videoUri);
-        return [p.id, !!(session && (session.splitPoints.length > 0 || session.deletedSegments.length > 0 || session.subtitleSegments))] as [string, boolean];
+        return [
+          p.id,
+          !!(
+            session &&
+            (session.splitPoints.length > 0 ||
+              session.deletedSegments.length > 0 ||
+              session.subtitleSegments)
+          ),
+        ] as [string, boolean];
       }),
-    ).then(entries => setSessionMap(Object.fromEntries(entries)));
+    ).then((entries) => setSessionMap(Object.fromEntries(entries)));
   }, [projects]);
 
   // Hardware back exits selection mode
   useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (isSelectionModeRef.current) {
         setSelectedIds(new Set());
         return true;
@@ -146,11 +176,11 @@ function ProjectsScreen() {
   }, []);
 
   const handleLongPress = useCallback((project: Project) => {
-    setSelectedIds(prev => new Set([...prev, project.id]));
+    setSelectedIds((prev) => new Set([...prev, project.id]));
   }, []);
 
   const handleToggleSelect = useCallback((project: Project) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(project.id)) next.delete(project.id);
       else next.add(project.id);
@@ -161,15 +191,15 @@ function ProjectsScreen() {
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
     Alert.alert(
-      t('deleteProjects'),
-      t('deleteProjectsConfirm', { count, s: count !== 1 ? 's' : '' }),
+      t("deleteProjects"),
+      t("deleteProjectsConfirm", { count, s: count !== 1 ? "s" : "" }),
       [
-        { text: t('cancel'), style: 'cancel' },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: t('delete'),
-          style: 'destructive',
+          text: t("delete"),
+          style: "destructive",
           onPress: () => {
-            selectedIds.forEach(id => removeProject(id));
+            selectedIds.forEach((id) => removeProject(id));
             setSelectedIds(new Set());
           },
         },
@@ -177,100 +207,157 @@ function ProjectsScreen() {
     );
   }, [selectedIds, removeProject]);
 
-  const handleOpen = useCallback((project: Project) => {
-    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
-    const unsubs: Array<() => void> = [];
-    let rewardEarned = false;
-    const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
+  const handleOpen = useCallback(
+    (project: Project) => {
+      const ad = RewardedInterstitialAd.createForAdRequest(
+        REWARDED_INTERSTITIAL_AD_UNIT_ID,
+      );
+      const unsubs: Array<() => void> = [];
+      let rewardEarned = false;
+      const cleanup = () => {
+        unsubs.forEach((fn) => fn());
+        unsubs.length = 0;
+      };
 
-    const grantReward = () => {
-      (navigation as any).navigate('Trim', {
-        videoUri: project.videoUri,
-        duration: project.duration,
-      });
-    };
+      const grantReward = () => {
+        (navigation as any).navigate("Trim", {
+          videoUri: project.videoUri,
+          duration: project.duration,
+        });
+      };
 
-    unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
-    unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
-    unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => {
-      cleanup();
-      if (rewardEarned) grantReward();
-    }));
-    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); grantReward(); }));
+      unsubs.push(
+        ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()),
+      );
+      unsubs.push(
+        ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+          rewardEarned = true;
+        }),
+      );
+      unsubs.push(
+        ad.addAdEventListener(AdEventType.CLOSED, () => {
+          cleanup();
+          if (rewardEarned) grantReward();
+        }),
+      );
+      unsubs.push(
+        ad.addAdEventListener(AdEventType.ERROR, () => {
+          cleanup();
+          grantReward();
+        }),
+      );
 
-    ad.load();
-  }, [navigation]);
+      ad.load();
+    },
+    [navigation],
+  );
 
-  const handleDelete = useCallback((project: Project) => {
-    Alert.alert(
-      t('deleteProject'),
-      t('deleteProjectConfirm', { name: project.videoName }),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: () => removeProject(project.id),
-        },
-      ],
-    );
-  }, [removeProject]);
+  const handleDelete = useCallback(
+    (project: Project) => {
+      Alert.alert(
+        t("deleteProject"),
+        t("deleteProjectConfirm", { name: project.videoName }),
+        [
+          { text: t("cancel"), style: "cancel" },
+          {
+            text: t("delete"),
+            style: "destructive",
+            onPress: () => removeProject(project.id),
+          },
+        ],
+      );
+    },
+    [removeProject],
+  );
 
-  const renderItem = useCallback(({ item }: { item: Project }) => (
-    <ProjectCard
-      project={item}
-      hasSession={sessionMap[item.id] ?? false}
-      isSelectionMode={isSelectionMode}
-      isSelected={selectedIds.has(item.id)}
-      inProgressLabel={t('inProgress')}
-      onOpen={() => handleOpen(item)}
-      onDelete={() => handleDelete(item)}
-      onLongPress={() => handleLongPress(item)}
-      onToggleSelect={() => handleToggleSelect(item)}
-    />
-  ), [sessionMap, isSelectionMode, selectedIds, handleOpen, handleDelete, handleLongPress, handleToggleSelect, t]);
+  const renderItem = useCallback(
+    ({ item }: { item: Project }) => (
+      <ProjectCard
+        project={item}
+        hasSession={sessionMap[item.id] ?? false}
+        isSelectionMode={isSelectionMode}
+        isSelected={selectedIds.has(item.id)}
+        inProgressLabel={t("inProgress")}
+        onOpen={() => handleOpen(item)}
+        onDelete={() => handleDelete(item)}
+        onLongPress={() => handleLongPress(item)}
+        onToggleSelect={() => handleToggleSelect(item)}
+      />
+    ),
+    [
+      sessionMap,
+      isSelectionMode,
+      selectedIds,
+      handleOpen,
+      handleDelete,
+      handleLongPress,
+      handleToggleSelect,
+      t,
+    ],
+  );
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: c.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: c.background }]}
+      edges={["top"]}
+    >
       {isSelectionMode ? (
         <View style={[styles.header, { borderBottomColor: c.border }]}>
-          <TouchableOpacity style={styles.cancelSelBtn} onPress={() => setSelectedIds(new Set())}>
+          <TouchableOpacity
+            style={styles.cancelSelBtn}
+            onPress={() => setSelectedIds(new Set())}
+          >
             <Text style={styles.cancelSelText}>✕</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.selectAllBtn}
             onPress={() => {
-              if (selectedIds.size === projects.length) setSelectedIds(new Set());
-              else setSelectedIds(new Set(projects.map(p => p.id)));
+              if (selectedIds.size === projects.length)
+                setSelectedIds(new Set());
+              else setSelectedIds(new Set(projects.map((p) => p.id)));
             }}
           >
-            <View style={[styles.selectAllBox, selectedIds.size === projects.length && styles.checkboxSelected]}>
-              {selectedIds.size === projects.length && <Text style={styles.selectAllCheck}>✓</Text>}
+            <View
+              style={[
+                styles.selectAllBox,
+                selectedIds.size === projects.length && styles.checkboxSelected,
+              ]}
+            >
+              {selectedIds.size === projects.length && (
+                <Text style={styles.selectAllCheck}>✓</Text>
+              )}
             </View>
             <Text style={styles.selectAllText}>
-              {selectedIds.size === projects.length ? t('deselectAll') : t('selectAll')}
+              {selectedIds.size === projects.length
+                ? t("deselectAll")
+                : t("selectAll")}
             </Text>
           </TouchableOpacity>
-          <Text style={[styles.selCount, { color: c.text }]}>{selectedIds.size} {t('selected')}</Text>
-          <TouchableOpacity style={styles.deleteSelBtn} onPress={handleBulkDelete}>
-            <Text style={styles.deleteSelText}>{t('delete')}</Text>
+          <Text style={[styles.selCount, { color: c.text }]}>
+            {selectedIds.size} {t("selected")}
+          </Text>
+          <TouchableOpacity
+            style={styles.deleteSelBtn}
+            onPress={handleBulkDelete}
+          >
+            <Text style={styles.deleteSelText}>{t("delete")}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={[styles.header, { borderBottomColor: c.border }]}>
           <TouchableOpacity
-            onPress={() => (navigation as any).navigate('Browser')}
+            onPress={() => (navigation as any).navigate("Browser")}
             style={styles.backBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[styles.backBtnText, { color: c.text }]}>{'‹'}</Text>
+            <Text style={[styles.backBtnText, { color: c.text }]}>{"‹"}</Text>
           </TouchableOpacity>
-          <Text style={[styles.title, { color: c.text }]}>{t('projects')}</Text>
+          <Text style={[styles.title, { color: c.text }]}>{t("projects")}</Text>
           <TouchableOpacity
             style={styles.newBtn}
-            onPress={() => (navigation as any).navigate('Downloads')}
+            onPress={() => (navigation as any).navigate("Downloads")}
           >
-            <Text style={styles.newBtnText}>{t('newProject')}</Text>
+            <Text style={styles.newBtnText}>{t("newProject")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -278,15 +365,17 @@ function ProjectsScreen() {
       {projects.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🎬</Text>
-          <Text style={[styles.emptyTitle, { color: c.text }]}>{t('noProjectsYet')}</Text>
+          <Text style={[styles.emptyTitle, { color: c.text }]}>
+            {t("noProjectsYet")}
+          </Text>
           <Text style={[styles.emptyHint, { color: c.textSecondary }]}>
-            {t('noProjectsHint')}
+            {t("noProjectsHint")}
           </Text>
         </View>
       ) : (
         <FlatList
           data={projects}
-          keyExtractor={item => item.id}
+          keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -305,33 +394,33 @@ const THUMB_H = 63;
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  title: { fontSize: 28, fontWeight: '700', flex: 1 },
+  title: { fontSize: 28, fontWeight: "700", flex: 1 },
   backBtn: { paddingRight: 12, paddingVertical: 4 },
-  backBtnText: { fontSize: 32, fontWeight: '400', lineHeight: 32 },
+  backBtnText: { fontSize: 32, fontWeight: "400", lineHeight: 32 },
   newBtn: {
-    backgroundColor: '#6c63ff',
+    backgroundColor: "#6c63ff",
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
   },
-  newBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  newBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 
   list: { padding: 12, gap: 10, paddingBottom: 60 },
 
   // Card
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1c1c1e',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1c1c1e",
     borderRadius: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
     padding: 10,
     gap: 12,
   },
@@ -341,87 +430,98 @@ const styles = StyleSheet.create({
     width: THUMB_W,
     height: THUMB_H,
     borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#2c2c2e',
+    overflow: "hidden",
+    backgroundColor: "#2c2c2e",
     flexShrink: 0,
   },
-  thumbImg: { width: '100%', height: '100%' },
+  thumbImg: { width: "100%", height: "100%" },
   thumbPlaceholder: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   thumbIcon: { fontSize: 28 },
   durationBadge: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 4,
     right: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: "rgba(0,0,0,0.7)",
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  durationText: { color: '#fff', fontSize: 10, fontWeight: '600' },
+  durationText: { color: "#fff", fontSize: 10, fontWeight: "600" },
 
   // Info
   cardInfo: { flex: 1 },
-  cardName: { color: '#fff', fontSize: 14, fontWeight: '600', marginBottom: 6 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardName: { color: "#fff", fontSize: 14, fontWeight: "600", marginBottom: 6 },
+  cardMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
   inProgressBadge: {
-    backgroundColor: '#2a2250',
+    backgroundColor: "#2a2250",
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  inProgressText: { color: '#a89fff', fontSize: 10, fontWeight: '600' },
-  cardTime: { color: '#666', fontSize: 12 },
+  inProgressText: { color: "#a89fff", fontSize: 10, fontWeight: "600" },
+  cardTime: { color: "#666", fontSize: 12 },
 
   // Delete
   deleteBtn: { padding: 4 },
-  deleteIcon: { color: '#555', fontSize: 16 },
+  deleteIcon: { color: "#555", fontSize: 16 },
 
   // Empty
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  empty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+  },
   emptyIcon: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  emptyHint: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  emptyTitle: { fontSize: 20, fontWeight: "700", marginBottom: 8 },
+  emptyHint: { fontSize: 14, textAlign: "center", lineHeight: 22 },
 
   // Selection mode
-  cardSelected: { borderWidth: 2, borderColor: '#6c63ff' },
+  cardSelected: { borderWidth: 2, borderColor: "#6c63ff" },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#555',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#555",
+    alignItems: "center",
+    justifyContent: "center",
     flexShrink: 0,
   },
-  checkboxSelected: { backgroundColor: '#6c63ff', borderColor: '#6c63ff' },
-  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  checkboxSelected: { backgroundColor: "#6c63ff", borderColor: "#6c63ff" },
+  checkmark: { color: "#fff", fontSize: 14, fontWeight: "700" },
   cancelSelBtn: { padding: 6 },
-  cancelSelText: { color: '#aaa', fontSize: 16, fontWeight: '700' },
+  cancelSelText: { color: "#aaa", fontSize: 16, fontWeight: "700" },
   deleteSelBtn: {
-    backgroundColor: '#ff3b30',
+    backgroundColor: "#ff3b30",
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
   },
-  deleteSelText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  selCount: { fontSize: 15, fontWeight: '600' },
-  selectAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 4 },
+  deleteSelText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  selCount: { fontSize: 15, fontWeight: "600" },
+  selectAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
   selectAllBox: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: '#777',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#777",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  selectAllCheck: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  selectAllText: { color: '#aaa', fontSize: 14, fontWeight: '600' },
+  selectAllCheck: { color: "#fff", fontSize: 10, fontWeight: "700" },
+  selectAllText: { color: "#aaa", fontSize: 14, fontWeight: "600" },
 });
 
 export default withErrorBoundary(ProjectsScreen);

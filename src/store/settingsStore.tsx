@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -8,7 +9,6 @@ import React, {
   useRef,
 } from "react";
 import { useColorScheme } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "@browser_settings";
 const HISTORY_KEY = "@browser_history";
@@ -36,12 +36,17 @@ export const SEARCH_ENGINE_HOME: Record<string, string> = {
 
 const STRIP_SUBDOMAIN_RE = /^(www|m|search)\./i;
 
-const normalizeHost = (host: string) => host.replace(STRIP_SUBDOMAIN_RE, '').toLowerCase();
+const normalizeHost = (host: string) =>
+  host.replace(STRIP_SUBDOMAIN_RE, "").toLowerCase();
 
 export const SEARCH_ENGINE_HOSTS: ReadonlySet<string> = new Set(
   [...Object.values(SEARCH_ENGINES), ...Object.values(SEARCH_ENGINE_HOME)]
     .map((url) => {
-      try { return normalizeHost(new URL(url).hostname); } catch { return ''; }
+      try {
+        return normalizeHost(new URL(url).hostname);
+      } catch {
+        return "";
+      }
     })
     .filter(Boolean),
 );
@@ -109,7 +114,10 @@ const DARK: ThemeColors = {
   addressBar: "#1C1C1E",
 };
 
-export const THEME_COLORS: Record<ColorScheme, ThemeColors> = { light: LIGHT, dark: DARK };
+export const THEME_COLORS: Record<ColorScheme, ThemeColors> = {
+  light: LIGHT,
+  dark: DARK,
+};
 
 // ─── Shortcuts ────────────────────────────────────────────────────────────────
 
@@ -122,12 +130,12 @@ export interface Shortcut {
 }
 
 const DEFAULT_SHORTCUTS: Shortcut[] = [
-  { id: "s1", title: "GitHub",      url: "https://github.com",           emoji: "🐙" },
-  { id: "s2", title: "YouTube",     url: "https://youtube.com",          emoji: "▶️" },
-  { id: "s3", title: "ChatGPT",     url: "https://chat.openai.com",      emoji: "🤖" },
-  { id: "s4", title: "Reddit",      url: "https://reddit.com",           emoji: "🟠" },
-  { id: "s5", title: "X / Twitter", url: "https://x.com",                emoji: "𝕏" },
-  { id: "s6", title: "Wikipedia",   url: "https://wikipedia.org",        emoji: "📖" },
+  { id: "s1", title: "GitHub", url: "https://github.com", emoji: "🐙" },
+  { id: "s2", title: "YouTube", url: "https://youtube.com", emoji: "▶️" },
+  { id: "s3", title: "ChatGPT", url: "https://chat.openai.com", emoji: "🤖" },
+  { id: "s4", title: "Reddit", url: "https://reddit.com", emoji: "🟠" },
+  { id: "s5", title: "X / Twitter", url: "https://x.com", emoji: "𝕏" },
+  { id: "s6", title: "Wikipedia", url: "https://wikipedia.org", emoji: "📖" },
 ];
 
 // ─── Language codes ──────────────────────────────────────────────────────────
@@ -148,7 +156,7 @@ export const LANGUAGE_CODES: Record<string, string> = {
 
 // ─── Settings state ───────────────────────────────────────────────────────────
 
-export type VideoBannerPosition = 'top' | 'left' | 'right' | 'bottom';
+export type VideoBannerPosition = "top" | "left" | "right" | "bottom";
 
 export interface SettingsState {
   searchEngine: string;
@@ -169,12 +177,17 @@ const DEFAULT_SETTINGS: SettingsState = {
   adBlockEnabled: true,
   popupBlockEnabled: true,
   shortcuts: DEFAULT_SHORTCUTS,
-  videoBannerPosition: 'top',
+  videoBannerPosition: "top",
 };
 
-type SettingsAction = { type: "SET"; payload: Partial<SettingsState> } | { type: "RESTORE"; payload: SettingsState };
+type SettingsAction =
+  | { type: "SET"; payload: Partial<SettingsState> }
+  | { type: "RESTORE"; payload: SettingsState };
 
-function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
+function settingsReducer(
+  state: SettingsState,
+  action: SettingsAction,
+): SettingsState {
   switch (action.type) {
     case "SET":
       return { ...state, ...action.payload };
@@ -199,10 +212,16 @@ type BookmarkAction =
   | { type: "REMOVE"; payload: { id: string } }
   | { type: "RESTORE"; payload: Bookmark[] };
 
-function bookmarkReducer(state: Bookmark[], action: BookmarkAction): Bookmark[] {
+function bookmarkReducer(
+  state: Bookmark[],
+  action: BookmarkAction,
+): Bookmark[] {
   switch (action.type) {
     case "ADD":
-      return [action.payload, ...state.filter((b) => b.url !== action.payload.url)];
+      return [
+        action.payload,
+        ...state.filter((b) => b.url !== action.payload.url),
+      ];
     case "REMOVE":
       return state.filter((b) => b.id !== action.payload.id);
     case "RESTORE":
@@ -226,7 +245,10 @@ type HistoryAction =
   | { type: "CLEAR" }
   | { type: "RESTORE"; payload: HistoryEntry[] };
 
-function historyReducer(state: HistoryEntry[], action: HistoryAction): HistoryEntry[] {
+function historyReducer(
+  state: HistoryEntry[],
+  action: HistoryAction,
+): HistoryEntry[] {
   switch (action.type) {
     case "PUSH": {
       // Deduplicate: remove any prior entry for the same URL then prepend
@@ -246,7 +268,10 @@ function historyReducer(state: HistoryEntry[], action: HistoryAction): HistoryEn
 
 interface SettingsContextValue {
   settings: SettingsState;
-  setSetting: <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => void;
+  setSetting: <K extends keyof SettingsState>(
+    key: K,
+    value: SettingsState[K],
+  ) => void;
   history: HistoryEntry[];
   pushHistory: (entry: Omit<HistoryEntry, "id" | "timestamp">) => void;
   clearHistory: () => void;
@@ -265,15 +290,22 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, dispatchSettings] = useReducer(settingsReducer, DEFAULT_SETTINGS);
+  const [settings, dispatchSettings] = useReducer(
+    settingsReducer,
+    DEFAULT_SETTINGS,
+  );
   const [history, dispatchHistory] = useReducer(historyReducer, []);
   const [bookmarks, dispatchBookmarks] = useReducer(bookmarkReducer, []);
   const [isReady, setIsReady] = React.useState(false);
   const systemScheme = useColorScheme();
 
-  const saveSettingsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSettingsTimeout = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const saveHistoryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveBookmarksTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveBookmarksTimeout = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Load on mount
   useEffect(() => {
@@ -286,15 +318,20 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         ]);
         if (rawSettings) {
           const parsed = JSON.parse(rawSettings) as Partial<SettingsState>;
-          dispatchSettings({ type: "RESTORE", payload: { ...DEFAULT_SETTINGS, ...parsed } });
+          dispatchSettings({
+            type: "RESTORE",
+            payload: { ...DEFAULT_SETTINGS, ...parsed },
+          });
         }
         if (rawHistory) {
           const parsed = JSON.parse(rawHistory) as HistoryEntry[];
-          if (Array.isArray(parsed)) dispatchHistory({ type: "RESTORE", payload: parsed });
+          if (Array.isArray(parsed))
+            dispatchHistory({ type: "RESTORE", payload: parsed });
         }
         if (rawBookmarks) {
           const parsed = JSON.parse(rawBookmarks) as Bookmark[];
-          if (Array.isArray(parsed)) dispatchBookmarks({ type: "RESTORE", payload: parsed });
+          if (Array.isArray(parsed))
+            dispatchBookmarks({ type: "RESTORE", payload: parsed });
         }
       } catch (e) {
         console.warn("Failed to restore settings/history:", e);
@@ -309,7 +346,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (saveSettingsTimeout.current) clearTimeout(saveSettingsTimeout.current);
     saveSettingsTimeout.current = setTimeout(() => {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings)).catch((e) =>
-        console.warn("Failed to save settings:", e)
+        console.warn("Failed to save settings:", e),
       );
     }, 300);
   }, [settings, isReady]);
@@ -320,7 +357,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (saveHistoryTimeout.current) clearTimeout(saveHistoryTimeout.current);
     saveHistoryTimeout.current = setTimeout(() => {
       AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history)).catch((e) =>
-        console.warn("Failed to save history:", e)
+        console.warn("Failed to save history:", e),
       );
     }, 500);
   }, [history, isReady]);
@@ -328,43 +365,53 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // Persist bookmarks on change (debounced)
   useEffect(() => {
     if (!isReady) return;
-    if (saveBookmarksTimeout.current) clearTimeout(saveBookmarksTimeout.current);
+    if (saveBookmarksTimeout.current)
+      clearTimeout(saveBookmarksTimeout.current);
     saveBookmarksTimeout.current = setTimeout(() => {
-      AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks)).catch((e) =>
-        console.warn("Failed to save bookmarks:", e)
+      AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bookmarks)).catch(
+        (e) => console.warn("Failed to save bookmarks:", e),
       );
     }, 300);
   }, [bookmarks, isReady]);
 
-  const setSetting = useCallback(<K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
-    dispatchSettings({ type: "SET", payload: { [key]: value } });
-  }, []);
+  const setSetting = useCallback(
+    <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
+      dispatchSettings({ type: "SET", payload: { [key]: value } });
+    },
+    [],
+  );
 
-  const pushHistory = useCallback((entry: Omit<HistoryEntry, "id" | "timestamp">) => {
-    dispatchHistory({
-      type: "PUSH",
-      payload: {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        timestamp: Date.now(),
-        ...entry,
-      },
-    });
-  }, []);
+  const pushHistory = useCallback(
+    (entry: Omit<HistoryEntry, "id" | "timestamp">) => {
+      dispatchHistory({
+        type: "PUSH",
+        payload: {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          timestamp: Date.now(),
+          ...entry,
+        },
+      });
+    },
+    [],
+  );
 
   const clearHistory = useCallback(() => {
     dispatchHistory({ type: "CLEAR" });
   }, []);
 
-  const addBookmark = useCallback((entry: Omit<Bookmark, "id" | "createdAt">) => {
-    dispatchBookmarks({
-      type: "ADD",
-      payload: {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        createdAt: Date.now(),
-        ...entry,
-      },
-    });
-  }, []);
+  const addBookmark = useCallback(
+    (entry: Omit<Bookmark, "id" | "createdAt">) => {
+      dispatchBookmarks({
+        type: "ADD",
+        payload: {
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          createdAt: Date.now(),
+          ...entry,
+        },
+      });
+    },
+    [],
+  );
 
   const removeBookmark = useCallback((id: string) => {
     dispatchBookmarks({ type: "REMOVE", payload: { id } });
@@ -374,42 +421,88 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   settingsRef.current = settings;
 
   const searchUrl = useCallback((query: string) => {
-    const baseUrl = SEARCH_ENGINES[settingsRef.current.searchEngine] ?? SEARCH_ENGINES.Google;
+    const baseUrl =
+      SEARCH_ENGINES[settingsRef.current.searchEngine] ?? SEARCH_ENGINES.Google;
     return baseUrl + encodeURIComponent(query);
   }, []);
 
   const homeUrl = useCallback(() => {
-    return SEARCH_ENGINE_HOME[settingsRef.current.searchEngine] ?? SEARCH_ENGINE_HOME.Google;
+    return (
+      SEARCH_ENGINE_HOME[settingsRef.current.searchEngine] ??
+      SEARCH_ENGINE_HOME.Google
+    );
   }, []);
 
   const addShortcut = useCallback((shortcut: Omit<Shortcut, "id">) => {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     dispatchSettings({
       type: "SET",
-      payload: { shortcuts: [...settingsRef.current.shortcuts, { ...shortcut, id }] },
+      payload: {
+        shortcuts: [...settingsRef.current.shortcuts, { ...shortcut, id }],
+      },
     });
   }, []);
 
   const removeShortcut = useCallback((id: string) => {
     dispatchSettings({
       type: "SET",
-      payload: { shortcuts: settingsRef.current.shortcuts.filter((s) => s.id !== id) },
+      payload: {
+        shortcuts: settingsRef.current.shortcuts.filter((s) => s.id !== id),
+      },
     });
   }, []);
 
   const resolvedScheme: ColorScheme =
-    settings.theme === "Dark" ? "dark"
-    : settings.theme === "Light" ? "light"
-    : (systemScheme ?? "light");
+    settings.theme === "Dark"
+      ? "dark"
+      : settings.theme === "Light"
+        ? "light"
+        : (systemScheme ?? "light");
 
   const themeColors = THEME_COLORS[resolvedScheme];
 
   const value = useMemo<SettingsContextValue>(
-    () => ({ settings, setSetting, history, pushHistory, clearHistory, bookmarks, addBookmark, removeBookmark, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady }),
-    [settings, setSetting, history, pushHistory, clearHistory, bookmarks, addBookmark, removeBookmark, searchUrl, homeUrl, addShortcut, removeShortcut, resolvedScheme, themeColors, isReady]
+    () => ({
+      settings,
+      setSetting,
+      history,
+      pushHistory,
+      clearHistory,
+      bookmarks,
+      addBookmark,
+      removeBookmark,
+      searchUrl,
+      homeUrl,
+      addShortcut,
+      removeShortcut,
+      resolvedScheme,
+      themeColors,
+      isReady,
+    }),
+    [
+      settings,
+      setSetting,
+      history,
+      pushHistory,
+      clearHistory,
+      bookmarks,
+      addBookmark,
+      removeBookmark,
+      searchUrl,
+      homeUrl,
+      addShortcut,
+      removeShortcut,
+      resolvedScheme,
+      themeColors,
+      isReady,
+    ],
   );
 
-  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+  return (
+    <SettingsContext.Provider value={value}>
+      {children}
+    </SettingsContext.Provider>
+  );
 }
 
 export function useSettings() {

@@ -1,8 +1,8 @@
 import type { Segment, SubtitleStyle } from '../../types/videoEditor';
 import {
   DEFAULT_SUBTITLE_STYLE,
-  SUBTITLE_FONT_SCALE,
   SUBTITLE_FONT_CSS,
+  SUBTITLE_FONT_SCALE,
 } from '../../types/videoEditor';
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {

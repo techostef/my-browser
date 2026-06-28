@@ -1,6 +1,6 @@
 import React from "react";
+import { useActiveTabId, useTabActions, useTabList } from "../store/tabStore";
 import TabBar from "./TabBar";
-import { useTabList, useActiveTabId, useTabActions } from "../store/tabStore";
 
 interface Props {
   visible: boolean;
@@ -10,15 +10,16 @@ interface Props {
 function TabBarContainerInner({ visible, onClose }: Props) {
   const tabs = useTabList();
   const activeTabId = useActiveTabId();
-  const { addTab, removeTab, removeMultipleTabs, setActiveTab } = useTabActions();
+  const { addTab, removeTab, removeMultipleTabs, setActiveTab } =
+    useTabActions();
 
   return (
     <TabBar
       tabs={tabs}
       activeTabId={activeTabId}
       onSwitchTab={setActiveTab}
-      onAddTab={() => addTab('about:home')}
-      onAddIncognitoTab={() => addTab('about:home', true)}
+      onAddTab={() => addTab("about:home")}
+      onAddIncognitoTab={() => addTab("about:home", true)}
       onRemoveTab={removeTab}
       onCloseAllTabs={removeMultipleTabs}
       visible={visible}

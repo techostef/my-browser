@@ -1,14 +1,8 @@
 import React, { useState } from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
-import { SortKey } from "./types";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "../../i18n";
 import { TranslationKey } from "../../i18n/translations";
+import { SortKey } from "./types";
 
 const SORT_OPTIONS: [SortKey, TranslationKey][] = [
   ["name_asc", "sortNameAsc"],
@@ -87,12 +81,15 @@ export default function ActionsDropdown({
                   }}
                 >
                   <Text style={styles.icon}>📁</Text>
-                  <Text style={styles.label}>{t('newFolder')}</Text>
+                  <Text style={styles.label}>{t("newFolder")}</Text>
                 </TouchableOpacity>
               )}
               {isDevicePath && (
                 <TouchableOpacity
-                  style={[styles.row, isDeviceScanRunning && styles.rowDisabled]}
+                  style={[
+                    styles.row,
+                    isDeviceScanRunning && styles.rowDisabled,
+                  ]}
                   disabled={isDeviceScanRunning}
                   onPress={() => {
                     close();
@@ -101,7 +98,7 @@ export default function ActionsDropdown({
                 >
                   <Text style={styles.icon}>🔄</Text>
                   <Text style={styles.label}>
-                    {isDeviceScanRunning ? t('scanning') : t('rescanDevice')}
+                    {isDeviceScanRunning ? t("scanning") : t("rescanDevice")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -111,7 +108,7 @@ export default function ActionsDropdown({
                 onPress={() => setPage("sort")}
               >
                 <Text style={styles.icon}>↕️</Text>
-                <Text style={styles.label}>{t('sort')}</Text>
+                <Text style={styles.label}>{t("sort")}</Text>
                 <Text style={styles.chevron}>›</Text>
               </TouchableOpacity>
               {!isDevicePath && (
@@ -126,7 +123,7 @@ export default function ActionsDropdown({
                   <Text
                     style={[styles.label, showHidden && styles.labelActive]}
                   >
-                    {t('showHidden')}
+                    {t("showHidden")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -138,7 +135,7 @@ export default function ActionsDropdown({
                 }}
               >
                 <Text style={styles.icon}>🏷</Text>
-                <Text style={styles.label}>{t('manageLabels')}</Text>
+                <Text style={styles.label}>{t("manageLabels")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.row}
@@ -148,7 +145,7 @@ export default function ActionsDropdown({
                 }}
               >
                 <Text style={styles.icon}>🔍</Text>
-                <Text style={styles.label}>{t('findDuplicates')}</Text>
+                <Text style={styles.label}>{t("findDuplicates")}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -159,7 +156,7 @@ export default function ActionsDropdown({
               >
                 <Text style={styles.icon}>‹</Text>
                 <Text style={[styles.label, { fontWeight: "700" }]}>
-                  {t('sortBy')}
+                  {t("sortBy")}
                 </Text>
               </TouchableOpacity>
               <View style={styles.divider} />
@@ -172,7 +169,9 @@ export default function ActionsDropdown({
                     close();
                   }}
                 >
-                  <Text style={styles.icon}>{sortKey === key ? "✓" : "  "}</Text>
+                  <Text style={styles.icon}>
+                    {sortKey === key ? "✓" : "  "}
+                  </Text>
                   <Text
                     style={[
                       styles.label,

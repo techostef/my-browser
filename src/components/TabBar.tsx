@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
+  Alert,
+  Dimensions,
   Modal,
   SafeAreaView,
-  Dimensions,
-  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
   Gesture,
@@ -16,16 +16,16 @@ import {
   ScrollView,
 } from "react-native-gesture-handler";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  interpolate,
   Extrapolation,
+  interpolate,
   runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
-import { BrowserTab } from "../types";
 import { useTranslation } from "../i18n";
+import { BrowserTab } from "../types";
 
 const CARD_GAP = 12;
 const SWIPE_THRESHOLD = 0.35; // fraction of card width
@@ -44,7 +44,14 @@ interface CardProps {
   onRemove: () => void;
 }
 
-function SwipeableTabCard({ tab, isActive, isIncognito, canClose, onSwitch, onRemove }: CardProps) {
+function SwipeableTabCard({
+  tab,
+  isActive,
+  isIncognito,
+  canClose,
+  onSwitch,
+  onRemove,
+}: CardProps) {
   const { t } = useTranslation();
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(1);
@@ -67,15 +74,18 @@ function SwipeableTabCard({ tab, isActive, isIncognito, canClose, onSwitch, onRe
     })
     .onEnd((e) => {
       const shouldDismiss =
-        canCloseShared.value && (
-          Math.abs(e.translationX) > CARD_WIDTH * SWIPE_THRESHOLD ||
-          Math.abs(e.velocityX) > 500
-        );
+        canCloseShared.value &&
+        (Math.abs(e.translationX) > CARD_WIDTH * SWIPE_THRESHOLD ||
+          Math.abs(e.velocityX) > 500);
       if (shouldDismiss) {
         const dir = e.translationX >= 0 ? 1 : -1;
-        translateX.value = withTiming(dir * OUT_X, { duration: 220 }, (finished) => {
-          if (finished) runOnJS(onRemove)();
-        });
+        translateX.value = withTiming(
+          dir * OUT_X,
+          { duration: 220 },
+          (finished) => {
+            if (finished) runOnJS(onRemove)();
+          },
+        );
         opacity.value = withTiming(0, { duration: 180 });
       } else {
         translateX.value = withSpring(0);
@@ -94,34 +104,56 @@ function SwipeableTabCard({ tab, isActive, isIncognito, canClose, onSwitch, onRe
         style={[
           styles.card,
           isIncognito && styles.cardIncognito,
-          isActive && (isIncognito ? styles.cardActiveIncognito : styles.cardActive),
+          isActive &&
+            (isIncognito ? styles.cardActiveIncognito : styles.cardActive),
           animatedStyle,
-        ]}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={onSwitch} activeOpacity={0.85}>
-          <View style={[
-            styles.cardBar,
-            isIncognito && styles.cardBarIncognito,
-            isActive && (isIncognito ? styles.cardBarActiveIncognito : styles.cardBarActive),
-          ]}>
-            <Text style={[
-              styles.cardUrl,
-              isIncognito && styles.cardUrlIncognito,
-              isActive && styles.cardUrlActive,
-            ]} numberOfLines={1}>
-              {isIncognito && <Text>🕵️ </Text>}{displayUrl || t('newTabLabel')}
+        ]}
+      >
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          onPress={onSwitch}
+          activeOpacity={0.85}
+        >
+          <View
+            style={[
+              styles.cardBar,
+              isIncognito && styles.cardBarIncognito,
+              isActive &&
+                (isIncognito
+                  ? styles.cardBarActiveIncognito
+                  : styles.cardBarActive),
+            ]}
+          >
+            <Text
+              style={[
+                styles.cardUrl,
+                isIncognito && styles.cardUrlIncognito,
+                isActive && styles.cardUrlActive,
+              ]}
+              numberOfLines={1}
+            >
+              {isIncognito && <Text>🕵️ </Text>}
+              {displayUrl || t("newTabLabel")}
             </Text>
             {canClose && (
               <TouchableOpacity
                 style={styles.closeBtn}
                 onPress={onRemove}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Text style={styles.closeBtnText}>✕</Text>
               </TouchableOpacity>
             )}
           </View>
           <View style={styles.cardBody}>
-            <Text style={[styles.cardTitle, isIncognito && styles.cardTitleIncognito]} numberOfLines={3}>
-              {tab.title || t('newTabLabel')}
+            <Text
+              style={[
+                styles.cardTitle,
+                isIncognito && styles.cardTitleIncognito,
+              ]}
+              numberOfLines={3}
+            >
+              {tab.title || t("newTabLabel")}
             </Text>
           </View>
         </TouchableOpacity>
@@ -157,34 +189,46 @@ export default function TabBar({
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
   // Default segment to whichever mode the active tab is in
   const [segment, setSegment] = useState<"normal" | "incognito">(
-    activeTab?.incognito ? "incognito" : "normal"
+    activeTab?.incognito ? "incognito" : "normal",
   );
 
   // ── Undo close state ─────────────────────────────────────────────────────
-  const [pendingClose, setPendingClose] = useState<{ id: string; title: string } | null>(null);
+  const [pendingClose, setPendingClose] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressWidth = useSharedValue(1);
 
-  const commitClose = useCallback((id: string) => {
-    onRemoveTab(id);
-    setPendingClose(null);
-  }, [onRemoveTab]);
+  const commitClose = useCallback(
+    (id: string) => {
+      onRemoveTab(id);
+      setPendingClose(null);
+    },
+    [onRemoveTab],
+  );
 
-  const handleRequestClose = useCallback((id: string) => {
-    const tab = tabs.find((t) => t.id === id);
-    const title = tab?.title || tab?.url?.replace(/^https?:\/\//, "").split("/")[0] || t('newTabLabel');
-    // If there's already a pending close, commit it immediately
-    if (pendingClose && pendingTimerRef.current) {
-      clearTimeout(pendingTimerRef.current);
-      onRemoveTab(pendingClose.id);
-    }
-    setPendingClose({ id, title });
-    progressWidth.value = 1;
-    progressWidth.value = withTiming(0, { duration: 3000 });
-    pendingTimerRef.current = setTimeout(() => {
-      commitClose(id);
-    }, 3000);
-  }, [tabs, pendingClose, commitClose, onRemoveTab]);
+  const handleRequestClose = useCallback(
+    (id: string) => {
+      const tab = tabs.find((t) => t.id === id);
+      const title =
+        tab?.title ||
+        tab?.url?.replace(/^https?:\/\//, "").split("/")[0] ||
+        t("newTabLabel");
+      // If there's already a pending close, commit it immediately
+      if (pendingClose && pendingTimerRef.current) {
+        clearTimeout(pendingTimerRef.current);
+        onRemoveTab(pendingClose.id);
+      }
+      setPendingClose({ id, title });
+      progressWidth.value = 1;
+      progressWidth.value = withTiming(0, { duration: 3000 });
+      pendingTimerRef.current = setTimeout(() => {
+        commitClose(id);
+      }, 3000);
+    },
+    [tabs, pendingClose, commitClose, onRemoveTab],
+  );
 
   const handleUndo = useCallback(() => {
     if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
@@ -213,13 +257,19 @@ export default function TabBar({
   }, [visible]);
 
   const isIncognito = segment === "incognito";
-  const allVisibleTabs = tabs.filter((t) => !t.hidden && !!t.incognito === isIncognito);
+  const allVisibleTabs = tabs.filter(
+    (t) => !t.hidden && !!t.incognito === isIncognito,
+  );
   // Hide the pending-close tab from the grid
   const visibleTabs = pendingClose
     ? allVisibleTabs.filter((t) => t.id !== pendingClose.id)
     : allVisibleTabs;
-  const normalCount = tabs.filter((t) => !t.hidden && !t.incognito && t.id !== pendingClose?.id).length;
-  const incognitoCount = tabs.filter((t) => !t.hidden && t.incognito && t.id !== pendingClose?.id).length;
+  const normalCount = tabs.filter(
+    (t) => !t.hidden && !t.incognito && t.id !== pendingClose?.id,
+  ).length;
+  const incognitoCount = tabs.filter(
+    (t) => !t.hidden && t.incognito && t.id !== pendingClose?.id,
+  ).length;
 
   const handleSwitchTab = (id: string) => {
     onSwitchTab(id);
@@ -234,25 +284,23 @@ export default function TabBar({
 
   const handleCloseAll = () => {
     if (visibleTabs.length === 0) return;
-    const title = isIncognito ? t('closeAllIncognitoTitle') : t('closeAllNormalTitle');
+    const title = isIncognito
+      ? t("closeAllIncognitoTitle")
+      : t("closeAllNormalTitle");
     const body = isIncognito
-      ? t('closeAllIncognitoBody', { count: String(visibleTabs.length) })
-      : t('closeAllNormalBody', { count: String(visibleTabs.length) });
-    Alert.alert(
-      title,
-      body,
-      [
-        { text: t('cancel'), style: "cancel" },
-        {
-          text: t('closeAll'),
-          style: "destructive",
-          onPress: () => {
-            onCloseAllTabs(visibleTabs.map((tab) => tab.id));
-            onClose();
-          },
+      ? t("closeAllIncognitoBody", { count: String(visibleTabs.length) })
+      : t("closeAllNormalBody", { count: String(visibleTabs.length) });
+    Alert.alert(title, body, [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("closeAll"),
+        style: "destructive",
+        onPress: () => {
+          onCloseAllTabs(visibleTabs.map((tab) => tab.id));
+          onClose();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   return (
@@ -260,102 +308,175 @@ export default function TabBar({
       visible={visible}
       animationType="slide"
       transparent={false}
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={[styles.root, isIncognito && styles.rootIncognito]}>
-        {/* Header */}
-        <View style={[styles.header, isIncognito && styles.headerIncognito]}>
-          <TouchableOpacity
-            style={styles.closeAllBtn}
-            onPress={handleCloseAll}
-            disabled={visibleTabs.length === 0}>
-            <Text style={[styles.closeAllText, visibleTabs.length === 0 && styles.closeAllTextDisabled]}>
-              {t('closeAll')}
-            </Text>
-          </TouchableOpacity>
-       
-          <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
-            <Text style={styles.doneBtnText}>{t('done')}</Text>
-          </TouchableOpacity>
-        </View>
+        <SafeAreaView
+          style={[styles.root, isIncognito && styles.rootIncognito]}
+        >
+          {/* Header */}
+          <View style={[styles.header, isIncognito && styles.headerIncognito]}>
+            <TouchableOpacity
+              style={styles.closeAllBtn}
+              onPress={handleCloseAll}
+              disabled={visibleTabs.length === 0}
+            >
+              <Text
+                style={[
+                  styles.closeAllText,
+                  visibleTabs.length === 0 && styles.closeAllTextDisabled,
+                ]}
+              >
+                {t("closeAll")}
+              </Text>
+            </TouchableOpacity>
 
-        {/* Segment control */}
-        <View style={[styles.segmentRow, isIncognito && styles.segmentRowIncognito]}>
-          <TouchableOpacity
-            style={[styles.segmentBtn, !isIncognito && styles.segmentBtnActive]}
-            onPress={() => setSegment("normal")}>
-            <Text style={[styles.segmentText, !isIncognito && styles.segmentTextActive]}>
-              {t('tabsSegment')}{normalCount > 0 ? ` (${normalCount})` : ""}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.segmentBtn, isIncognito && styles.segmentBtnActiveIncognito]}
-            onPress={() => setSegment("incognito")}>
-            <Text style={[styles.segmentText, styles.segmentTextIncog, isIncognito && styles.segmentTextActive]}>
-              {t('incognitoSegment')}{incognitoCount > 0 ? ` (${incognitoCount})` : ""}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Incognito info banner */}
-        {isIncognito && (
-          <View style={styles.incognitoBanner}>
-            <Text style={styles.incognitoBannerTitle}>{t('youreIncognito')}</Text>
-            <Text style={styles.incognitoBannerBody}>{t('incognitoDescription')}</Text>
+            <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
+              <Text style={styles.doneBtnText}>{t("done")}</Text>
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* Grid */}
-        <ScrollView
-          contentContainerStyle={styles.grid}
-          showsVerticalScrollIndicator={false}>
-          {visibleTabs.length === 0 ? (
-            <View style={styles.emptyWrap}>
-              <Text style={[styles.emptyText, isIncognito && styles.emptyTextIncognito]}>
-                {isIncognito ? t('noIncognitoTabs') : t('noTabsOpen')}
+          {/* Segment control */}
+          <View
+            style={[
+              styles.segmentRow,
+              isIncognito && styles.segmentRowIncognito,
+            ]}
+          >
+            <TouchableOpacity
+              style={[
+                styles.segmentBtn,
+                !isIncognito && styles.segmentBtnActive,
+              ]}
+              onPress={() => setSegment("normal")}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  !isIncognito && styles.segmentTextActive,
+                ]}
+              >
+                {t("tabsSegment")}
+                {normalCount > 0 ? ` (${normalCount})` : ""}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.segmentBtn,
+                isIncognito && styles.segmentBtnActiveIncognito,
+              ]}
+              onPress={() => setSegment("incognito")}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  styles.segmentTextIncog,
+                  isIncognito && styles.segmentTextActive,
+                ]}
+              >
+                {t("incognitoSegment")}
+                {incognitoCount > 0 ? ` (${incognitoCount})` : ""}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Incognito info banner */}
+          {isIncognito && (
+            <View style={styles.incognitoBanner}>
+              <Text style={styles.incognitoBannerTitle}>
+                {t("youreIncognito")}
+              </Text>
+              <Text style={styles.incognitoBannerBody}>
+                {t("incognitoDescription")}
               </Text>
             </View>
-          ) : (
-            visibleTabs.map((tab) => (
-              <SwipeableTabCard
-                key={tab.id}
-                tab={tab}
-                isActive={tab.id === activeTabId}
-                isIncognito={isIncognito}
-                canClose={visibleTabs.length > 1}
-                onSwitch={() => handleSwitchTab(tab.id)}
-                onRemove={() => handleRequestClose(tab.id)}
-              />
-            ))
           )}
-        </ScrollView>
 
-        {/* Undo close toast */}
-        {pendingClose && (
-          <View style={[styles.undoToast, isIncognito && styles.undoToastIncognito]}>
-            <View style={styles.undoToastContent}>
-              <Text style={[styles.undoToastText, isIncognito && styles.undoToastTextIncognito]} numberOfLines={1}>
-                {t('closedTabToast', { title: pendingClose.title })}
-              </Text>
-              <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
-                <Text style={styles.undoBtnText}>{t('undo')}</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.progressTrack, isIncognito && styles.progressTrackIncognito]}>
-              <Animated.View style={[styles.progressBar, isIncognito && styles.progressBarIncognito, progressStyle]} />
-            </View>
-          </View>
-        )}
+          {/* Grid */}
+          <ScrollView
+            contentContainerStyle={styles.grid}
+            showsVerticalScrollIndicator={false}
+          >
+            {visibleTabs.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Text
+                  style={[
+                    styles.emptyText,
+                    isIncognito && styles.emptyTextIncognito,
+                  ]}
+                >
+                  {isIncognito ? t("noIncognitoTabs") : t("noTabsOpen")}
+                </Text>
+              </View>
+            ) : (
+              visibleTabs.map((tab) => (
+                <SwipeableTabCard
+                  key={tab.id}
+                  tab={tab}
+                  isActive={tab.id === activeTabId}
+                  isIncognito={isIncognito}
+                  canClose={visibleTabs.length > 1}
+                  onSwitch={() => handleSwitchTab(tab.id)}
+                  onRemove={() => handleRequestClose(tab.id)}
+                />
+              ))
+            )}
+          </ScrollView>
 
-        {/* New tab button */}
-        <TouchableOpacity
-          style={[styles.newTabBtn, isIncognito && styles.newTabBtnIncognito]}
-          onPress={handleAddTab}>
-          <Text style={[styles.newTabBtnText, isIncognito && styles.newTabBtnTextIncognito]}>
-            {isIncognito ? t('newIncognitoTabBtn') : t('newTabBtn')}
-          </Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+          {/* Undo close toast */}
+          {pendingClose && (
+            <View
+              style={[
+                styles.undoToast,
+                isIncognito && styles.undoToastIncognito,
+              ]}
+            >
+              <View style={styles.undoToastContent}>
+                <Text
+                  style={[
+                    styles.undoToastText,
+                    isIncognito && styles.undoToastTextIncognito,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t("closedTabToast", { title: pendingClose.title })}
+                </Text>
+                <TouchableOpacity style={styles.undoBtn} onPress={handleUndo}>
+                  <Text style={styles.undoBtnText}>{t("undo")}</Text>
+                </TouchableOpacity>
+              </View>
+              <View
+                style={[
+                  styles.progressTrack,
+                  isIncognito && styles.progressTrackIncognito,
+                ]}
+              >
+                <Animated.View
+                  style={[
+                    styles.progressBar,
+                    isIncognito && styles.progressBarIncognito,
+                    progressStyle,
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* New tab button */}
+          <TouchableOpacity
+            style={[styles.newTabBtn, isIncognito && styles.newTabBtnIncognito]}
+            onPress={handleAddTab}
+          >
+            <Text
+              style={[
+                styles.newTabBtnText,
+                isIncognito && styles.newTabBtnTextIncognito,
+              ]}
+            >
+              {isIncognito ? t("newIncognitoTabBtn") : t("newTabBtn")}
+            </Text>
+          </TouchableOpacity>
+        </SafeAreaView>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -429,7 +550,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#4C3575",
   },
-  incognitoBannerTitle: { fontSize: 13, fontWeight: "700", color: "#C4B5FD", marginBottom: 4 },
+  incognitoBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#C4B5FD",
+    marginBottom: 4,
+  },
   incognitoBannerBody: { fontSize: 12, color: "#9D8EC4", lineHeight: 17 },
 
   grid: {
@@ -469,9 +595,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#DDD",
   },
-  cardBarIncognito: { backgroundColor: "#3D2D5C", borderBottomColor: "#4C3575" },
+  cardBarIncognito: {
+    backgroundColor: "#3D2D5C",
+    borderBottomColor: "#4C3575",
+  },
   cardBarActive: { backgroundColor: "#D6F5F3", borderBottomColor: "#B2E8E5" },
-  cardBarActiveIncognito: { backgroundColor: "#4C3575", borderBottomColor: "#6D4E9E" },
+  cardBarActiveIncognito: {
+    backgroundColor: "#4C3575",
+    borderBottomColor: "#6D4E9E",
+  },
 
   cardUrl: { flex: 1, fontSize: 11, color: "#666" },
   cardUrlIncognito: { color: "#C4B5FD" },
@@ -509,7 +641,11 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  newTabBtnIncognito: { backgroundColor: "#2D2040", borderWidth: 1, borderColor: "#4C3575" },
+  newTabBtnIncognito: {
+    backgroundColor: "#2D2040",
+    borderWidth: 1,
+    borderColor: "#4C3575",
+  },
   newTabBtnText: { fontSize: 16, fontWeight: "600", color: "#4ECDC4" },
   newTabBtnTextIncognito: { color: "#C4B5FD" },
 

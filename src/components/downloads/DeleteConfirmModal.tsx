@@ -1,14 +1,8 @@
-import React from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { sharedStyles as s } from "./sharedStyles";
+import React from "react";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "../../i18n";
+import { sharedStyles as s } from "./sharedStyles";
 
 type Props = {
   visible: boolean;
@@ -29,14 +23,14 @@ export default function DeleteConfirmModal({
 }: Props) {
   const { t } = useTranslation();
   const isMany = count > 1;
-  const title = isMany ? t('deleteItems', { count }) : t('deleteItem');
+  const title = isMany ? t("deleteItems", { count }) : t("deleteItem");
   const message = permanent
     ? isMany
-      ? t('deleteForeverPlural')
-      : t('deleteForeverSingle')
+      ? t("deleteForeverPlural")
+      : t("deleteForeverSingle")
     : isMany
-      ? t('moveToTrashPlural')
-      : t('moveToTrashSingle');
+      ? t("moveToTrashPlural")
+      : t("moveToTrashSingle");
 
   return (
     <Modal
@@ -60,19 +54,21 @@ export default function DeleteConfirmModal({
                 <Ionicons name="checkmark" size={14} color="#FFF" />
               )}
             </View>
-            <Text style={styles.checkLabel}>{t('deletePermanentlyCheckbox')}</Text>
+            <Text style={styles.checkLabel}>
+              {t("deletePermanentlyCheckbox")}
+            </Text>
           </TouchableOpacity>
 
           <View style={s.modalActions}>
             <TouchableOpacity style={s.modalBtn} onPress={onCancel}>
-              <Text style={s.modalBtnText}>{t('cancel')}</Text>
+              <Text style={s.modalBtnText}>{t("cancel")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[s.modalBtn, styles.deleteBtn]}
               onPress={onConfirm}
             >
               <Text style={[s.modalBtnText, styles.deleteBtnText]}>
-                {t('delete')}
+                {t("delete")}
               </Text>
             </TouchableOpacity>
           </View>

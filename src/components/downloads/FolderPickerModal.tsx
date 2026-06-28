@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { sharedStyles as s } from "./sharedStyles";
 
 export type FolderPickerOption = {
@@ -33,9 +33,16 @@ export default function FolderPickerModal({
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity activeOpacity={1} style={s.modalCard} onPress={() => {}}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={s.modalCard}
+          onPress={() => {}}
+        >
           <Text style={s.modalTitle}>{title}</Text>
-          <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={s.moveOptions}>
+          <ScrollView
+            style={{ maxHeight: 320 }}
+            contentContainerStyle={s.moveOptions}
+          >
             {options.map((opt, i) => (
               <TouchableOpacity
                 key={i}

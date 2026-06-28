@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import { useCallback, useEffect, useRef } from "react";
+import { AppState } from "react-native";
 import {
-  RewardedInterstitialAd,
-  RewardedAdEventType,
   AdEventType,
-} from 'react-native-google-mobile-ads';
-import { useAdState, useAdActions } from '../store/adStore';
-import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from '../config/admob';
+  RewardedAdEventType,
+  RewardedInterstitialAd,
+} from "react-native-google-mobile-ads";
+import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../config/admob";
+import { useAdActions, useAdState } from "../store/adStore";
 
 export function AdController() {
   const { pendingInterstitial } = useAdState();
@@ -29,11 +29,13 @@ export function AdController() {
     isLoadingRef.current = true;
     rewardEarnedRef.current = false;
 
-    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
+    const ad = RewardedInterstitialAd.createForAdRequest(
+      REWARDED_INTERSTITIAL_AD_UNIT_ID,
+    );
     const unsubs: Array<() => void> = [];
 
     const cleanup = () => {
-      unsubs.forEach(fn => fn());
+      unsubs.forEach((fn) => fn());
       unsubs.length = 0;
       isLoadingRef.current = false;
     };
@@ -95,8 +97,8 @@ export function AdController() {
 
   // Re-show if app returns to foreground while ad is still pending
   useEffect(() => {
-    const sub = AppState.addEventListener('change', nextState => {
-      if (nextState === 'active' && pendingRef.current) {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && pendingRef.current) {
         loadAndShow();
       }
     });

@@ -1,35 +1,49 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
 /** biome-ignore-all lint/suspicious/useIterableCallbackReturn: <explanation> */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as ScreenOrientation from "expo-screen-orientation";
+import { VideoView, useVideoPlayer } from "expo-video";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
+  ActivityIndicator,
+  BackHandler,
+  Dimensions,
+  GestureResponderEvent,
+  LayoutChangeEvent,
   Modal,
-  View,
+  StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  StatusBar,
-  Dimensions,
-  LayoutChangeEvent,
-  GestureResponderEvent,
-  BackHandler,
+  View,
 } from "react-native";
-import { Image } from "expo-image";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
-import * as ScreenOrientation from "expo-screen-orientation";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { VideoView, useVideoPlayer } from "expo-video";
 import {
-  RewardedInterstitialAd,
-  RewardedAdEventType,
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import {
   AdEventType,
+  RewardedAdEventType,
+  RewardedInterstitialAd,
 } from "react-native-google-mobile-ads";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { REWARDED_INTERSTITIAL_AD_UNIT_ID } from "../../config/admob";
-import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "../../i18n";
 import { DownloadTask } from "../../types";
 import { DownloadMediaType } from "../DownloadItem";
-import { useTranslation } from "../../i18n";
 
 type Props = {
   task: DownloadTask | null;
@@ -70,9 +84,7 @@ export default function PreviewModal({
   hasNext,
 }: Props) {
   const { t } = useTranslation();
-  const player = useVideoPlayer(
-    task?.filePath ? { uri: task.filePath } : null,
-  );
+  const player = useVideoPlayer(task?.filePath ? { uri: task.filePath } : null);
 
   const seekHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,7 +98,9 @@ export default function PreviewModal({
   const seekStartTimeRef = useRef(0);
   const lastSeekAtRef = useRef(0);
   const pendingSeekSecRef = useRef<number | null>(null);
-  const pendingSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const [isPlaying, setIsPlaying] = useState(true);
   const [position, setPosition] = useState(0);
@@ -108,7 +122,10 @@ export default function PreviewModal({
     "worklet";
     const maxX = ((s - 1) * SCREEN_WIDTH) / 2;
     const maxY = ((s - 1) * SCREEN_HEIGHT) / 2;
-    return { x: Math.min(maxX, Math.max(-maxX, tx)), y: Math.min(maxY, Math.max(-maxY, ty)) };
+    return {
+      x: Math.min(maxX, Math.max(-maxX, tx)),
+      y: Math.min(maxY, Math.max(-maxY, ty)),
+    };
   };
 
   const imgPinchGesture = Gesture.Pinch()
@@ -125,7 +142,11 @@ export default function PreviewModal({
         imgSavedTransY.value = 0;
       } else {
         imgSavedScale.value = imgScale.value;
-        const clamped = clampImg(imgTransX.value, imgTransY.value, imgScale.value);
+        const clamped = clampImg(
+          imgTransX.value,
+          imgTransY.value,
+          imgScale.value,
+        );
         imgTransX.value = clamped.x;
         imgTransY.value = clamped.y;
         imgSavedTransX.value = clamped.x;
@@ -162,7 +183,11 @@ export default function PreviewModal({
         imgSavedTransY.value = 0;
       } else {
         const s = 2.5;
-        const clamped = clampImg((SCREEN_WIDTH / 2 - e.x) * (s - 1), (SCREEN_HEIGHT / 2 - e.y) * (s - 1), s);
+        const clamped = clampImg(
+          (SCREEN_WIDTH / 2 - e.x) * (s - 1),
+          (SCREEN_HEIGHT / 2 - e.y) * (s - 1),
+          s,
+        );
         imgScale.value = withTiming(s);
         imgTransX.value = withTiming(clamped.x);
         imgTransY.value = withTiming(clamped.y);
@@ -173,7 +198,8 @@ export default function PreviewModal({
     });
 
   const imgGesture = useMemo(
-    () => Gesture.Simultaneous(imgPinchGesture, imgPanGesture, imgDoubleTapGesture),
+    () =>
+      Gesture.Simultaneous(imgPinchGesture, imgPanGesture, imgDoubleTapGesture),
     [],
   );
 
@@ -213,18 +239,23 @@ export default function PreviewModal({
   useEffect(() => {
     let active = true;
 
-    const statusSub = player.addListener('statusChange', ({ status }) => {
+    const statusSub = player.addListener("statusChange", ({ status }) => {
       if (!active) return;
-      setIsBuffering(status === 'loading');
-      if (status === 'readyToPlay') {
-        try { setDuration(player.duration * 1000); } catch {}
+      setIsBuffering(status === "loading");
+      if (status === "readyToPlay") {
+        try {
+          setDuration(player.duration * 1000);
+        } catch {}
       }
     });
-    const playingSub = player.addListener('playingChange', ({ isPlaying: playing }) => {
-      if (!active) return;
-      setIsPlaying(playing);
-      if (!playing) setShowControls(true);
-    });
+    const playingSub = player.addListener(
+      "playingChange",
+      ({ isPlaying: playing }) => {
+        if (!active) return;
+        setIsPlaying(playing);
+        if (!playing) setShowControls(true);
+      },
+    );
     const interval = setInterval(() => {
       if (!active || seekingRef.current) return;
       try {
@@ -255,7 +286,8 @@ export default function PreviewModal({
     return () => {
       if (seekHintTimer.current) clearTimeout(seekHintTimer.current);
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
-      if (pendingSeekTimerRef.current) clearTimeout(pendingSeekTimerRef.current);
+      if (pendingSeekTimerRef.current)
+        clearTimeout(pendingSeekTimerRef.current);
     };
   }, []);
 
@@ -299,15 +331,36 @@ export default function PreviewModal({
   }, [showControls, isPlaying]);
 
   const handleEditPress = useCallback(() => {
-    const ad = RewardedInterstitialAd.createForAdRequest(REWARDED_INTERSTITIAL_AD_UNIT_ID);
+    const ad = RewardedInterstitialAd.createForAdRequest(
+      REWARDED_INTERSTITIAL_AD_UNIT_ID,
+    );
     const unsubs: Array<() => void> = [];
     let rewardEarned = false;
-    const cleanup = () => { unsubs.forEach(fn => fn()); unsubs.length = 0; };
+    const cleanup = () => {
+      unsubs.forEach((fn) => fn());
+      unsubs.length = 0;
+    };
 
-    unsubs.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()));
-    unsubs.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { rewardEarned = true; }));
-    unsubs.push(ad.addAdEventListener(AdEventType.CLOSED, () => { cleanup(); if (rewardEarned) onEditVideo?.(); }));
-    unsubs.push(ad.addAdEventListener(AdEventType.ERROR, () => { cleanup(); onEditVideo?.(); }));
+    unsubs.push(
+      ad.addAdEventListener(RewardedAdEventType.LOADED, () => ad.show()),
+    );
+    unsubs.push(
+      ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+        rewardEarned = true;
+      }),
+    );
+    unsubs.push(
+      ad.addAdEventListener(AdEventType.CLOSED, () => {
+        cleanup();
+        if (rewardEarned) onEditVideo?.();
+      }),
+    );
+    unsubs.push(
+      ad.addAdEventListener(AdEventType.ERROR, () => {
+        cleanup();
+        onEditVideo?.();
+      }),
+    );
 
     ad.load();
   }, [onEditVideo]);
@@ -493,127 +546,40 @@ export default function PreviewModal({
       transparent={false}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar hidden />
-      <View style={styles.root}>
-        {/* ── Image preview ── */}
-        {task?.filePath && mediaType === "image" && (
-          <>
-            <GestureDetector gesture={imgGesture}>
-              <Animated.View style={[StyleSheet.absoluteFill, imgAnimStyle]}>
-                <Image
-                  source={{ uri: task.filePath }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="contain"
-                />
-              </Animated.View>
-            </GestureDetector>
-            <SafeAreaView
-              style={StyleSheet.absoluteFill}
-              edges={["top"]}
-              pointerEvents="box-none"
-            >
-              <View style={styles.topBar} pointerEvents="box-none">
-                <Text style={styles.titleText} numberOfLines={1}>
-                  {task?.fileName || t('preview')}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.iconBtn, styles.modeBtn]}
-                  onPress={() => setLandscape((l) => !l)}
-                  hitSlop={8}
-                >
-                  <Text style={styles.modeBtnText}>
-                    {landscape ? `▯ ${t('portrait')}` : `▭ ${t('landscapeMode')}`}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => {
-                    ScreenOrientation.unlockAsync();
-                    onClose();
-                  }}
-                  hitSlop={8}
-                >
-                  <Text style={styles.iconBtnText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </SafeAreaView>
-          </>
-        )}
-
-        {/* ── Video / audio preview ── */}
-        {task?.filePath && isMedia && (
-          <>
-            <VideoView
-              player={player}
-              style={StyleSheet.absoluteFill}
-              contentFit="contain"
-              nativeControls={false}
-            />
-
-            {mediaType === "audio" && (
-              <View style={styles.audioPlaceholder} pointerEvents="none">
-                <Text style={styles.audioIcon}>♪</Text>
-              </View>
-            )}
-
-            {/* Tap zones (always present) */}
-            <View style={StyleSheet.absoluteFill}>
-              {mediaType === "video" && (
-                <GestureDetector gesture={leftTapGesture}>
-                  <View style={[styles.tapZone, styles.tapZoneLeft]}>
-                    {seekHint === "left" && (
-                      <View style={styles.seekHint}>
-                        <Text style={styles.seekHintText}>« {SEEK_SECS}s</Text>
-                      </View>
-                    )}
-                  </View>
-                </GestureDetector>
-              )}
-              <GestureDetector gesture={centerTapGesture}>
-                <View style={styles.tapZoneCenter} />
+        <StatusBar hidden />
+        <View style={styles.root}>
+          {/* ── Image preview ── */}
+          {task?.filePath && mediaType === "image" && (
+            <>
+              <GestureDetector gesture={imgGesture}>
+                <Animated.View style={[StyleSheet.absoluteFill, imgAnimStyle]}>
+                  <Image
+                    source={{ uri: task.filePath }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="contain"
+                  />
+                </Animated.View>
               </GestureDetector>
-              {mediaType === "video" && (
-                <GestureDetector gesture={rightTapGesture}>
-                  <View style={[styles.tapZone, styles.tapZoneRight]}>
-                    {seekHint === "right" && (
-                      <View style={styles.seekHint}>
-                        <Text style={styles.seekHintText}>{SEEK_SECS}s »</Text>
-                      </View>
-                    )}
-                  </View>
-                </GestureDetector>
-              )}
-            </View>
-
-            {/* Buffering spinner */}
-            {isBuffering && (
-              <View style={styles.bufferOverlay} pointerEvents="none">
-                <ActivityIndicator size="large" color="#fff" />
-              </View>
-            )}
-
-            {/* Controls overlay */}
-            {showControls && (
               <SafeAreaView
                 style={StyleSheet.absoluteFill}
-                edges={["top", "bottom"]}
+                edges={["top"]}
                 pointerEvents="box-none"
               >
-                <View style={styles.dimOverlay} pointerEvents="none" />
-
-                {/* Top bar — title + edit + rotate + close */}
                 <View style={styles.topBar} pointerEvents="box-none">
                   <Text style={styles.titleText} numberOfLines={1}>
-                    {task?.fileName || t('preview')}
+                    {task?.fileName || t("preview")}
                   </Text>
-                  {mediaType === "video" && onEditVideo && (
-                    <TouchableOpacity
-                      style={[styles.iconBtn, styles.editBtn]}
-                      onPress={handleEditPress}
-                    >
-                      <Text style={styles.editBtnText}>✂️ {t('edit')}</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    style={[styles.iconBtn, styles.modeBtn]}
+                    onPress={() => setLandscape((l) => !l)}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.modeBtnText}>
+                      {landscape
+                        ? `▯ ${t("portrait")}`
+                        : `▭ ${t("landscapeMode")}`}
+                    </Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.iconBtn}
                     onPress={() => {
@@ -625,118 +591,214 @@ export default function PreviewModal({
                     <Text style={styles.iconBtnText}>✕</Text>
                   </TouchableOpacity>
                 </View>
+              </SafeAreaView>
+            </>
+          )}
 
-                {/* Center play/pause */}
-                <View style={styles.centerControls} pointerEvents="box-none">
-                  <TouchableOpacity
-                    style={styles.playBtn}
-                    onPress={togglePlay}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.playIcon}>
-                      {isPlaying ? "❚❚" : "▶"}
-                    </Text>
-                  </TouchableOpacity>
+          {/* ── Video / audio preview ── */}
+          {task?.filePath && isMedia && (
+            <>
+              <VideoView
+                player={player}
+                style={StyleSheet.absoluteFill}
+                contentFit="contain"
+                nativeControls={false}
+              />
+
+              {mediaType === "audio" && (
+                <View style={styles.audioPlaceholder} pointerEvents="none">
+                  <Text style={styles.audioIcon}>♪</Text>
                 </View>
+              )}
 
-                {/* Bottom bar — prev | time | seek | time | next */}
-                <View style={styles.bottomBar} pointerEvents="box-none">
-                  <View style={styles.seekRow}>
-                    <Text style={styles.timeText}>{formatTime(position)}</Text>
-                    <View
-                      ref={seekBarRef}
-                      collapsable={false}
-                      style={styles.seekBarTouchable}
-                      onLayout={onSeekBarLayout}
-                      onStartShouldSetResponder={() => true}
-                      onMoveShouldSetResponder={() => true}
-                      onResponderGrant={onSeekGrant}
-                      onResponderMove={onSeekMove}
-                      onResponderRelease={onSeekRelease}
-                      onResponderTerminate={onSeekRelease}
-                    >
-                      <View style={styles.seekBarTrack}>
-                        <View
-                          style={[
-                            styles.seekBarFill,
-                            { width: `${progressPct}%` },
-                          ]}
-                        />
-                        <View
-                          style={[
-                            styles.seekBarThumb,
-                            { left: `${progressPct}%` },
-                          ]}
-                        />
-                      </View>
+              {/* Tap zones (always present) */}
+              <View style={StyleSheet.absoluteFill}>
+                {mediaType === "video" && (
+                  <GestureDetector gesture={leftTapGesture}>
+                    <View style={[styles.tapZone, styles.tapZoneLeft]}>
+                      {seekHint === "left" && (
+                        <View style={styles.seekHint}>
+                          <Text style={styles.seekHintText}>
+                            « {SEEK_SECS}s
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                    <Text style={styles.timeText}>{formatTime(duration)}</Text>
-                  </View>
+                  </GestureDetector>
+                )}
+                <GestureDetector gesture={centerTapGesture}>
+                  <View style={styles.tapZoneCenter} />
+                </GestureDetector>
+                {mediaType === "video" && (
+                  <GestureDetector gesture={rightTapGesture}>
+                    <View style={[styles.tapZone, styles.tapZoneRight]}>
+                      {seekHint === "right" && (
+                        <View style={styles.seekHint}>
+                          <Text style={styles.seekHintText}>
+                            {SEEK_SECS}s »
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </GestureDetector>
+                )}
+              </View>
 
-                  <View style={styles.navRow}>
+              {/* Buffering spinner */}
+              {isBuffering && (
+                <View style={styles.bufferOverlay} pointerEvents="none">
+                  <ActivityIndicator size="large" color="#fff" />
+                </View>
+              )}
+
+              {/* Controls overlay */}
+              {showControls && (
+                <SafeAreaView
+                  style={StyleSheet.absoluteFill}
+                  edges={["top", "bottom"]}
+                  pointerEvents="box-none"
+                >
+                  <View style={styles.dimOverlay} pointerEvents="none" />
+
+                  {/* Top bar — title + edit + rotate + close */}
+                  <View style={styles.topBar} pointerEvents="box-none">
+                    <Text style={styles.titleText} numberOfLines={1}>
+                      {task?.fileName || t("preview")}
+                    </Text>
+                    {mediaType === "video" && onEditVideo && (
+                      <TouchableOpacity
+                        style={[styles.iconBtn, styles.editBtn]}
+                        onPress={handleEditPress}
+                      >
+                        <Text style={styles.editBtnText}>✂️ {t("edit")}</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
-                      style={styles.orientationBtn}
-                      onPress={() => setLandscape((l) => !l)}
+                      style={styles.iconBtn}
+                      onPress={() => {
+                        ScreenOrientation.unlockAsync();
+                        onClose();
+                      }}
                       hitSlop={8}
                     >
-                      <Ionicons
-                        name={
-                          landscape
-                            ? "phone-portrait-outline"
-                            : "phone-landscape-outline"
-                        }
-                        size={22}
-                        color="#FFF"
-                      />
+                      <Text style={styles.iconBtnText}>✕</Text>
                     </TouchableOpacity>
-                    {onPrev && (
-                      <TouchableOpacity
-                        style={[
-                          styles.navBtn,
-                          !hasPrev && styles.navBtnDisabled,
-                        ]}
-                        onPress={onPrev}
-                        disabled={!hasPrev}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.navBtnText,
-                            !hasPrev && styles.navBtnTextDisabled,
-                          ]}
-                        >
-                          ⏮  {t('previous')}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    {onNext && (
-                      <TouchableOpacity
-                        style={[
-                          styles.navBtn,
-                          !hasNext && styles.navBtnDisabled,
-                        ]}
-                        onPress={onNext}
-                        disabled={!hasNext}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.navBtnText,
-                            !hasNext && styles.navBtnTextDisabled,
-                          ]}
-                        >
-                          {t('next')}  ⏭
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    
                   </View>
-                </View>
-              </SafeAreaView>
-            )}
-          </>
-        )}
-      </View>
+
+                  {/* Center play/pause */}
+                  <View style={styles.centerControls} pointerEvents="box-none">
+                    <TouchableOpacity
+                      style={styles.playBtn}
+                      onPress={togglePlay}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.playIcon}>
+                        {isPlaying ? "❚❚" : "▶"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Bottom bar — prev | time | seek | time | next */}
+                  <View style={styles.bottomBar} pointerEvents="box-none">
+                    <View style={styles.seekRow}>
+                      <Text style={styles.timeText}>
+                        {formatTime(position)}
+                      </Text>
+                      <View
+                        ref={seekBarRef}
+                        collapsable={false}
+                        style={styles.seekBarTouchable}
+                        onLayout={onSeekBarLayout}
+                        onStartShouldSetResponder={() => true}
+                        onMoveShouldSetResponder={() => true}
+                        onResponderGrant={onSeekGrant}
+                        onResponderMove={onSeekMove}
+                        onResponderRelease={onSeekRelease}
+                        onResponderTerminate={onSeekRelease}
+                      >
+                        <View style={styles.seekBarTrack}>
+                          <View
+                            style={[
+                              styles.seekBarFill,
+                              { width: `${progressPct}%` },
+                            ]}
+                          />
+                          <View
+                            style={[
+                              styles.seekBarThumb,
+                              { left: `${progressPct}%` },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                      <Text style={styles.timeText}>
+                        {formatTime(duration)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.navRow}>
+                      <TouchableOpacity
+                        style={styles.orientationBtn}
+                        onPress={() => setLandscape((l) => !l)}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={
+                            landscape
+                              ? "phone-portrait-outline"
+                              : "phone-landscape-outline"
+                          }
+                          size={22}
+                          color="#FFF"
+                        />
+                      </TouchableOpacity>
+                      {onPrev && (
+                        <TouchableOpacity
+                          style={[
+                            styles.navBtn,
+                            !hasPrev && styles.navBtnDisabled,
+                          ]}
+                          onPress={onPrev}
+                          disabled={!hasPrev}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.navBtnText,
+                              !hasPrev && styles.navBtnTextDisabled,
+                            ]}
+                          >
+                            ⏮ {t("previous")}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {onNext && (
+                        <TouchableOpacity
+                          style={[
+                            styles.navBtn,
+                            !hasNext && styles.navBtnDisabled,
+                          ]}
+                          onPress={onNext}
+                          disabled={!hasNext}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.navBtnText,
+                              !hasNext && styles.navBtnTextDisabled,
+                            ]}
+                          >
+                            {t("next")} ⏭
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </SafeAreaView>
+              )}
+            </>
+          )}
+        </View>
       </GestureHandlerRootView>
     </Modal>
   );

@@ -14,7 +14,9 @@ interface Props {
   injectedJavaScript: string;
   handleMessage: (event: any) => void;
   handleNavigationStateChange: (navState: WebViewNavigation) => void;
-  handleShouldStartLoadWithRequest?: (request: ShouldStartLoadRequest) => boolean;
+  handleShouldStartLoadWithRequest?: (
+    request: ShouldStartLoadRequest,
+  ) => boolean;
   onOpenWindow?: (event: WebViewOpenWindowEvent) => void;
   onLoadStart?: () => void;
   onLoadProgress?: (progress: number) => void;
@@ -53,7 +55,9 @@ const Browser = ({
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
       onOpenWindow={onOpenWindow}
       onLoadStart={onLoadStart}
-      onLoadProgress={({ nativeEvent }) => onLoadProgress?.(nativeEvent.progress)}
+      onLoadProgress={({ nativeEvent }) =>
+        onLoadProgress?.(nativeEvent.progress)
+      }
       onLoadEnd={onLoadEnd}
       onError={onLoadError}
       onHttpError={onHttpError}
@@ -68,7 +72,7 @@ const Browser = ({
       userAgent="Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     />
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -80,8 +84,10 @@ const styles = StyleSheet.create({
   },
 });
 
-
 // Re-render only when injectedJavaScript changes (settings toggled). All other
 // prop changes (onMessage, navState callbacks, currentUrl) are handled via refs
 // or imperative WebView calls so frozen closures are intentional.
-export default React.memo(Browser, (prev, next) => prev.injectedJavaScript === next.injectedJavaScript);
+export default React.memo(
+  Browser,
+  (prev, next) => prev.injectedJavaScript === next.injectedJavaScript,
+);

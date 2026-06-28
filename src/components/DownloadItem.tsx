@@ -1,15 +1,15 @@
-import React, { memo, useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Image as RNImage,
-  Modal,
-} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import { Ionicons } from "@expo/vector-icons";
+import React, { memo, useEffect, useRef, useState } from "react";
+import {
+  Modal,
+  Image as RNImage,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { DownloadTask } from "../types";
 
 export type DownloadMediaType = "image" | "video" | "audio" | "other";
@@ -51,8 +51,9 @@ function formatDuration(ms: number): string {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function getStatusColor(status: DownloadTask["status"]): string {
@@ -109,7 +110,10 @@ const DownloadItem = memo(function DownloadItem({
   );
   const [actionsVisible, setActionsVisible] = useState(false);
   const [infoVisible, setInfoVisible] = useState(false);
-  const [imgDimensions, setImgDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [imgDimensions, setImgDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const justEnteredSelectionRef = useRef(false);
   const sizeBytes =
     task.totalBytes > 0 ? task.totalBytes : task.bytesDownloaded;
@@ -259,7 +263,12 @@ const DownloadItem = memo(function DownloadItem({
             </View>
           )
         ) : (
-          <View style={[styles.thumbnailFallback, { backgroundColor: statusColor + "18" }]}>
+          <View
+            style={[
+              styles.thumbnailFallback,
+              { backgroundColor: statusColor + "18" },
+            ]}
+          >
             <Text style={styles.statusOverlayIcon}>
               {task.status === "downloading"
                 ? "⬇️"
@@ -280,7 +289,8 @@ const DownloadItem = memo(function DownloadItem({
                   ? "Tap to Resume"
                   : task.status === "failed" || task.status === "cancelled"
                     ? "Tap to Retry"
-                    : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                    : task.status.charAt(0).toUpperCase() +
+                      task.status.slice(1)}
             </Text>
             {task.status === "downloading" && task.totalBytes > 0 && (
               <View style={styles.statusProgressWrap}>
@@ -310,7 +320,8 @@ const DownloadItem = memo(function DownloadItem({
             {task.fileName || task.url.split("/").pop() || "video"}
           </Text>
           <Text style={styles.fileSize} numberOfLines={1}>
-            {formatBytes(sizeBytes)}{task.duration ? ` · ${formatDuration(task.duration)}` : ''}
+            {formatBytes(sizeBytes)}
+            {task.duration ? ` · ${formatDuration(task.duration)}` : ""}
           </Text>
         </View>
 
@@ -325,7 +336,7 @@ const DownloadItem = memo(function DownloadItem({
       </View>
 
       <View style={styles.labelRow}>
-        {labels?.map(label => (
+        {labels?.map((label) => (
           <View key={label} style={styles.labelPill}>
             <Text style={styles.labelPillText}>{label}</Text>
           </View>
@@ -464,7 +475,11 @@ const DownloadItem = memo(function DownloadItem({
                     setActionsVisible(false);
                   }}
                 >
-                  <Text style={[styles.actionBtnText, styles.deletePermanentlyText]}>🗑 Delete Permanently</Text>
+                  <Text
+                    style={[styles.actionBtnText, styles.deletePermanentlyText]}
+                  >
+                    🗑 Delete Permanently
+                  </Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -474,7 +489,11 @@ const DownloadItem = memo(function DownloadItem({
                   setInfoVisible(true);
                 }}
               >
-                <Ionicons name="information-circle-outline" size={18} color={"#2196F3"} />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color={"#2196F3"}
+                />
                 <Text style={styles.actionBtnText}>Info</Text>
               </TouchableOpacity>
             </View>
@@ -522,7 +541,9 @@ const DownloadItem = memo(function DownloadItem({
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Dimensions</Text>
                   <Text style={styles.infoValue}>
-                    {imgDimensions ? `${imgDimensions.width} × ${imgDimensions.height} px` : "—"}
+                    {imgDimensions
+                      ? `${imgDimensions.width} × ${imgDimensions.height} px`
+                      : "—"}
                   </Text>
                 </View>
               )}
@@ -837,7 +858,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 4,
     marginTop: 5,
-    height: 16
+    height: 16,
   },
   labelPill: {
     backgroundColor: "#E3F2FD",

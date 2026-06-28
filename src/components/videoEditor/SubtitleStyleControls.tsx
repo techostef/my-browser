@@ -1,20 +1,20 @@
-import React, { useRef } from 'react';
+import React, { useRef } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   PanResponder,
-  ScrollView,
   Platform,
-} from 'react-native';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useTranslation } from "../../i18n";
 import type {
-  SubtitleStyle,
   SubtitleFontFamily,
   SubtitleFontSize,
-} from '../../types/videoEditor';
-import { SUBTITLE_FONT_SCALE } from '../../types/videoEditor';
-import { useTranslation } from '../../i18n';
+  SubtitleStyle,
+} from "../../types/videoEditor";
+import { SUBTITLE_FONT_SCALE } from "../../types/videoEditor";
 
 type Props = {
   value: SubtitleStyle;
@@ -22,37 +22,37 @@ type Props = {
 };
 
 const BG_COLORS: { hex: string; label: string }[] = [
-  { hex: '#000000', label: 'Black' },
-  { hex: '#FFFFFF', label: 'White' },
-  { hex: '#FFD400', label: 'Yellow' },
-  { hex: '#E53935', label: 'Red' },
-  { hex: '#1E88E5', label: 'Blue' },
+  { hex: "#000000", label: "Black" },
+  { hex: "#FFFFFF", label: "White" },
+  { hex: "#FFD400", label: "Yellow" },
+  { hex: "#E53935", label: "Red" },
+  { hex: "#1E88E5", label: "Blue" },
 ];
 
 const TEXT_COLORS: { hex: string; label: string }[] = [
-  { hex: '#FFFFFF', label: 'White' },
-  { hex: '#000000', label: 'Black' },
-  { hex: '#FFD400', label: 'Yellow' },
-  { hex: '#E53935', label: 'Red' },
-  { hex: '#1E88E5', label: 'Blue' },
-  { hex: '#43A047', label: 'Green' },
+  { hex: "#FFFFFF", label: "White" },
+  { hex: "#000000", label: "Black" },
+  { hex: "#FFD400", label: "Yellow" },
+  { hex: "#E53935", label: "Red" },
+  { hex: "#1E88E5", label: "Blue" },
+  { hex: "#43A047", label: "Green" },
 ];
 
 const FONT_OPTIONS: { id: SubtitleFontFamily; label: string }[] = [
-  { id: 'sans', label: 'Sans' },
-  { id: 'serif', label: 'Serif' },
-  { id: 'mono', label: 'Mono' },
+  { id: "sans", label: "Sans" },
+  { id: "serif", label: "Serif" },
+  { id: "mono", label: "Mono" },
 ];
 
 const SIZE_OPTIONS: { id: SubtitleFontSize; label: string }[] = [
-  { id: 'sm', label: 'S' },
-  { id: 'md', label: 'M' },
-  { id: 'lg', label: 'L' },
-  { id: 'xl', label: 'XL' },
+  { id: "sm", label: "S" },
+  { id: "md", label: "M" },
+  { id: "lg", label: "L" },
+  { id: "xl", label: "XL" },
 ];
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const h = hex.replace('#', '');
+  const h = hex.replace("#", "");
   return {
     r: parseInt(h.slice(0, 2), 16),
     g: parseInt(h.slice(2, 4), 16),
@@ -65,12 +65,22 @@ export function rgbaFromStyle(style: SubtitleStyle): string {
   return `rgba(${r},${g},${b},${style.opacity})`;
 }
 
-export function resolveFontFamily(family: SubtitleFontFamily): string | undefined {
-  if (family === 'serif') {
-    return Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' });
+export function resolveFontFamily(
+  family: SubtitleFontFamily,
+): string | undefined {
+  if (family === "serif") {
+    return Platform.select({
+      ios: "Georgia",
+      android: "serif",
+      default: "serif",
+    });
   }
-  if (family === 'mono') {
-    return Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+  if (family === "mono") {
+    return Platform.select({
+      ios: "Menlo",
+      android: "monospace",
+      default: "monospace",
+    });
   }
   return undefined; // system default sans
 }
@@ -131,20 +141,20 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
             style={{
               color: value.textColor,
               fontSize: previewFontSize,
-              fontWeight: '700',
+              fontWeight: "700",
               fontFamily: resolveFontFamily(value.fontFamily),
-              textShadowColor: 'rgba(0,0,0,0.85)',
+              textShadowColor: "rgba(0,0,0,0.85)",
               textShadowOffset: { width: 0, height: 1 },
               textShadowRadius: 3,
             }}
           >
-            {t('sampleSubtitle')}
+            {t("sampleSubtitle")}
           </Text>
         </View>
       </View>
 
       {/* Font family */}
-      <Text style={styles.sectionTitle}>{t('subtitleFont')}</Text>
+      <Text style={styles.sectionTitle}>{t("subtitleFont")}</Text>
       <View style={styles.chipRow}>
         {FONT_OPTIONS.map((f) => {
           const selected = f.id === value.fontFamily;
@@ -169,7 +179,7 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       {/* Font size */}
-      <Text style={styles.sectionTitle}>{t('subtitleSize')}</Text>
+      <Text style={styles.sectionTitle}>{t("subtitleSize")}</Text>
       <View style={styles.chipRow}>
         {SIZE_OPTIONS.map((s) => {
           const selected = s.id === value.fontSize;
@@ -179,7 +189,9 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
               onPress={() => onChange({ ...value, fontSize: s.id })}
               style={[styles.sizePill, selected && styles.pillSelected]}
             >
-              <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
+              <Text
+                style={[styles.pillText, selected && styles.pillTextSelected]}
+              >
                 {s.label}
               </Text>
             </TouchableOpacity>
@@ -188,22 +200,26 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       {/* Text color */}
-      <Text style={styles.sectionTitle}>{t('textColor')}</Text>
+      <Text style={styles.sectionTitle}>{t("textColor")}</Text>
       <View style={styles.chipRow}>
         {TEXT_COLORS.map((c) => {
-          const selected = c.hex.toUpperCase() === (value.textColor ?? '').toUpperCase();
+          const selected =
+            c.hex.toUpperCase() === (value.textColor ?? "").toUpperCase();
           return (
             <TouchableOpacity
               key={c.hex}
               onPress={() => onChange({ ...value, textColor: c.hex })}
-              style={[styles.colorChipWrap, selected && styles.colorChipWrapSelected]}
+              style={[
+                styles.colorChipWrap,
+                selected && styles.colorChipWrapSelected,
+              ]}
               accessibilityLabel={`Text color ${c.label}`}
             >
               <View
                 style={[
                   styles.colorChip,
                   { backgroundColor: c.hex },
-                  c.hex === '#FFFFFF' && styles.colorChipLight,
+                  c.hex === "#FFFFFF" && styles.colorChipLight,
                 ]}
               />
             </TouchableOpacity>
@@ -212,22 +228,26 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       {/* Background color */}
-      <Text style={styles.sectionTitle}>{t('background')}</Text>
+      <Text style={styles.sectionTitle}>{t("background")}</Text>
       <View style={styles.chipRow}>
         {BG_COLORS.map((c) => {
-          const selected = c.hex.toUpperCase() === (value.color ?? '').toUpperCase();
+          const selected =
+            c.hex.toUpperCase() === (value.color ?? "").toUpperCase();
           return (
             <TouchableOpacity
               key={c.hex}
               onPress={() => onChange({ ...value, color: c.hex })}
-              style={[styles.colorChipWrap, selected && styles.colorChipWrapSelected]}
+              style={[
+                styles.colorChipWrap,
+                selected && styles.colorChipWrapSelected,
+              ]}
               accessibilityLabel={`Background color ${c.label}`}
             >
               <View
                 style={[
                   styles.colorChip,
                   { backgroundColor: c.hex },
-                  c.hex === '#FFFFFF' && styles.colorChipLight,
+                  c.hex === "#FFFFFF" && styles.colorChipLight,
                 ]}
               />
             </TouchableOpacity>
@@ -236,9 +256,9 @@ export default function SubtitleStyleControls({ value, onChange }: Props) {
       </View>
 
       <View style={styles.sliderRow}>
-        <Text style={styles.sliderLabel}>{t('opacity')}</Text>
+        <Text style={styles.sliderLabel}>{t("opacity")}</Text>
         <Text style={styles.sliderValue}>
-          {value.opacity === 0 ? t('off') : `${opacityPct}%`}
+          {value.opacity === 0 ? t("off") : `${opacityPct}%`}
         </Text>
       </View>
       <View
@@ -265,7 +285,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   previewWrap: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingTop: 18,
     paddingBottom: 8,
   },
@@ -276,60 +296,60 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   sectionTitle: {
-    color: '#bdbdc7',
+    color: "#bdbdc7",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     paddingTop: 16,
     paddingBottom: 8,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   chipRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   pill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: '#2a2a35',
+    backgroundColor: "#2a2a35",
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   sizePill: {
     minWidth: 44,
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: '#2a2a35',
+    backgroundColor: "#2a2a35",
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   pillSelected: {
-    backgroundColor: '#6c63ff',
-    borderColor: '#8d86ff',
+    backgroundColor: "#6c63ff",
+    borderColor: "#8d86ff",
   },
   pillText: {
-    color: '#d6d6dc',
+    color: "#d6d6dc",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   pillTextSelected: {
-    color: '#fff',
+    color: "#fff",
   },
   colorChipWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   colorChipWrapSelected: {
-    borderColor: '#8d86ff',
+    borderColor: "#8d86ff",
   },
   colorChip: {
     width: 26,
@@ -338,51 +358,51 @@ const styles = StyleSheet.create({
   },
   colorChipLight: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#777',
+    borderColor: "#777",
   },
   sliderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 18,
     marginBottom: 6,
   },
   sliderLabel: {
-    color: '#d6d6dc',
+    color: "#d6d6dc",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   sliderValue: {
-    color: '#bdbdc7',
+    color: "#bdbdc7",
     fontSize: 12,
-    fontVariant: ['tabular-nums'],
+    fontVariant: ["tabular-nums"],
   },
   sliderHit: {
     paddingVertical: 12,
   },
   sliderTrack: {
     height: 4,
-    backgroundColor: '#3a3a4a',
+    backgroundColor: "#3a3a4a",
     borderRadius: 2,
-    position: 'relative',
+    position: "relative",
   },
   sliderFill: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: '#6c63ff',
+    backgroundColor: "#6c63ff",
     borderRadius: 2,
   },
   sliderThumb: {
-    position: 'absolute',
+    position: "absolute",
     top: -8,
     width: 20,
     height: 20,
     marginLeft: -10,
     borderRadius: 10,
-    backgroundColor: '#6c63ff',
+    backgroundColor: "#6c63ff",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   },
 });

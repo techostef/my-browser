@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { parseSrt, segmentsToSrt, type Segment } from './srt';
 import { getOpenAIKey } from '../openaiKey';
 import { extractAudioChunk, extractAudioChunkWav, probeVideoInfo } from './ffmpeg';
+import { parseSrt, segmentsToSrt, type Segment } from './srt';
 
 // Each 5-minute chunk at mono 64 kbps AAC ≈ 2.4 MB — well under the 25 MB limit.
 const CHUNK_SECS = 300;

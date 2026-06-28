@@ -2,60 +2,83 @@
 /** biome-ignore-all lint/suspicious/noFallthroughSwitchClause: <explanation> */
 /** biome-ignore-all lint/correctness/noSwitchDeclarations: <explanation> */
 /** biome-ignore-all lint/suspicious/useIterableCallbackReturn: <explanation> */
-import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { withErrorBoundary } from '../components/ErrorBoundary';
-import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, StatusBar, Alert, ActivityIndicator, AppState, BackHandler, DeviceEventEmitter } from 'react-native';
-import { WebView, WebViewNavigation } from 'react-native-webview';
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system/legacy";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  BackHandler,
+  DeviceEventEmitter,
+  Modal,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { WebView, WebViewNavigation } from "react-native-webview";
 import {
   ShouldStartLoadRequest,
   WebViewErrorEvent,
   WebViewHttpErrorEvent,
-} from 'react-native-webview/lib/WebViewTypes';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system/legacy';
+} from "react-native-webview/lib/WebViewTypes";
+import { withErrorBoundary } from "../components/ErrorBoundary";
 
-import AddressBar from '../components/AddressBar';
-import HomePage from '../components/HomePage';
-import { useSettings, useThemeColors, isSearchEngineHost } from '../store/settingsStore';
-import VideoDetectedBanner from '../components/VideoDetectedBanner';
-import VideoPreviewModal from '../components/VideoPreviewModal';
-import VideoPlayerController from '../components/VideoPlayerController';
-import { useDownloadActions } from '../store/downloadStore';
-import { useAdActions } from '../store/adStore';
+import Browser from "@/components/Browser";
+import CookieManager from "@react-native-cookies/cookies";
+import AddressBar from "../components/AddressBar";
+import HomePage from "../components/HomePage";
+import MangaDownloadModal from "../components/manga/MangaDownloadModal";
+import PageErrorView, { PageError } from "../components/PageErrorView";
+import PopupBlockedBanner from "../components/PopupBlockedBanner";
+import VideoDetectedBanner from "../components/VideoDetectedBanner";
+import VideoPlayerController from "../components/VideoPlayerController";
+import VideoPreviewModal from "../components/VideoPreviewModal";
+import { useMangaBgWebView } from "../context/MangaBgWebViewContext";
+import { AD_BLOCKER_JS } from "../services/adBlocker";
+import {
+  MANGA_CHAPTER_LIST_EXTRACTOR_JS,
+  MANGA_INDEX_DETECTOR_JS,
+  MANGA_PAGE_IMAGES_EXTRACTOR_JS,
+} from "../services/mangaDetector";
+import {
+  chapterFolderPath,
+  downloadChapterImages,
+  getChapterSizeBytes,
+  sanitizeMangaName,
+  saveCoverImage,
+} from "../services/mangaDownloadService";
+import { POPUP_BLOCKER_JS } from "../services/popupBlocker";
+import { VIDEO_DETECTOR_JS } from "../services/videoDetector";
+import { useAdActions } from "../store/adStore";
+import { useDownloadActions } from "../store/downloadStore";
+import { useManga } from "../store/mangaStore";
+import {
+  isSearchEngineHost,
+  useSettings,
+  useThemeColors,
+} from "../store/settingsStore";
 import {
   useActiveTab,
   useActiveTabId,
   useIsTabsReady,
   useTabActions,
   useTabList,
-} from '../store/tabStore';
-import { DetectedVideo, HlsVariant } from '../types';
-import Browser from '@/components/Browser';
-import { VIDEO_DETECTOR_JS } from '../services/videoDetector';
-import { AD_BLOCKER_JS } from '../services/adBlocker';
-import { POPUP_BLOCKER_JS } from '../services/popupBlocker';
-import PageErrorView, { PageError } from '../components/PageErrorView';
-import PopupBlockedBanner from '../components/PopupBlockedBanner';
-import CookieManager from '@react-native-cookies/cookies';
-import MangaDownloadModal from '../components/manga/MangaDownloadModal';
-import {
-  MANGA_INDEX_DETECTOR_JS,
-  MANGA_CHAPTER_LIST_EXTRACTOR_JS,
-  MANGA_PAGE_IMAGES_EXTRACTOR_JS,
-} from '../services/mangaDetector';
-import {
-  sanitizeMangaName,
-  chapterFolderPath,
-  downloadChapterImages,
-  saveCoverImage,
-  getChapterSizeBytes,
-} from '../services/mangaDownloadService';
-import { useManga } from '../store/mangaStore';
-import { useMangaBgWebView } from '../context/MangaBgWebViewContext';
-import { MangaChapterInfo } from '../types/manga';
+} from "../store/tabStore";
+import { DetectedVideo, HlsVariant } from "../types";
+import { MangaChapterInfo } from "../types/manga";
 
-const SUPPORTED_MANGA_DOMAINS = ['www.mangaread.org', 'mangaread.org'];
+const SUPPORTED_MANGA_DOMAINS = ["www.mangaread.org", "mangaread.org"];
 
 // Injected into the browser WebView when the user taps Preview on a stream.
 // Posts the currentTime of the most-advanced playing video element.
@@ -205,21 +228,39 @@ function BrowserScreen() {
   const activeTabId = useActiveTabId();
   const tabs = useTabList();
   const activeTab = useActiveTab();
-  const { addTab, removeTab, updateTab, setTabHidden, pushUrl, replaceUrl, navigateHistory, getTabsSnapshot } = useTabActions();
-  const { startDownload, createBlobTask, updateBlobProgress, completeBlobDownload } = useDownloadActions();
+  const {
+    addTab,
+    removeTab,
+    updateTab,
+    setTabHidden,
+    pushUrl,
+    replaceUrl,
+    navigateHistory,
+    getTabsSnapshot,
+  } = useTabActions();
+  const {
+    startDownload,
+    createBlobTask,
+    updateBlobProgress,
+    completeBlobDownload,
+  } = useDownloadActions();
   const { requestDownload } = useAdActions();
   const { settings, pushHistory, setSetting } = useSettings();
   const activeHostname = useMemo(() => {
-    try { return new URL(activeTab?.url ?? '').hostname; } catch { return ''; }
+    try {
+      return new URL(activeTab?.url ?? "").hostname;
+    } catch {
+      return "";
+    }
   }, [activeTab?.url]);
   const injectedJavaScript = useMemo(() => {
-    if (activeHostname && isSearchEngineHost(activeHostname)) return '';
+    if (activeHostname && isSearchEngineHost(activeHostname)) return "";
     let js = VIDEO_DETECTOR_JS;
     if (settings.adBlockEnabled) js = AD_BLOCKER_JS + js;
     if (settings.popupBlockEnabled) js = POPUP_BLOCKER_JS + js;
     return js;
   }, [activeHostname, settings.adBlockEnabled, settings.popupBlockEnabled]);
-  const previousUrl = useRef('');
+  const previousUrl = useRef("");
   const navigation = useNavigation();
 
   // Per-tab WebView refs
@@ -230,25 +271,61 @@ function BrowserScreen() {
   // Used to hold a stream preview request while we wait for the current
   // playback time to come back from the browser WebView.
   const pendingPreviewVideoRef = useRef<DetectedVideo | null>(null);
-  const pendingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Per-tab video detection state
-  const [detectedVideosMap, setDetectedVideosMap] = useState<Record<string, DetectedVideo[]>>({});
-  const [bannerDismissedMap, setBannerDismissedMap] = useState<Record<string, boolean>>({});
-  const [playingVideoUrlMap, setPlayingVideoUrlMap] = useState<Record<string, string>>({});
-  const [segmentBlobMap, setSegmentBlobMap] = useState<Record<string, Record<string, string>>>({});
+  const [detectedVideosMap, setDetectedVideosMap] = useState<
+    Record<string, DetectedVideo[]>
+  >({});
+  const [bannerDismissedMap, setBannerDismissedMap] = useState<
+    Record<string, boolean>
+  >({});
+  const [playingVideoUrlMap, setPlayingVideoUrlMap] = useState<
+    Record<string, string>
+  >({});
+  const [segmentBlobMap, setSegmentBlobMap] = useState<
+    Record<string, Record<string, string>>
+  >({});
 
   // Per-tab page-load state: progress bar + custom error page.
-  interface LoadState { loading: boolean; progress: number; error: PageError | null; }
-  const [loadStateMap, setLoadStateMap] = useState<Record<string, LoadState>>({});
-  const updateLoadState = useCallback((tabId: string, partial: Partial<LoadState>) => {
-    setLoadStateMap(prev => {
-      const current = prev[tabId] ?? { loading: false, progress: 0, error: null };
-      return { ...prev, [tabId]: { ...current, ...partial } };
-    });
-  }, []);
+  interface LoadState {
+    loading: boolean;
+    progress: number;
+    error: PageError | null;
+  }
+  const [loadStateMap, setLoadStateMap] = useState<Record<string, LoadState>>(
+    {},
+  );
+  const updateLoadState = useCallback(
+    (tabId: string, partial: Partial<LoadState>) => {
+      setLoadStateMap((prev) => {
+        const current = prev[tabId] ?? {
+          loading: false,
+          progress: 0,
+          error: null,
+        };
+        if (current.progress === 1) {
+          return prev;
+        }
+        return { ...prev, [tabId]: { ...current, ...partial } };
+      });
+    },
+    [],
+  );
 
-  const activeBlobMap = useRef<Map<string, { downloadId: string; pageTitle: string; totalSize: number; tabId: string }>>(new Map());
+  const activeBlobMap = useRef<
+    Map<
+      string,
+      {
+        downloadId: string;
+        pageTitle: string;
+        totalSize: number;
+        tabId: string;
+      }
+    >
+  >(new Map());
 
   // Parallel pipeline for blob *previews*: extracts the same captured bytes
   // via __extractBlobVideo, but writes them to cache (file://) instead of the
@@ -256,7 +333,16 @@ function BrowserScreen() {
   // The extraction message handlers below check this map first so a blob being
   // previewed doesn't get treated as a download.
   const activeBlobPreviewMap = useRef<
-    Map<string, { previewId: string; tabId: string; totalSize: number; video: DetectedVideo; cancelled?: boolean }>
+    Map<
+      string,
+      {
+        previewId: string;
+        tabId: string;
+        totalSize: number;
+        video: DetectedVideo;
+        cancelled?: boolean;
+      }
+    >
   >(new Map());
   const previewTempFileRef = useRef<string | null>(null);
 
@@ -268,13 +354,20 @@ function BrowserScreen() {
   const [mangaModalVisible, setMangaModalVisible] = useState(false);
   const [mangaModalLoading, setMangaModalLoading] = useState(false);
   const [mangaModalError, setMangaModalError] = useState<string | null>(null);
-  const [mangaModalTitle, setMangaModalTitle] = useState('');
-  const [mangaModalChapters, setMangaModalChapters] = useState<MangaChapterInfo[]>([]);
-  const [mangaModalLastUpdated, setMangaModalLastUpdated] = useState<number | undefined>(undefined);
-  const [mangaModalExistingSize, setMangaModalExistingSize] = useState<number | undefined>(undefined);
-  const [mangaIndexUrl, setMangaIndexUrl] = useState('');
+  const [mangaModalTitle, setMangaModalTitle] = useState("");
+  const [mangaModalChapters, setMangaModalChapters] = useState<
+    MangaChapterInfo[]
+  >([]);
+  const [mangaModalLastUpdated, setMangaModalLastUpdated] = useState<
+    number | undefined
+  >(undefined);
+  const [mangaModalExistingSize, setMangaModalExistingSize] = useState<
+    number | undefined
+  >(undefined);
+  const [mangaIndexUrl, setMangaIndexUrl] = useState("");
   const mangaDownloadActiveRef = useRef(false);
-  const [mangaUnsupportedModalVisible, setMangaUnsupportedModalVisible] = useState(false);
+  const [mangaUnsupportedModalVisible, setMangaUnsupportedModalVisible] =
+    useState(false);
 
   // Popup blocker state
   const [blockedPopupUrl, setBlockedPopupUrl] = useState<string | null>(null);
@@ -322,8 +415,8 @@ function BrowserScreen() {
 
   // Kick when app returns from background (handles app minimize/restore).
   useEffect(() => {
-    const sub = AppState.addEventListener('change', nextState => {
-      if (nextState === 'active') kickExtractingTabs();
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") kickExtractingTabs();
     });
     return () => sub.remove();
   }, [kickExtractingTabs]);
@@ -346,22 +439,23 @@ function BrowserScreen() {
       // popups in Chrome / Facebook / TikTok / etc. via Android's app links.
       const url = request.url;
       if (
-        !url.startsWith('http://') &&
-        !url.startsWith('https://') &&
-        !url.startsWith('about:') &&
-        !url.startsWith('data:') &&
-        !url.startsWith('blob:') &&
-        !url.startsWith('file:') &&
-        !url.startsWith('javascript:')
+        !url.startsWith("http://") &&
+        !url.startsWith("https://") &&
+        !url.startsWith("about:") &&
+        !url.startsWith("data:") &&
+        !url.startsWith("blob:") &&
+        !url.startsWith("file:") &&
+        !url.startsWith("javascript:")
       ) {
         return false;
       }
       if (!tabHasActiveExtraction(tabId)) return true;
-      const tab = getTabsSnapshot().find(t => t.id === tabId);
+      const tab = getTabsSnapshot().find((t) => t.id === tabId);
       if (!tab) return true;
       // Allow same-document loads (initial load, reloads, hash changes) so the
       // current page can keep running its extraction script.
-      if (request.url === tab.url || request.url === tab.lastVisitedUrl) return true;
+      if (request.url === tab.url || request.url === tab.lastVisitedUrl)
+        return true;
       // Top-frame nav away from the extracting page → park the tab in the
       // background and open the new URL in a fresh visible tab.
       setTabHidden(tabId, true);
@@ -387,17 +481,17 @@ function BrowserScreen() {
   const finalizeExtractionForTab = useCallback(
     (tabId: string) => {
       if (tabHasActiveExtraction(tabId)) return;
-      const tab = getTabsSnapshot().find(t => t.id === tabId);
+      const tab = getTabsSnapshot().find((t) => t.id === tabId);
       if (tab?.hidden) {
         // Hidden background-extraction tab: extraction is done, drop it.
         removeTab(tabId);
         delete webViewRefs.current[tabId];
-        setDetectedVideosMap(prev => {
+        setDetectedVideosMap((prev) => {
           const next = { ...prev };
           delete next[tabId];
           return next;
         });
-        setBannerDismissedMap(prev => {
+        setBannerDismissedMap((prev) => {
           const next = { ...prev };
           delete next[tabId];
           return next;
@@ -409,9 +503,10 @@ function BrowserScreen() {
 
   const activeDetectedVideos = detectedVideosMap[activeTabId] || [];
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
-  const activePlayingVideoUrl = playingVideoUrlMap[activeTabId] || '';
-  const activeSegmentBlob = segmentBlobMap[activeTabId] || {}
-  const navbarTitle = activeDetectedVideos[0]?.pageTitle || activeTab?.title || 'Video';
+  const activePlayingVideoUrl = playingVideoUrlMap[activeTabId] || "";
+  const activeSegmentBlob = segmentBlobMap[activeTabId] || {};
+  const navbarTitle =
+    activeDetectedVideos[0]?.pageTitle || activeTab?.title || "Video";
 
   // Video preview modal state
   const [previewVideo, setPreviewVideo] = useState<DetectedVideo | null>(null);
@@ -427,24 +522,28 @@ function BrowserScreen() {
 
   // For DASH/HLS streams, capture the browser's current playback position before
   // opening the preview so the modal can seek to the same spot.
-  const handlePreviewVideo = useCallback((video: DetectedVideo) => {
-    if (video.type === 'dash' || video.type === 'hls') {
-      pendingPreviewVideoRef.current = video;
-      if (pendingPreviewTimerRef.current) clearTimeout(pendingPreviewTimerRef.current);
-      webViewRefs.current[activeTabId]?.injectJavaScript(GET_VIDEO_TIME_JS);
-      // Fallback: open with startTime=0 if no reply within 400ms
-      pendingPreviewTimerRef.current = setTimeout(() => {
-        if (pendingPreviewVideoRef.current === video) {
-          pendingPreviewVideoRef.current = null;
-          pendingPreviewTimerRef.current = null;
-          setPreviewVideo(video);
-        }
-      }, 400);
-      return;
-    }
+  const handlePreviewVideo = useCallback(
+    (video: DetectedVideo) => {
+      if (video.type === "dash" || video.type === "hls") {
+        pendingPreviewVideoRef.current = video;
+        if (pendingPreviewTimerRef.current)
+          clearTimeout(pendingPreviewTimerRef.current);
+        webViewRefs.current[activeTabId]?.injectJavaScript(GET_VIDEO_TIME_JS);
+        // Fallback: open with startTime=0 if no reply within 400ms
+        pendingPreviewTimerRef.current = setTimeout(() => {
+          if (pendingPreviewVideoRef.current === video) {
+            pendingPreviewVideoRef.current = null;
+            pendingPreviewTimerRef.current = null;
+            setPreviewVideo(video);
+          }
+        }, 400);
+        return;
+      }
 
-    setPreviewVideo(video);
-  }, [activeTabId]);
+      setPreviewVideo(video);
+    },
+    [activeTabId],
+  );
 
   const handleToggleFullscreen = useCallback(() => {
     webViewRefs.current[activeTabId]?.injectJavaScript(TOGGLE_FULLSCREEN_JS);
@@ -456,7 +555,7 @@ function BrowserScreen() {
   // acts on its __rn-iframe-playing video (or forwards further to nested
   // iframes).
   const injectLiveTogglePlay = useCallback(() => {
-    const sendTheData = `window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: v.src || v.currentSrc || '' } }));`
+    const sendTheData = `window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: v.src || v.currentSrc || '' } }));`;
     webViewRefs.current[activeTabId]?.injectJavaScript(
       `(function(){var v=document.querySelector('.__rn-playing');if(v){${sendTheData};v.paused?v.play().catch(function(){}):v.pause();return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_TOGGLE_PLAY'},'*');}catch(_){}}})();true;`,
     );
@@ -468,14 +567,17 @@ function BrowserScreen() {
     );
   }, [activeTabId]);
 
-  const injectLiveSeek = useCallback((time: number) => {
-    liveSeekTsRef.current = Date.now();
-    liveSeekTargetRef.current = time;
-    setLiveCurrentTime(time);
-    webViewRefs.current[activeTabId]?.injectJavaScript(
-      `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=${time};return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SEEK',time:${time}},'*');}catch(_){}}})();true;`,
-    );
-  }, [activeTabId]);
+  const injectLiveSeek = useCallback(
+    (time: number) => {
+      liveSeekTsRef.current = Date.now();
+      liveSeekTargetRef.current = time;
+      setLiveCurrentTime(time);
+      webViewRefs.current[activeTabId]?.injectJavaScript(
+        `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=${time};return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SEEK',time:${time}},'*');}catch(_){}}})();true;`,
+      );
+    },
+    [activeTabId],
+  );
 
   const injectLiveSkipBack = useCallback(() => {
     webViewRefs.current[activeTabId]?.injectJavaScript(
@@ -498,7 +600,9 @@ function BrowserScreen() {
     setPreviewVideo(null);
     setIsVideoPlaying(false);
     const REMOVE_JS = `if(window.__rnVideoStateInterval){clearInterval(window.__rnVideoStateInterval);window.__rnVideoStateInterval=null;} window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles(); true;`;
-    Object.values(webViewRefs.current).forEach(ref => ref?.injectJavaScript(REMOVE_JS));
+    Object.values(webViewRefs.current).forEach((ref) =>
+      ref?.injectJavaScript(REMOVE_JS),
+    );
     const tempPath = previewTempFileRef.current;
     previewTempFileRef.current = null;
     if (tempPath) {
@@ -508,8 +612,10 @@ function BrowserScreen() {
 
   // Inject a URL into the (memoized) WebView without causing a React re-render.
   const injectNavigation = useCallback((tabId: string, url: string) => {
-    const esc = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    webViewRefs.current[tabId]?.injectJavaScript(`window.location.href='${esc}'; true;`);
+    const esc = url.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    webViewRefs.current[tabId]?.injectJavaScript(
+      `window.location.href='${esc}'; true;`,
+    );
   }, []);
 
   const getBaseUrl = useCallback((url: string) => {
@@ -521,37 +627,52 @@ function BrowserScreen() {
     }
   }, []);
 
-  const handleNavigate = useCallback((url: string) => {
-    if (tabHasActiveExtraction(activeTabId)) {
-      // Park the extracting tab in the background so its WebView and
-      // __extractBlobVideo script keep running, then open the new URL in a
-      // fresh tab. The hidden tab self-removes when extraction completes.
-      setTabHidden(activeTabId, true);
-      addTab(url);
-      return;
-    }
-    isHistoryNavRef.current[activeTabId] = true;
-    pushUrl(activeTabId, url);
-    // setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
-    setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: false }));
-    injectNavigation(activeTabId, url);
-  }, [activeTabId, pushUrl, tabHasActiveExtraction, setTabHidden, addTab, injectNavigation, getTabsSnapshot, getBaseUrl]);
+  const handleNavigate = useCallback(
+    (url: string) => {
+      if (tabHasActiveExtraction(activeTabId)) {
+        // Park the extracting tab in the background so its WebView and
+        // __extractBlobVideo script keep running, then open the new URL in a
+        // fresh tab. The hidden tab self-removes when extraction completes.
+        setTabHidden(activeTabId, true);
+        addTab(url);
+        return;
+      }
+      isHistoryNavRef.current[activeTabId] = true;
+      pushUrl(activeTabId, url);
+      // setDetectedVideosMap(prev => ({ ...prev, [activeTabId]: [] }));
+      setBannerDismissedMap((prev) => ({ ...prev, [activeTabId]: false }));
+      injectNavigation(activeTabId, url);
+    },
+    [
+      activeTabId,
+      pushUrl,
+      tabHasActiveExtraction,
+      setTabHidden,
+      addTab,
+      injectNavigation,
+      getTabsSnapshot,
+      getBaseUrl,
+    ],
+  );
 
-  const handleGoBack = useCallback((tabId: string): boolean => {
-    const tab = getTabsSnapshot().find(t => t.id === tabId);
-    if (!tab || tab.historyIndex <= 0) return false;
-    const prevUrl = tab.urlHistory[tab.historyIndex - 1];
-    isHistoryNavRef.current[tabId] = true;
-    navigateHistory(tabId, -1);
-    const webView = webViewRefs.current[tabId];
-    if (webView && webViewCanGoBackRef.current[tabId]) {
-      webView.goBack();
-    } else {
-      // Restored tabs have no native WebView history, fall back to href injection.
-      injectNavigation(tabId, prevUrl);
-    }
-    return true;
-  }, [navigateHistory, getTabsSnapshot, injectNavigation]);
+  const handleGoBack = useCallback(
+    (tabId: string): boolean => {
+      const tab = getTabsSnapshot().find((t) => t.id === tabId);
+      if (!tab || tab.historyIndex <= 0) return false;
+      const prevUrl = tab.urlHistory[tab.historyIndex - 1];
+      isHistoryNavRef.current[tabId] = true;
+      navigateHistory(tabId, -1);
+      const webView = webViewRefs.current[tabId];
+      if (webView && webViewCanGoBackRef.current[tabId]) {
+        webView.goBack();
+      } else {
+        // Restored tabs have no native WebView history, fall back to href injection.
+        injectNavigation(tabId, prevUrl);
+      }
+      return true;
+    },
+    [navigateHistory, getTabsSnapshot, injectNavigation],
+  );
 
   // Hardware back: navigate browser history first, then fall back to default
   // (which exits the app at the root). Without this, Android's back button
@@ -563,7 +684,7 @@ function BrowserScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
         return handleGoBack(activeTabIdRef.current);
       });
       return () => sub.remove();
@@ -572,7 +693,7 @@ function BrowserScreen() {
 
   useEffect(() => {
     if (!isVideoPlaying) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       handleToggleFullscreen();
       return true;
     });
@@ -584,210 +705,260 @@ function BrowserScreen() {
   // the bottom-tab navigation — setOptions there sets per-screen tab options.
   useEffect(() => {
     if (isVideoPlaying) {
-      (navigation as any).setOptions({ tabBarStyle: { display: 'none' } });
+      (navigation as any).setOptions({ tabBarStyle: { display: "none" } });
       return () => {
         (navigation as any).setOptions({ tabBarStyle: undefined });
       };
     }
   }, [isVideoPlaying, navigation]);
 
-  const handleGoForward = useCallback((tabId: string) => {
-    const tab = getTabsSnapshot().find(t => t.id === tabId);
-    if (!tab || tab.historyIndex >= tab.urlHistory.length - 1) return;
-    const nextUrl = tab.urlHistory[tab.historyIndex + 1];
-    isHistoryNavRef.current[tabId] = true;
-    navigateHistory(tabId, 1);
-    const webView = webViewRefs.current[tabId];
-    if (webView && webViewCanGoForwardRef.current[tabId]) {
-      webView.goForward();
-    } else {
-      injectNavigation(tabId, nextUrl);
-    }
-  }, [navigateHistory, getTabsSnapshot, injectNavigation]);
-
-  const handleNavigationStateChange = useCallback((tabId: string) => (navState: WebViewNavigation) => {
-    if (!navState.url) return;
-    webViewCanGoBackRef.current[tabId] = navState.canGoBack ?? false;
-    webViewCanGoForwardRef.current[tabId] = navState.canGoForward ?? false;
-
-    if (isHistoryNavRef.current[tabId]) {
-      // Programmatic navigation (back/forward/address-bar) already updated the
-      // history stack — just sync the title and clear the flag.
-      isHistoryNavRef.current[tabId] = false;
-      if (navState.title) updateTab(tabId, { title: navState.title });
-      previousUrl.current = navState.url;
-      return;
-    }
-
-    // Determine whether this navigation is a genuine page change or just a
-    // query/hash/case variation of the current page. Compare bases against the
-    // URL at the current history position (not the stale `previousUrl` ref)
-    // and normalize case so e.g. `/mediaViewer` and `/mediaviewer` collapse.
-    const tab = getTabsSnapshot().find(t => t.id === tabId);
-    const currentHistoryUrl = tab?.urlHistory[tab.historyIndex] ?? '';
-    const nextBase = getBaseUrl(navState.url).toLowerCase();
-    const currentBase = getBaseUrl(currentHistoryUrl).toLowerCase();
-
-    if (nextBase === currentBase) {
-      replaceUrl(tabId, navState.url, navState.title || undefined);
-    } else {
-      pushUrl(tabId, navState.url, navState.title || undefined);
-      if (!tab?.incognito) {
-        pushHistory({ url: navState.url, title: navState.title || navState.url });
+  const handleGoForward = useCallback(
+    (tabId: string) => {
+      const tab = getTabsSnapshot().find((t) => t.id === tabId);
+      if (!tab || tab.historyIndex >= tab.urlHistory.length - 1) return;
+      const nextUrl = tab.urlHistory[tab.historyIndex + 1];
+      isHistoryNavRef.current[tabId] = true;
+      navigateHistory(tabId, 1);
+      const webView = webViewRefs.current[tabId];
+      if (webView && webViewCanGoForwardRef.current[tabId]) {
+        webView.goForward();
+      } else {
+        injectNavigation(tabId, nextUrl);
       }
-    }
-    previousUrl.current = navState.url;
-  }, [updateTab, pushUrl, replaceUrl, getTabsSnapshot, getBaseUrl, pushHistory]);
+    },
+    [navigateHistory, getTabsSnapshot, injectNavigation],
+  );
 
-  const handleMessage = useCallback((tabId: string) => (event: { nativeEvent: { data: string } }) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
+  const handleNavigationStateChange = useCallback(
+    (tabId: string) => (navState: WebViewNavigation) => {
+      if (!navState.url) return;
+      webViewCanGoBackRef.current[tabId] = navState.canGoBack ?? false;
+      webViewCanGoForwardRef.current[tabId] = navState.canGoForward ?? false;
 
-      switch (message.type) {
-        case 'VIDEO_DETECTED': {
-          const items: DetectedVideo[] = message.payload || [];
-          if (items.length > 0) {
-            setDetectedVideosMap(prev => {
-              const existing = prev[tabId] || [];
-              const existingUrls = new Set(existing.map(v => v.url));
-              const newItems = items.filter(v => !existingUrls.has(v.url));
-              return newItems.length > 0 ? { ...prev, [tabId]: [...existing, ...newItems] } : prev;
-            });
-          }
-          setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
-          break;
-        }
-        case 'M3U8_INFO': {
-          const item = message.payload;
-          setDetectedVideosMap(prev => {
-            const existing = prev[tabId] || [];
-            const indexExisting = existing.findIndex((v) => v.url === item.url);
-            if (indexExisting !== -1) {
-              existing[indexExisting] = item;
-              return { ...prev, [tabId]: existing };
-            }
-            return { ...prev, [tabId]: [...existing, item] };
+      if (isHistoryNavRef.current[tabId]) {
+        // Programmatic navigation (back/forward/address-bar) already updated the
+        // history stack — just sync the title and clear the flag.
+        isHistoryNavRef.current[tabId] = false;
+        if (navState.title) updateTab(tabId, { title: navState.title });
+        previousUrl.current = navState.url;
+        return;
+      }
+
+      // Determine whether this navigation is a genuine page change or just a
+      // query/hash/case variation of the current page. Compare bases against the
+      // URL at the current history position (not the stale `previousUrl` ref)
+      // and normalize case so e.g. `/mediaViewer` and `/mediaviewer` collapse.
+      const tab = getTabsSnapshot().find((t) => t.id === tabId);
+      const currentHistoryUrl = tab?.urlHistory[tab.historyIndex] ?? "";
+      const nextBase = getBaseUrl(navState.url).toLowerCase();
+      const currentBase = getBaseUrl(currentHistoryUrl).toLowerCase();
+
+      if (nextBase === currentBase) {
+        replaceUrl(tabId, navState.url, navState.title || undefined);
+      } else {
+        pushUrl(tabId, navState.url, navState.title || undefined);
+        if (!tab?.incognito) {
+          pushHistory({
+            url: navState.url,
+            title: navState.title || navState.url,
           });
-          setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
-          break;
         }
-        case 'VIDEO_CURRENT_TIME': {
-          const pending = pendingPreviewVideoRef.current;
-          if (pending) {
-            if (pendingPreviewTimerRef.current) clearTimeout(pendingPreviewTimerRef.current);
-            pendingPreviewTimerRef.current = null;
-            pendingPreviewVideoRef.current = null;
-            setPreviewVideo({ ...pending, startTime: message.payload?.time || 0 });
+      }
+      previousUrl.current = navState.url;
+    },
+    [updateTab, pushUrl, replaceUrl, getTabsSnapshot, getBaseUrl, pushHistory],
+  );
+
+  const handleMessage = useCallback(
+    (tabId: string) => (event: { nativeEvent: { data: string } }) => {
+      try {
+        const message = JSON.parse(event.nativeEvent.data);
+
+        switch (message.type) {
+          case "VIDEO_DETECTED": {
+            const items: DetectedVideo[] = message.payload || [];
+            if (items.length > 0) {
+              setDetectedVideosMap((prev) => {
+                const existing = prev[tabId] || [];
+                const existingUrls = new Set(existing.map((v) => v.url));
+                const newItems = items.filter((v) => !existingUrls.has(v.url));
+                return newItems.length > 0
+                  ? { ...prev, [tabId]: [...existing, ...newItems] }
+                  : prev;
+              });
+            }
+            setBannerDismissedMap((prev) => ({ ...prev, [tabId]: false }));
+            break;
           }
-          break;
-        }
-        case 'VIDEO_PLAYING': {
-          const src: string = message.payload?.src || '';
-          const m3u8Url: string = message.payload?.m3u8Url || '';
-          const matchUrl = m3u8Url || src;
-          if (matchUrl) {
-            setPlayingVideoUrlMap(prev => ({ ...prev, [tabId]: matchUrl }));
+          case "M3U8_INFO": {
+            const item = message.payload;
+            setDetectedVideosMap((prev) => {
+              const existing = prev[tabId] || [];
+              const indexExisting = existing.findIndex(
+                (v) => v.url === item.url,
+              );
+              if (indexExisting !== -1) {
+                existing[indexExisting] = item;
+                return { ...prev, [tabId]: existing };
+              }
+              return { ...prev, [tabId]: [...existing, item] };
+            });
+            setBannerDismissedMap((prev) => ({ ...prev, [tabId]: false }));
+            break;
           }
-          break;
-        }
-        case 'VIDEO_FULLSCREEN_CHANGED': {
-          const active = message.payload?.active === true;
-          setIsVideoPlaying(active);
-          if (!active) {
-            setLiveCurrentTime(0);
-            setLiveDuration(0);
-            setLiveIsPaused(false);
-            setLiveIsMuted(false);
-            setBannerDismissedMap(prev => ({ ...prev, [tabId]: false }));
+          case "VIDEO_CURRENT_TIME": {
+            const pending = pendingPreviewVideoRef.current;
+            if (pending) {
+              if (pendingPreviewTimerRef.current)
+                clearTimeout(pendingPreviewTimerRef.current);
+              pendingPreviewTimerRef.current = null;
+              pendingPreviewVideoRef.current = null;
+              setPreviewVideo({
+                ...pending,
+                startTime: message.payload?.time || 0,
+              });
+            }
+            break;
           }
-          break;
-        }
-        case 'VIDEO_STATE': {
-          const seekAge = Date.now() - liveSeekTsRef.current;
-          if (seekAge < 1500 && Math.abs(message.currentTime - liveSeekTargetRef.current) > 2) {
-            // Suppress stale currentTime that arrives before the WebView
-            // has applied the seek — only update non-time fields.
-            setLiveDuration(message.duration);
-            setLiveIsPaused(message.paused);
-            setLiveIsMuted(message.muted);
-          } else {
-            setLiveCurrentTime(message.currentTime);
-            setLiveDuration(message.duration);
-            setLiveIsPaused(message.paused);
-            setLiveIsMuted(message.muted);
+          case "VIDEO_PLAYING": {
+            const src: string = message.payload?.src || "";
+            const m3u8Url: string = message.payload?.m3u8Url || "";
+            const matchUrl = m3u8Url || src;
+            if (matchUrl) {
+              setPlayingVideoUrlMap((prev) => ({ ...prev, [tabId]: matchUrl }));
+            }
+            break;
           }
-          break;
-        }
-        case 'DETECTOR_LOG':
-          const filterLogs = ['[FULLSCREEN]'];
-          const log = message.payload;
-          if (typeof log === 'string' && filterLogs.some(f => log.includes(f))) {
-            // console.log('[Detector]', log);
+          case "VIDEO_FULLSCREEN_CHANGED": {
+            const active = message.payload?.active === true;
+            setIsVideoPlaying(active);
+            if (!active) {
+              setLiveCurrentTime(0);
+              setLiveDuration(0);
+              setLiveIsPaused(false);
+              setLiveIsMuted(false);
+              setBannerDismissedMap((prev) => ({ ...prev, [tabId]: false }));
+            }
+            break;
           }
-          break;
-        case 'PAGE_INFO':
-          break;
-        case 'MANGA_DETECTION': {
-          const result = message.payload;
-          if (!result.found || !result.indexUrl) {
-            Alert.alert('Not a manga page', 'No manga was detected on this page.');
+          case "VIDEO_STATE": {
+            const seekAge = Date.now() - liveSeekTsRef.current;
+            if (
+              seekAge < 1500 &&
+              Math.abs(message.currentTime - liveSeekTargetRef.current) > 2
+            ) {
+              // Suppress stale currentTime that arrives before the WebView
+              // has applied the seek — only update non-time fields.
+              setLiveDuration(message.duration);
+              setLiveIsPaused(message.paused);
+              setLiveIsMuted(message.muted);
+            } else {
+              setLiveCurrentTime(message.currentTime);
+              setLiveDuration(message.duration);
+              setLiveIsPaused(message.paused);
+              setLiveIsMuted(message.muted);
+            }
+            break;
+          }
+          case "DETECTOR_LOG":
+            const filterLogs = ["[FULLSCREEN]"];
+            const log = message.payload;
+            if (
+              typeof log === "string" &&
+              filterLogs.some((f) => log.includes(f))
+            ) {
+              // console.log('[Detector]', log);
+            }
+            break;
+          case "PAGE_INFO":
+            break;
+          case "MANGA_DETECTION": {
+            const result = message.payload;
+            if (!result.found || !result.indexUrl) {
+              Alert.alert(
+                "Not a manga page",
+                "No manga was detected on this page.",
+              );
+              return;
+            }
+            setMangaIndexUrl(result.indexUrl);
+            setMangaModalTitle(result.mangaTitle || "Manga");
+            setMangaModalLoading(true);
+            setMangaModalError(null);
+            setMangaModalChapters([]);
+            setMangaModalLastUpdated(undefined);
+            setMangaModalExistingSize(undefined);
+            setMangaModalVisible(true);
+
+            loadBgWebView(
+              result.chapterPageUrl || result.indexUrl,
+              MANGA_CHAPTER_LIST_EXTRACTOR_JS,
+            )
+              .then((chapters: MangaChapterInfo[]) => {
+                setMangaModalChapters(chapters);
+                setMangaModalLastUpdated(Date.now());
+                const safeName = sanitizeMangaName(
+                  result.mangaTitle || "Manga",
+                );
+                const existing = getTitle(
+                  safeName.toLowerCase().replace(/\s+/g, "-"),
+                );
+                setMangaModalExistingSize(
+                  existing
+                    ? existing.chapters.reduce(
+                        (s, ch) => s + (ch.sizeBytes || 0),
+                        0,
+                      )
+                    : undefined,
+                );
+              })
+              .catch((err: any) => {
+                setMangaModalError(
+                  err?.message || "Failed to fetch chapter list",
+                );
+              })
+              .finally(() => {
+                setMangaModalLoading(false);
+                clearBgWebView();
+              });
             return;
           }
-          setMangaIndexUrl(result.indexUrl);
-          setMangaModalTitle(result.mangaTitle || 'Manga');
-          setMangaModalLoading(true);
-          setMangaModalError(null);
-          setMangaModalChapters([]);
-          setMangaModalLastUpdated(undefined);
-          setMangaModalExistingSize(undefined);
-          setMangaModalVisible(true);
-
-          loadBgWebView(result.chapterPageUrl || result.indexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
-            .then((chapters: MangaChapterInfo[]) => {
-              setMangaModalChapters(chapters);
-              setMangaModalLastUpdated(Date.now());
-              const safeName = sanitizeMangaName(result.mangaTitle || 'Manga');
-              const existing = getTitle(safeName.toLowerCase().replace(/\s+/g, '-'));
-              setMangaModalExistingSize(
-                existing ? existing.chapters.reduce((s, ch) => s + (ch.sizeBytes || 0), 0) : undefined,
-              );
-            })
-            .catch((err: any) => {
-              setMangaModalError(err?.message || 'Failed to fetch chapter list');
-            })
-            .finally(() => {
-              setMangaModalLoading(false);
-              clearBgWebView();
+          case "EXTRACTION_LINK_CLICK": {
+            const { href } = message.payload;
+            // console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
+            // Park the extracting tab in the background, open link in a new tab.
+            setTabHidden(tabId, true);
+            addTab(href);
+            break;
+          }
+          case "M4S_BLOB_MATCH": {
+            setSegmentBlobMap((prev) => {
+              const { m4sUrl, blobUrl } = message.payload;
+              const existing = prev[tabId] || {};
+              existing[blobUrl] = m4sUrl;
+              return { ...prev, [tabId]: existing };
             });
-          return;
+            // console.log("message.payload", message.payload)
+          }
+          case "POPUP_BLOCKED": {
+            const url: string = message.payload?.url;
+            if (url) setBlockedPopupUrl(url);
+            break;
+          }
         }
-        case 'EXTRACTION_LINK_CLICK': {
-          const { href } = message.payload;
-          // console.log(`[BrowserScreen] EXTRACTION_LINK_CLICK on tab ${tabId}: ${href}`);
-          // Park the extracting tab in the background, open link in a new tab.
-          setTabHidden(tabId, true);
-          addTab(href);
-          break;
-        }
-        case 'M4S_BLOB_MATCH': {
-          setSegmentBlobMap(prev => {
-            const { m4sUrl, blobUrl } = message.payload
-            const existing = prev[tabId] || {};
-            existing[blobUrl] = m4sUrl;
-            return { ...prev, [tabId]: existing }
-          });
-          // console.log("message.payload", message.payload)
-        }
-        case 'POPUP_BLOCKED': {
-          const url: string = message.payload?.url;
-          if (url) setBlockedPopupUrl(url);
-          break;
-        }
+      } catch (err) {
+        // Ignore non-JSON messages from websites
       }
-    } catch (err) {
-      // Ignore non-JSON messages from websites
-    }
-  }, [updateBlobProgress, completeBlobDownload, finalizeExtractionForTab, setTabHidden, addTab, setBlockedPopupUrl]);
+    },
+    [
+      updateBlobProgress,
+      completeBlobDownload,
+      finalizeExtractionForTab,
+      setTabHidden,
+      addTab,
+      setBlockedPopupUrl,
+    ],
+  );
 
   // Stable ref wrappers — Browser is memoized so its onMessage / onShouldStartLoad
   // props are frozen at mount. Reading through a ref ensures the latest handler
@@ -812,33 +983,35 @@ function BrowserScreen() {
     (video: DetectedVideo, variant?: HlsVariant) => {
       requestDownload(() => {
         startDownload(video, variant);
-        Alert.alert('Download Started', 'Check the Downloads tab for progress.');
+        Alert.alert(
+          "Download Started",
+          "Check the Downloads tab for progress.",
+        );
       });
     },
     [startDownload, requestDownload],
   );
 
-
   const handleDownload = useCallback(
     (video: DetectedVideo) => {
-      if (video.type === 'blob') {
+      if (video.type === "blob") {
         Alert.alert(
-          'Blob URL',
-          'This video uses a blob URL and cannot be downloaded directly. It may be DRM-protected or streamed.',
+          "Blob URL",
+          "This video uses a blob URL and cannot be downloaded directly. It may be DRM-protected or streamed.",
         );
         return;
       }
-      if (video.type === 'dash') {
+      if (video.type === "dash") {
         Alert.alert(
-          'DASH Stream',
-          'DASH streams cannot be downloaded directly. Use Preview to watch it.',
+          "DASH Stream",
+          "DASH streams cannot be downloaded directly. Use Preview to watch it.",
         );
         return;
       }
-      if (video.type === 'blob-ready') {
+      if (video.type === "blob-ready") {
         const webView = webViewRefs.current[activeTabId];
         if (!webView) {
-          Alert.alert('Error', 'WebView not available for blob extraction.');
+          Alert.alert("Error", "WebView not available for blob extraction.");
           return;
         }
         const downloadId = `blob_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -857,11 +1030,14 @@ function BrowserScreen() {
         webViewRefs.current[activeTabId]?.injectJavaScript(
           `window.__extractionGuardCount = (window.__extractionGuardCount||0) + 1; window.__extractBlobVideo && window.__extractBlobVideo('${escUrl}', { waitForReady: true }); true;`,
         );
-        Alert.alert('Download queued', 'Video is buffering. Track progress in the Downloads tab.');
+        Alert.alert(
+          "Download queued",
+          "Video is buffering. Track progress in the Downloads tab.",
+        );
         return;
       }
       startDownload(video);
-      Alert.alert('Download Started', 'Check the Downloads tab for progress.');
+      Alert.alert("Download Started", "Check the Downloads tab for progress.");
     },
     [startDownload, activeTabId],
   );
@@ -882,25 +1058,25 @@ function BrowserScreen() {
   // Reset all per-tab video detection state for a tab. Called on refresh so the
   // banner/fullscreen/segment data doesn't leak across a page reload.
   const resetTabVideoState = useCallback((tabId: string) => {
-    setDetectedVideosMap(prev => {
+    setDetectedVideosMap((prev) => {
       if (!prev[tabId]) return prev;
       const next = { ...prev };
       delete next[tabId];
       return next;
     });
-    setBannerDismissedMap(prev => {
+    setBannerDismissedMap((prev) => {
       if (prev[tabId] === undefined) return prev;
       const next = { ...prev };
       delete next[tabId];
       return next;
     });
-    setPlayingVideoUrlMap(prev => {
+    setPlayingVideoUrlMap((prev) => {
       if (prev[tabId] === undefined) return prev;
       const next = { ...prev };
       delete next[tabId];
       return next;
     });
-    setSegmentBlobMap(prev => {
+    setSegmentBlobMap((prev) => {
       if (prev[tabId] === undefined) return prev;
       const next = { ...prev };
       delete next[tabId];
@@ -909,15 +1085,23 @@ function BrowserScreen() {
   }, []);
 
   // Stable wrappers so memoized children don't invalidate on every render.
-  const handleGoBackActive = useCallback(() => { handleGoBack(activeTabId); }, [handleGoBack, activeTabId]);
-  const handleGoForwardActive = useCallback(() => { handleGoForward(activeTabId); }, [handleGoForward, activeTabId]);
+  const handleGoBackActive = useCallback(() => {
+    handleGoBack(activeTabId);
+  }, [handleGoBack, activeTabId]);
+  const handleGoForwardActive = useCallback(() => {
+    handleGoForward(activeTabId);
+  }, [handleGoForward, activeTabId]);
   const handleReloadActive = useCallback(() => {
     resetTabVideoState(activeTabId);
     webViewRefs.current[activeTabId]?.reload();
   }, [activeTabId, resetTabVideoState]);
   const handleRetryActive = useCallback(() => {
     resetTabVideoState(activeTabId);
-    updateLoadState(activeTabId, { loading: true, progress: 0.05, error: null });
+    updateLoadState(activeTabId, {
+      loading: true,
+      progress: 0.05,
+      error: null,
+    });
     webViewRefs.current[activeTabId]?.reload();
   }, [activeTabId, updateLoadState, resetTabVideoState]);
 
@@ -947,7 +1131,7 @@ function BrowserScreen() {
       updateLoadState(tabId, {
         loading: false,
         progress: 0,
-        error: { kind: 'network', url, code, description },
+        error: { kind: "network", url, code, description },
       });
     },
     [updateLoadState],
@@ -958,12 +1142,12 @@ function BrowserScreen() {
       if (statusCode < 400) return;
       // Ignore sub-resource errors (ads, images, etc.) — only fail on the main
       // frame URL so a loaded page isn't marked errored by a background request.
-      const tab = getTabsSnapshot().find(t => t.id === tabId);
+      const tab = getTabsSnapshot().find((t) => t.id === tabId);
       if (tab && url !== tab.url && url !== tab.lastVisitedUrl) return;
       updateLoadState(tabId, {
         loading: false,
         progress: 0,
-        error: { kind: 'http', url, code: statusCode, description },
+        error: { kind: "http", url, code: statusCode, description },
       });
     },
     [updateLoadState, getTabsSnapshot],
@@ -973,9 +1157,8 @@ function BrowserScreen() {
     webViewRefs.current[tabId] = ref;
   }, []);
 
-
   const handleMangaMenuAction = useCallback(() => {
-    const currentUrl = activeTab?.url || '';
+    const currentUrl = activeTab?.url || "";
     try {
       const domain = new URL(currentUrl).hostname;
       if (!SUPPORTED_MANGA_DOMAINS.includes(domain)) {
@@ -989,74 +1172,145 @@ function BrowserScreen() {
     webViewRefs.current[activeTabId]?.injectJavaScript(MANGA_INDEX_DETECTOR_JS);
   }, [activeTabId, activeTab?.url]);
 
-  const handleMangaDownloadConfirm = useCallback(async (selectedChapters: MangaChapterInfo[], confirmedTitle: string) => {
-    setMangaModalVisible(false);
-    mangaDownloadActiveRef.current = true;
+  const handleMangaDownloadConfirm = useCallback(
+    async (selectedChapters: MangaChapterInfo[], confirmedTitle: string) => {
+      setMangaModalVisible(false);
+      mangaDownloadActiveRef.current = true;
 
-    const safeTitleName = sanitizeMangaName(confirmedTitle);
-    const mangaId = safeTitleName.toLowerCase().replace(/\s+/g, '-');
+      const safeTitleName = sanitizeMangaName(confirmedTitle);
+      const mangaId = safeTitleName.toLowerCase().replace(/\s+/g, "-");
 
-    const chapters = selectedChapters.map(ch => ({
-      id: `${mangaId}-chapter-${ch.chapterNumber}`,
-      mangaId,
-      chapterNumber: ch.chapterNumber,
-      title: ch.title,
-      url: ch.url,
-      status: 'queued' as const,
-      progress: 0,
-      imageCount: 0,
-      downloadedImages: 0,
-      folderPath: chapterFolderPath(safeTitleName, ch.chapterNumber),
-      readProgress: 0,
-    }));
+      const chapters = selectedChapters.map((ch) => ({
+        id: `${mangaId}-chapter-${ch.chapterNumber}`,
+        mangaId,
+        chapterNumber: ch.chapterNumber,
+        title: ch.title,
+        url: ch.url,
+        status: "queued" as const,
+        progress: 0,
+        imageCount: 0,
+        downloadedImages: 0,
+        folderPath: chapterFolderPath(safeTitleName, ch.chapterNumber),
+        readProgress: 0,
+      }));
 
-    const existing = getTitle(mangaId);
-    if (!existing) {
-      addTitle({
-        id: mangaId,
-        title: confirmedTitle,
-        coverImagePath: '',
-        sourceUrl: mangaIndexUrl,
-        chapters,
-        createdAt: Date.now(),
-      });
-    } else {
-      const newChapters = chapters.filter(ch => !existing.chapters.find(ec => ec.id === ch.id));
-      if (newChapters.length > 0) {
-        updateTitle(mangaId, { chapters: [...existing.chapters, ...newChapters] });
+      const existing = getTitle(mangaId);
+      if (!existing) {
+        addTitle({
+          id: mangaId,
+          title: confirmedTitle,
+          coverImagePath: "",
+          sourceUrl: mangaIndexUrl,
+          chapters,
+          createdAt: Date.now(),
+        });
+      } else {
+        const newChapters = chapters.filter(
+          (ch) => !existing.chapters.find((ec) => ec.id === ch.id),
+        );
+        if (newChapters.length > 0) {
+          updateTitle(mangaId, {
+            chapters: [...existing.chapters, ...newChapters],
+          });
+        }
       }
-    }
 
-    let coverSaved = !!(getTitle(mangaId)?.coverImagePath);
-    for (const ch of chapters) {
-      if (!mangaDownloadActiveRef.current) break;
+      let coverSaved = !!getTitle(mangaId)?.coverImagePath;
+      for (const ch of chapters) {
+        if (!mangaDownloadActiveRef.current) break;
 
-      updateChapter(mangaId, ch.id, { status: 'downloading', progress: 0 });
+        updateChapter(mangaId, ch.id, { status: "downloading", progress: 0 });
 
+        try {
+          const imageUrls: string[] = await loadBgWebView(
+            ch.url,
+            MANGA_PAGE_IMAGES_EXTRACTOR_JS,
+          );
+
+          if (imageUrls.length === 0) {
+            updateChapter(mangaId, ch.id, { status: "failed" });
+            continue;
+          }
+
+          const filePaths = await downloadChapterImages(
+            ch.folderPath,
+            imageUrls,
+            undefined,
+            (done, total) => {
+              updateChapter(mangaId, ch.id, {
+                progress: Math.round((done / total) * 100),
+                downloadedImages: done,
+                imageCount: total,
+              });
+            },
+          );
+
+          const sizeBytes = await getChapterSizeBytes(ch.folderPath);
+          updateChapter(mangaId, ch.id, {
+            status: "completed",
+            progress: 100,
+            imageCount: filePaths.length,
+            downloadedImages: filePaths.length,
+            downloadedAt: Date.now(),
+            sizeBytes,
+          });
+
+          if (!coverSaved && filePaths.length > 0) {
+            const coverPath = await saveCoverImage(safeTitleName, filePaths[0]);
+            updateTitle(mangaId, { coverImagePath: coverPath });
+            coverSaved = true;
+          }
+        } catch (e) {
+          console.log("e", e);
+          updateChapter(mangaId, ch.id, { status: "failed" });
+        }
+      }
+
+      mangaDownloadActiveRef.current = false;
+      clearBgWebView();
+    },
+    [
+      mangaIndexUrl,
+      addTitle,
+      updateTitle,
+      updateChapter,
+      getTitle,
+      loadBgWebView,
+      clearBgWebView,
+    ],
+  );
+
+  const handleRetryChapterDownload = useCallback(
+    async (mangaId: string, chapterId: string, chapterUrl: string) => {
+      const manga = getTitle(mangaId);
+      const chapter = manga?.chapters.find((c) => c.id === chapterId);
+      if (!manga || !chapter) return;
+      updateChapter(mangaId, chapterId, { status: "downloading", progress: 0 });
       try {
-        const imageUrls: string[] = await loadBgWebView(ch.url, MANGA_PAGE_IMAGES_EXTRACTOR_JS);
-
+        const imageUrls: string[] = await loadBgWebView(
+          chapterUrl,
+          MANGA_PAGE_IMAGES_EXTRACTOR_JS,
+        );
         if (imageUrls.length === 0) {
-          updateChapter(mangaId, ch.id, { status: 'failed' });
-          continue;
+          updateChapter(mangaId, chapterId, { status: "failed" });
+          return;
         }
 
         const filePaths = await downloadChapterImages(
-          ch.folderPath,
+          chapter.folderPath,
           imageUrls,
           undefined,
-          (done, total) => {
-            updateChapter(mangaId, ch.id, {
+          (done, total) =>
+            updateChapter(mangaId, chapterId, {
               progress: Math.round((done / total) * 100),
               downloadedImages: done,
               imageCount: total,
-            });
-          },
+            }),
         );
 
-        const sizeBytes = await getChapterSizeBytes(ch.folderPath);
-        updateChapter(mangaId, ch.id, {
-          status: 'completed',
+        const sizeBytes = await getChapterSizeBytes(chapter.folderPath);
+        updateChapter(mangaId, chapterId, {
+          status: "completed",
           progress: 100,
           imageCount: filePaths.length,
           downloadedImages: filePaths.length,
@@ -1064,62 +1318,26 @@ function BrowserScreen() {
           sizeBytes,
         });
 
-        if (!coverSaved && filePaths.length > 0) {
-          const coverPath = await saveCoverImage(safeTitleName, filePaths[0]);
+        if (!manga.coverImagePath && filePaths.length > 0) {
+          const coverPath = await saveCoverImage(
+            sanitizeMangaName(manga.title),
+            filePaths[0],
+          );
           updateTitle(mangaId, { coverImagePath: coverPath });
-          coverSaved = true;
         }
       } catch (e) {
-        console.log("e", e)
-        updateChapter(mangaId, ch.id, { status: 'failed' });
+        console.log("e", e);
+        updateChapter(mangaId, chapterId, { status: "failed", progress: 0 });
+      } finally {
+        clearBgWebView();
       }
-    }
+    },
+    [getTitle, updateChapter, updateTitle, loadBgWebView, clearBgWebView],
+  );
 
-    mangaDownloadActiveRef.current = false;
-    clearBgWebView();
-  }, [mangaIndexUrl, addTitle, updateTitle, updateChapter, getTitle, loadBgWebView, clearBgWebView]);
-
-  const handleRetryChapterDownload = useCallback(async (mangaId: string, chapterId: string, chapterUrl: string) => {
-    
-    const manga = getTitle(mangaId);
-    const chapter = manga?.chapters.find(c => c.id === chapterId);
-    if (!manga || !chapter) return;
-    updateChapter(mangaId, chapterId, { status: 'downloading', progress: 0 });
-    try {
-      const imageUrls: string[] = await loadBgWebView(chapterUrl, MANGA_PAGE_IMAGES_EXTRACTOR_JS);
-      if (imageUrls.length === 0) { updateChapter(mangaId, chapterId, { status: 'failed' }); return; }
-
-      const filePaths = await downloadChapterImages(
-        chapter.folderPath,
-        imageUrls,
-        undefined,
-        (done, total) => updateChapter(mangaId, chapterId, {
-          progress: Math.round((done / total) * 100),
-          downloadedImages: done,
-          imageCount: total,
-        }),
-      );
-
-      const sizeBytes = await getChapterSizeBytes(chapter.folderPath);
-      updateChapter(mangaId, chapterId, {
-        status: 'completed', progress: 100,
-        imageCount: filePaths.length, downloadedImages: filePaths.length,
-        downloadedAt: Date.now(), sizeBytes,
-      });
-
-      if (!manga.coverImagePath && filePaths.length > 0) {
-        const coverPath = await saveCoverImage(sanitizeMangaName(manga.title), filePaths[0]);
-        updateTitle(mangaId, { coverImagePath: coverPath });
-      }
-    } catch (e) {
-      console.log("e", e)
-      updateChapter(mangaId, chapterId, { status: 'failed', progress: 0 });
-    } finally {
-      clearBgWebView();
-    }
-  }, [getTitle, updateChapter, updateTitle, loadBgWebView, clearBgWebView]);
-
-  const retryQueueRef = useRef<Array<{ mangaId: string; chapterId: string; chapterUrl: string }>>([]);
+  const retryQueueRef = useRef<
+    Array<{ mangaId: string; chapterId: string; chapterUrl: string }>
+  >([]);
   const isRetryingRef = useRef(false);
 
   const processRetryQueue = useCallback(async () => {
@@ -1127,57 +1345,99 @@ function BrowserScreen() {
     isRetryingRef.current = true;
     while (retryQueueRef.current.length > 0) {
       const next = retryQueueRef.current.shift()!;
-      await handleRetryChapterDownload(next.mangaId, next.chapterId, next.chapterUrl);
+      await handleRetryChapterDownload(
+        next.mangaId,
+        next.chapterId,
+        next.chapterUrl,
+      );
     }
     isRetryingRef.current = false;
   }, [handleRetryChapterDownload]);
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('MANGA_RETRY_CHAPTER', (data) => {
-      updateChapter(data.mangaId, data.chapterId, { status: 'queued', progress: 0 });
-      retryQueueRef.current.push(data);
-      processRetryQueue();
-    });
+    const sub = DeviceEventEmitter.addListener(
+      "MANGA_RETRY_CHAPTER",
+      (data) => {
+        updateChapter(data.mangaId, data.chapterId, {
+          status: "queued",
+          progress: 0,
+        });
+        retryQueueRef.current.push(data);
+        processRetryQueue();
+      },
+    );
     return () => sub.remove();
   }, [processRetryQueue, updateChapter]);
 
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('MANGA_REDOWNLOAD_CHAPTER', async (data) => {
-      const manga = getTitle(data.mangaId);
-      const chapter = manga?.chapters.find(c => c.id === data.chapterId);
-      if (chapter?.folderPath) {
-        await FileSystem.deleteAsync(chapter.folderPath, { idempotent: true }).catch(() => {});
-      }
-      updateChapter(data.mangaId, data.chapterId, { status: 'queued', progress: 0, downloadedImages: 0, imageCount: 0, sizeBytes: 0, downloadedAt: undefined });
-      retryQueueRef.current.push(data);
-      processRetryQueue();
-    });
+    const sub = DeviceEventEmitter.addListener(
+      "MANGA_REDOWNLOAD_CHAPTER",
+      async (data) => {
+        const manga = getTitle(data.mangaId);
+        const chapter = manga?.chapters.find((c) => c.id === data.chapterId);
+        if (chapter?.folderPath) {
+          await FileSystem.deleteAsync(chapter.folderPath, {
+            idempotent: true,
+          }).catch(() => {});
+        }
+        updateChapter(data.mangaId, data.chapterId, {
+          status: "queued",
+          progress: 0,
+          downloadedImages: 0,
+          imageCount: 0,
+          sizeBytes: 0,
+          downloadedAt: undefined,
+        });
+        retryQueueRef.current.push(data);
+        processRetryQueue();
+      },
+    );
     return () => sub.remove();
   }, [processRetryQueue, updateChapter, getTitle]);
 
   // Clean up local refs/state when tabs are removed from the store.
   useEffect(() => {
-    const tabIds = new Set(tabs.map(t => t.id));
+    const tabIds = new Set(tabs.map((t) => t.id));
     for (const id of Object.keys(webViewRefs.current)) {
       if (!tabIds.has(id)) {
         delete webViewRefs.current[id];
         delete isHistoryNavRef.current[id];
         delete webViewCanGoBackRef.current[id];
         delete webViewCanGoForwardRef.current[id];
-        setDetectedVideosMap(prev => { const next = { ...prev }; delete next[id]; return next; });
-        setBannerDismissedMap(prev => { const next = { ...prev }; delete next[id]; return next; });
-        setLoadStateMap(prev => { const next = { ...prev }; delete next[id]; return next; });
+        setDetectedVideosMap((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        setBannerDismissedMap((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        setLoadStateMap((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
       }
     }
   }, [tabs]);
 
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
-  const barStyle = c.background === '#000000' || c.background === '#1C1C1E' ? 'light-content' : 'dark-content';
+  const barStyle =
+    c.background === "#000000" || c.background === "#1C1C1E"
+      ? "light-content"
+      : "dark-content";
 
   if (!isReady) {
     return (
-      <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top }]}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: c.background, paddingTop: insets.top },
+        ]}
+      >
         <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4ECDC4" />
@@ -1187,22 +1447,32 @@ function BrowserScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: c.background, paddingTop: insets.top, marginBottom: -15 }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: c.background,
+          paddingTop: insets.top,
+          marginBottom: -15,
+        },
+      ]}
+    >
       <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
 
-      {!isVideoPlaying &&
-          <AddressBarContainer
-            onNavigate={handleNavigate}
-            onGoBack={handleGoBackActive}
-            onGoForward={handleGoForwardActive}
-            onReload={handleReloadActive}
-            onMenuAction={(action) => {
-              if (action === 'downloadManga') handleMangaMenuAction();
-            }}
-          />}
+      {!isVideoPlaying && (
+        <AddressBarContainer
+          onNavigate={handleNavigate}
+          onGoBack={handleGoBackActive}
+          onGoForward={handleGoForwardActive}
+          onReload={handleReloadActive}
+          onMenuAction={(action) => {
+            if (action === "downloadManga") handleMangaMenuAction();
+          }}
+        />
+      )}
 
       <View style={styles.webviewArea}>
-        {tabs.find(t => t.id === activeTabId)?.url === 'about:home' && (
+        {tabs.find((t) => t.id === activeTabId)?.url === "about:home" && (
           <HomePage onNavigate={handleNavigate} />
         )}
 
@@ -1225,7 +1495,12 @@ function BrowserScreen() {
           if (!ls?.loading || ls.progress >= 1) return null;
           return (
             <View pointerEvents="none" style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.max(2, ls.progress * 100)}%` }]} />
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${Math.max(2, ls.progress * 100)}%` },
+                ]}
+              />
             </View>
           );
         })()}
@@ -1235,7 +1510,9 @@ function BrowserScreen() {
             error={loadStateMap[activeTabId]!.error!}
             onRetry={handleRetryActive}
             onGoBack={handleGoBackActive}
-            canGoBack={(tabs.find(t => t.id === activeTabId)?.historyIndex ?? 0) > 0}
+            canGoBack={
+              (tabs.find((t) => t.id === activeTabId)?.historyIndex ?? 0) > 0
+            }
           />
         )}
 
@@ -1247,9 +1524,13 @@ function BrowserScreen() {
           position={settings.videoBannerPosition}
           onPreview={handlePreviewVideo}
           onDownload={handleDownloadWithVariant}
-          onDismiss={() => setBannerDismissedMap(prev => ({ ...prev, [activeTabId]: true }))}
+          onDismiss={() =>
+            setBannerDismissedMap((prev) => ({ ...prev, [activeTabId]: true }))
+          }
           onToggleFullscreen={handleToggleFullscreen}
-          onChangePosition={(position) => setSetting('videoBannerPosition', position)}
+          onChangePosition={(position) =>
+            setSetting("videoBannerPosition", position)
+          }
         />
 
         {isVideoPlaying && (
@@ -1292,39 +1573,53 @@ function BrowserScreen() {
         onClose={handleClosePreview}
       />
 
-        <MangaDownloadModal
-          visible={mangaModalVisible}
-          loading={mangaModalLoading}
-          error={mangaModalError}
-          mangaTitle={mangaModalTitle}
-          chapters={mangaModalChapters}
-          onConfirm={handleMangaDownloadConfirm}
-          onCancel={() => { setMangaModalVisible(false); clearBgWebView(); }}
-          onRetry={() => {
-            setMangaModalError(null);
-            setMangaModalLoading(true);
-            loadBgWebView(mangaIndexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
-              .then((chapters: MangaChapterInfo[]) => setMangaModalChapters(chapters))
-              .catch((err: any) => setMangaModalError(err?.message || 'Failed to fetch chapter list'))
-              .finally(() => { setMangaModalLoading(false); clearBgWebView(); });
-          }}
-        />
+      <MangaDownloadModal
+        visible={mangaModalVisible}
+        loading={mangaModalLoading}
+        error={mangaModalError}
+        mangaTitle={mangaModalTitle}
+        chapters={mangaModalChapters}
+        onConfirm={handleMangaDownloadConfirm}
+        onCancel={() => {
+          setMangaModalVisible(false);
+          clearBgWebView();
+        }}
+        onRetry={() => {
+          setMangaModalError(null);
+          setMangaModalLoading(true);
+          loadBgWebView(mangaIndexUrl, MANGA_CHAPTER_LIST_EXTRACTOR_JS)
+            .then((chapters: MangaChapterInfo[]) =>
+              setMangaModalChapters(chapters),
+            )
+            .catch((err: any) =>
+              setMangaModalError(
+                err?.message || "Failed to fetch chapter list",
+              ),
+            )
+            .finally(() => {
+              setMangaModalLoading(false);
+              clearBgWebView();
+            });
+        }}
+      />
 
-        {/* Unsupported manga site modal */}
-        <Modal
-          visible={mangaUnsupportedModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMangaUnsupportedModalVisible(false)}
-        >
-          <View style={styles.unsupportedOverlay}>
-            <View style={styles.unsupportedBox}>
-              <Text style={styles.unsupportedTitle}>Unsupported Website</Text>
-              <Text style={styles.unsupportedDesc}>
-                Manga download is not supported on this site.{'\n'}Tap a supported site below to navigate there:
-              </Text>
-              <ScrollView style={styles.unsupportedList}>
-                {SUPPORTED_MANGA_DOMAINS.filter(d => d.startsWith('www.')).map(domain => (
+      {/* Unsupported manga site modal */}
+      <Modal
+        visible={mangaUnsupportedModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMangaUnsupportedModalVisible(false)}
+      >
+        <View style={styles.unsupportedOverlay}>
+          <View style={styles.unsupportedBox}>
+            <Text style={styles.unsupportedTitle}>Unsupported Website</Text>
+            <Text style={styles.unsupportedDesc}>
+              Manga download is not supported on this site.{"\n"}Tap a supported
+              site below to navigate there:
+            </Text>
+            <ScrollView style={styles.unsupportedList}>
+              {SUPPORTED_MANGA_DOMAINS.filter((d) => d.startsWith("www.")).map(
+                (domain) => (
                   <TouchableOpacity
                     key={domain}
                     style={styles.unsupportedItem}
@@ -1335,18 +1630,18 @@ function BrowserScreen() {
                   >
                     <Text style={styles.unsupportedLink}>{domain}</Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <TouchableOpacity
-                style={styles.unsupportedCloseBtn}
-                onPress={() => setMangaUnsupportedModalVisible(false)}
-              >
-                <Text style={styles.unsupportedCloseText}>Close</Text>
-              </TouchableOpacity>
-            </View>
+                ),
+              )}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.unsupportedCloseBtn}
+              onPress={() => setMangaUnsupportedModalVisible(false)}
+            >
+              <Text style={styles.unsupportedCloseText}>Close</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
-
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1354,23 +1649,23 @@ function BrowserScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
   },
   webviewArea: {
     flex: 1,
   },
   progressTrack: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     zIndex: 10,
   },
   progressFill: {
-    height: '100%',
-    backgroundColor: '#4ECDC4',
+    height: "100%",
+    backgroundColor: "#4ECDC4",
   },
   webviewContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -1384,30 +1679,53 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   unsupportedOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center', justifyContent: 'center',
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   unsupportedBox: {
-    width: '85%', maxHeight: '60%', backgroundColor: '#1e293b',
-    borderRadius: 14, padding: 20, gap: 12,
+    width: "85%",
+    maxHeight: "60%",
+    backgroundColor: "#1e293b",
+    borderRadius: 14,
+    padding: 20,
+    gap: 12,
   },
-  unsupportedTitle: { fontSize: 17, fontWeight: '700', color: '#fff', textAlign: 'center' },
-  unsupportedDesc: { fontSize: 13, color: '#94a3b8', textAlign: 'center', lineHeight: 19 },
+  unsupportedTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#fff",
+    textAlign: "center",
+  },
+  unsupportedDesc: {
+    fontSize: 13,
+    color: "#94a3b8",
+    textAlign: "center",
+    lineHeight: 19,
+  },
   unsupportedList: { maxHeight: 200 },
   unsupportedItem: {
-    paddingVertical: 12, paddingHorizontal: 14,
-    borderRadius: 8, backgroundColor: '#334155', marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#334155",
+    marginBottom: 8,
   },
-  unsupportedLink: { fontSize: 14, color: '#60a5fa', fontWeight: '600' },
+  unsupportedLink: { fontSize: 14, color: "#60a5fa", fontWeight: "600" },
   unsupportedCloseBtn: {
-    alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 24,
-    borderRadius: 8, backgroundColor: '#475569', marginTop: 4,
+    alignSelf: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: "#475569",
+    marginTop: 4,
   },
-  unsupportedCloseText: { fontSize: 14, color: '#fff', fontWeight: '600' },
+  unsupportedCloseText: { fontSize: 14, color: "#fff", fontWeight: "600" },
 });
 
 // ----------------------------------------------------------------------------
@@ -1415,16 +1733,21 @@ const styles = StyleSheet.create({
 // so title updates / tab-list mutations don't re-render the parent BrowserScreen.
 // ----------------------------------------------------------------------------
 
-
 interface AddressBarContainerProps {
   onNavigate: (url: string) => void;
   onGoBack: () => void;
   onGoForward: () => void;
   onReload: () => void;
-  onMenuAction?: (action: 'downloadManga') => void;
+  onMenuAction?: (action: "downloadManga") => void;
 }
 
-function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload, onMenuAction }: AddressBarContainerProps) {
+function AddressBarContainerInner({
+  onNavigate,
+  onGoBack,
+  onGoForward,
+  onReload,
+  onMenuAction,
+}: AddressBarContainerProps) {
   const activeTab = useActiveTab();
   const { bookmarks, addBookmark, removeBookmark } = useSettings();
 
@@ -1434,11 +1757,14 @@ function AddressBarContainerInner({ onNavigate, onGoBack, onGoForward, onReload,
     if (currentBookmark) {
       removeBookmark(currentBookmark.id);
     } else {
-      addBookmark({ title: activeTab.title || activeTab.url, url: activeTab.url });
+      addBookmark({
+        title: activeTab.title || activeTab.url,
+        url: activeTab.url,
+      });
     }
   }, [currentBookmark, activeTab, addBookmark, removeBookmark]);
 
-  const showBookmark = activeTab.url !== 'about:home';
+  const showBookmark = activeTab.url !== "about:home";
 
   return (
     <AddressBar
@@ -1460,9 +1786,15 @@ const AddressBarContainer = React.memo(AddressBarContainerInner);
 
 interface WebViewListProps {
   setWebViewRef: (tabId: string, ref: WebView | null) => void;
-  handleMessage: (tabId: string) => (event: { nativeEvent: { data: string } }) => void;
-  handleNavigationStateChange: (tabId: string) => (navState: WebViewNavigation) => void;
-  handleShouldStartLoadWithRequest: (tabId: string) => (request: ShouldStartLoadRequest) => boolean;
+  handleMessage: (
+    tabId: string,
+  ) => (event: { nativeEvent: { data: string } }) => void;
+  handleNavigationStateChange: (
+    tabId: string,
+  ) => (navState: WebViewNavigation) => void;
+  handleShouldStartLoadWithRequest: (
+    tabId: string,
+  ) => (request: ShouldStartLoadRequest) => boolean;
   handleLoadStart: (tabId: string) => () => void;
   handleLoadProgress: (tabId: string) => (progress: number) => void;
   handleLoadEnd: (tabId: string) => () => void;
@@ -1498,7 +1830,7 @@ function WebViewListInner({
 
   useEffect(() => {
     if (!activeTabId) return;
-    setMountedTabIds(prev => {
+    setMountedTabIds((prev) => {
       if (prev.has(activeTabId)) return prev;
       const next = new Set(prev);
       next.add(activeTabId);
@@ -1516,9 +1848,12 @@ function WebViewListInner({
   // Saved cookies: { origin → [ {name, value} ] }
   // Only name+value are stored — the library uses the origin's host as domain,
   // avoiding null-domain issues that cause silent set() failures on Android.
-  const savedCookiesRef = useRef<Record<string, Array<{ name: string; value: string }>> | null>(null);
+  const savedCookiesRef = useRef<Record<
+    string,
+    Array<{ name: string; value: string }>
+  > | null>(null);
 
-  const incognitoCount = tabs.filter(t => t.incognito && !t.hidden).length;
+  const incognitoCount = tabs.filter((t) => t.incognito && !t.hidden).length;
 
   useEffect(() => {
     const hasIncognito = incognitoCount > 0;
@@ -1528,12 +1863,12 @@ function WebViewListInner({
       // Collect every unique origin visited by regular tabs so we can snapshot
       // their cookies. getAll() is iOS-only; on Android we fetch per-origin.
       const origins = new Set<string>();
-      tabsRef.current.forEach(tab => {
+      tabsRef.current.forEach((tab) => {
         if (!tab.incognito) {
-          (tab.urlHistory ?? [tab.url]).forEach(u => {
+          (tab.urlHistory ?? [tab.url]).forEach((u) => {
             try {
               const { origin } = new URL(u);
-              if (origin && origin !== 'null') origins.add(origin);
+              if (origin && origin !== "null") origins.add(origin);
             } catch {}
           });
         }
@@ -1542,19 +1877,27 @@ function WebViewListInner({
       const originList = [...origins];
       // console.log('[Incognito] >>> SAVE START — scanning origins:', originList);
       // allSettled so one failing origin doesn't abort the whole save.
-      Promise.allSettled(originList.map(o => CookieManager.get(o, false)))
-        .then(results => {
-          const saved: Record<string, Array<{ name: string; value: string }>> = {};
+      Promise.allSettled(originList.map((o) => CookieManager.get(o, false)))
+        .then((results) => {
+          const saved: Record<
+            string,
+            Array<{ name: string; value: string }>
+          > = {};
           results.forEach((r, i) => {
-            if (r.status === 'fulfilled') {
+            if (r.status === "fulfilled") {
               const cookieNames = Object.keys(r.value);
               // console.log('[Incognito] get(', originList[i], ') →', cookieNames.length, 'cookies:', cookieNames);
               const pairs = Object.values(r.value)
-                .filter(c => c.name && c.value)
-                .map(c => ({ name: c.name, value: c.value }));
+                .filter((c) => c.name && c.value)
+                .map((c) => ({ name: c.name, value: c.value }));
               if (pairs.length > 0) saved[originList[i]] = pairs;
             } else {
-              console.warn('[Incognito] get(', originList[i], ') REJECTED:', r.reason);
+              console.warn(
+                "[Incognito] get(",
+                originList[i],
+                ") REJECTED:",
+                r.reason,
+              );
             }
           });
           const total = Object.values(saved).reduce((s, c) => s + c.length, 0);
@@ -1587,18 +1930,28 @@ function WebViewListInner({
       setIncognitoReady(false);
       const saved = savedCookiesRef.current!;
       savedCookiesRef.current = null;
-      const totalToRestore = Object.values(saved).reduce((s, c) => s + c.length, 0);
+      const totalToRestore = Object.values(saved).reduce(
+        (s, c) => s + c.length,
+        0,
+      );
       // console.log('[Incognito] >>> RESTORE START —', totalToRestore, 'cookies across', Object.keys(saved).length, 'origins');
-      const buildSetCookie = (origin: string, name: string, value: string): string => {
-        const parts = [`${name}=${value}`, 'Path=/'];
-        if (origin.startsWith('https://')) parts.push('Secure');
-        return parts.join('; ');
+      const buildSetCookie = (
+        origin: string,
+        name: string,
+        value: string,
+      ): string => {
+        const parts = [`${name}=${value}`, "Path=/"];
+        if (origin.startsWith("https://")) parts.push("Secure");
+        return parts.join("; ");
       };
       Promise.all(
         Object.entries(saved).flatMap(([origin, cookies]) =>
-          cookies.map(cookie =>
-            CookieManager.setFromResponse(origin, buildSetCookie(origin, cookie.name, cookie.value))
-              .then(success => {
+          cookies.map((cookie) =>
+            CookieManager.setFromResponse(
+              origin,
+              buildSetCookie(origin, cookie.name, cookie.value),
+            )
+              .then((success) => {
                 // if (!success) console.warn('[Incognito] REJECTED', cookie.name, 'on', origin);
                 return success;
               })
@@ -1609,8 +1962,8 @@ function WebViewListInner({
           ),
         ),
       )
-        .then(results => {
-          const ok = results.filter(r => r === true).length;
+        .then((results) => {
+          const ok = results.filter((r) => r === true).length;
           // console.log('[Incognito] RESTORE done —', ok, '/', results.length, 'cookies accepted');
           return CookieManager.flush();
         })
@@ -1628,8 +1981,8 @@ function WebViewListInner({
   return (
     <View style={styles.webviewContainer}>
       {tabs
-        .filter(tab => {
-          if (tab.url === 'about:home') return false;
+        .filter((tab) => {
+          if (tab.url === "about:home") return false;
           // Defer mounting until the tab is first activated.
           if (!mountedTabIds.has(tab.id)) return false;
           // Incognito tab: only mount once cookies have been saved + cleared.
@@ -1639,20 +1992,23 @@ function WebViewListInner({
           // cookies and show a logged-out state.
           return !regularTabsHidden;
         })
-        .map(tab => (
+        .map((tab) => (
           <View
             key={tab.id}
             style={[
               styles.webviewWrapper,
               tab.id !== activeTabId && styles.hiddenTab,
             ]}
-            pointerEvents={tab.id === activeTabId ? 'auto' : 'none'}>
+            pointerEvents={tab.id === activeTabId ? "auto" : "none"}
+          >
             <Browser
               webViewRef={(ref: WebView | null) => setWebViewRef(tab.id, ref)}
               currentUrl={tab.url}
               handleMessage={handleMessage(tab.id)}
               handleNavigationStateChange={handleNavigationStateChange(tab.id)}
-              handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(tab.id)}
+              handleShouldStartLoadWithRequest={handleShouldStartLoadWithRequest(
+                tab.id,
+              )}
               onLoadStart={handleLoadStart(tab.id)}
               onLoadProgress={handleLoadProgress(tab.id)}
               onLoadEnd={handleLoadEnd(tab.id)}

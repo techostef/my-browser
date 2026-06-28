@@ -1,5 +1,5 @@
-import OpenAI from 'openai';
 import { createReadStream } from 'fs';
+import OpenAI from 'openai';
 import { parseSrt, type Segment } from '../../lib/videoEditor/srt';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

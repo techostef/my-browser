@@ -1,13 +1,13 @@
 import React, {
   createContext,
-  useContext,
-  useReducer,
   useCallback,
+  useContext,
   useEffect,
-  useRef,
   useMemo,
-} from 'react';
-import mobileAds from 'react-native-google-mobile-ads';
+  useReducer,
+  useRef,
+} from "react";
+import mobileAds from "react-native-google-mobile-ads";
 
 const AD_TRIGGER_FREQUENCY = 3;
 
@@ -24,20 +24,21 @@ interface AdActions {
   markAdCompleted: () => void;
 }
 
-type AdAction =
-  | { type: 'INCREMENT_DOWNLOAD' }
-  | { type: 'MARK_AD_COMPLETED' };
+type AdAction = { type: "INCREMENT_DOWNLOAD" } | { type: "MARK_AD_COMPLETED" };
 
 function adReducer(state: AdState, action: AdAction): AdState {
   switch (action.type) {
-    case 'INCREMENT_DOWNLOAD': {
+    case "INCREMENT_DOWNLOAD": {
       const newCount = state.downloadCount + 1;
       return {
         downloadCount: newCount,
-        pendingInterstitial: newCount % AD_TRIGGER_FREQUENCY === 0 ? true : state.pendingInterstitial,
+        pendingInterstitial:
+          newCount % AD_TRIGGER_FREQUENCY === 0
+            ? true
+            : state.pendingInterstitial,
       };
     }
-    case 'MARK_AD_COMPLETED':
+    case "MARK_AD_COMPLETED":
       return { ...state, pendingInterstitial: false };
     default:
       return state;
@@ -58,24 +59,26 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     mobileAds()
-      .setRequestConfiguration({ testDeviceIdentifiers: ['EMULATOR'] })
+      .setRequestConfiguration({ testDeviceIdentifiers: ["EMULATOR"] })
       .then(() => mobileAds().initialize())
-      .catch(err => {
-        console.warn('MobileAds init failed:', err);
+      .catch((err) => {
+        console.warn("MobileAds init failed:", err);
       });
   }, []);
 
   const markAdCompleted = useCallback(() => {
-    dispatch({ type: 'MARK_AD_COMPLETED' });
+    dispatch({ type: "MARK_AD_COMPLETED" });
     const pending = pendingDownloadRef.current;
     pendingDownloadRef.current = null;
-    if (pending) { pending(); }
+    if (pending) {
+      pending();
+    }
   }, []);
 
   const requestDownload = useCallback((startFn: () => void) => {
     countRef.current += 1;
     const triggersAd = countRef.current % AD_TRIGGER_FREQUENCY === 0;
-    dispatch({ type: 'INCREMENT_DOWNLOAD' });
+    dispatch({ type: "INCREMENT_DOWNLOAD" });
     if (triggersAd) {
       // Ad will show via AdController; download starts after markAdCompleted fires.
       pendingDownloadRef.current = startFn;
@@ -100,12 +103,12 @@ export function AdProvider({ children }: { children: React.ReactNode }) {
 
 export function useAdState(): AdState {
   const ctx = useContext(AdStateContext);
-  if (!ctx) throw new Error('useAdState must be used within AdProvider');
+  if (!ctx) throw new Error("useAdState must be used within AdProvider");
   return ctx;
 }
 
 export function useAdActions(): AdActions {
   const ctx = useContext(AdActionsContext);
-  if (!ctx) throw new Error('useAdActions must be used within AdProvider');
+  if (!ctx) throw new Error("useAdActions must be used within AdProvider");
   return ctx;
 }
