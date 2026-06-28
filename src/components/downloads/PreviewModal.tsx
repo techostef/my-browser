@@ -253,7 +253,10 @@ export default function PreviewModal({
       ({ isPlaying: playing }) => {
         if (!active) return;
         setIsPlaying(playing);
-        if (!playing) setShowControls(true);
+        // Auto-show controls when genuinely paused, but not during a
+        // programmatic seek (double-tap / drag) — expo-video reports a brief
+        // playing=false while seeking, which would flicker the controls back.
+        if (!playing && seekTargetMsRef.current === null) setShowControls(true);
       },
     );
     const interval = setInterval(() => {
@@ -420,6 +423,7 @@ export default function PreviewModal({
       .onEnd(() => {
         seekByRef.current(-SEEK_SECS);
         flashHintRef.current("left");
+        setShowControls(false);
       });
     const single = Gesture.Tap()
       .numberOfTaps(1)
@@ -439,6 +443,7 @@ export default function PreviewModal({
       .onEnd(() => {
         seekByRef.current(SEEK_SECS);
         flashHintRef.current("right");
+        setShowControls(false);
       });
     const single = Gesture.Tap()
       .numberOfTaps(1)

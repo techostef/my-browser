@@ -206,6 +206,15 @@ export default function VideoPlayerController({
     ]).start();
   };
 
+  const hideControls = useCallback(() => {
+    cancelHide();
+    Animated.timing(opacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => setControlsVisible(false));
+  }, [opacity, cancelHide]);
+
   const toggleControls = useCallback(() => {
     if (controlsVisible) {
       cancelHide();
@@ -227,8 +236,8 @@ export default function VideoPlayerController({
   onSkipBackRef.current = onSkipBack;
   const onSkipForwardRef = useRef(onSkipForward);
   onSkipForwardRef.current = onSkipForward;
-  const showControlsRef = useRef(showControls);
-  showControlsRef.current = showControls;
+  const hideControlsRef = useRef(hideControls);
+  hideControlsRef.current = hideControls;
 
   const leftTapGesture = useMemo(() => {
     const dbl = Gesture.Tap()
@@ -238,7 +247,7 @@ export default function VideoPlayerController({
       .onEnd(() => {
         onSkipBackRef.current();
         flashSeekIndicator(leftOpacity, leftScale);
-        showControlsRef.current();
+        hideControlsRef.current();
       });
     const single = Gesture.Tap()
       .numberOfTaps(1)
@@ -258,7 +267,7 @@ export default function VideoPlayerController({
       .onEnd(() => {
         onSkipForwardRef.current();
         flashSeekIndicator(rightOpacity, rightScale);
-        showControlsRef.current();
+        hideControlsRef.current();
       });
     const single = Gesture.Tap()
       .numberOfTaps(1)
