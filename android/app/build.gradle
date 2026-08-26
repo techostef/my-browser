@@ -52,7 +52,7 @@ react {
     //   The list of variants to that are debuggable. For those we're going to
     //   skip the bundling of the JS bundle and the assets. By default is just 'debug'.
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "prodDebug"]
+    debuggableVariants = ["obrowserDebug", "legacyDebug"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -117,6 +117,24 @@ android {
         versionCode 1
         versionName "1.0.0"
     }
+
+    // Two apps ship from this one codebase. `namespace` above stays the same for
+    // every variant — it only names the Kotlin/R/BuildConfig package, not the id
+    // the app installs under. Only `applicationId` decides that.
+    flavorDimensions = ["brand"]
+    productFlavors {
+        obrowser {
+            dimension "brand"
+            // inherits applicationId / versionCode / versionName from defaultConfig
+        }
+        legacy {
+            dimension "brand"
+            applicationId 'com.mybrowser.app'
+            versionCode 2          // must stay above the versionCode live on Play
+            versionName "1.0.1"
+        }
+    }
+
     def keystorePropertiesFile = rootProject.file("keystore.properties")
     def keystoreProperties = new Properties()
     if (keystorePropertiesFile.exists()) {
@@ -143,7 +161,12 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.release
+            // Local device testing only: pass -PuseDebugSigning=true to sign with
+            // the debug key so a build can update an already-installed debug APK
+            // in place. Play builds must never set it — default stays release.
+            // Delete the existing APK before flipping this flag: AGP repackages
+            // incrementally and will not re-sign an APK that is otherwise current.
+            signingConfig (findProperty('useDebugSigning')?.toBoolean() ? signingConfigs.debug : signingConfigs.release)
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"

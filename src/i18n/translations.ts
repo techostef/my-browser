@@ -140,6 +140,7 @@ export interface Translations {
   movingToDevice: string;
   unableToMoveSomeFiles: string;
   deviceScanRunning: string;
+  readingDurations: string;
   deviceScanResults: string;
   scanningDeviceFolder: string;
   folderEmpty: string;
@@ -157,6 +158,7 @@ export interface Translations {
   root: string;
   filterAll: string;
   labels: string;
+  filterUnlabeled: string;
   selected: string;
   deselectAll: string;
   selectAll: string;
@@ -551,6 +553,7 @@ const en: Translations = {
   movingToDevice: 'Moving to device download...',
   unableToMoveSomeFiles: 'Unable to move some files',
   deviceScanRunning: 'Device download scan is running...',
+  readingDurations: 'Reading media durations...',
   deviceScanResults: 'Showing last scanned device download results',
   scanningDeviceFolder: 'Scanning device folder...',
   folderEmpty: 'This folder is empty',
@@ -568,6 +571,7 @@ const en: Translations = {
   root: 'Root',
   filterAll: 'Filter All',
   labels: 'labels',
+  filterUnlabeled: 'Unlabeled',
   selected: 'selected',
   deselectAll: 'Deselect all',
   selectAll: 'Select all',
@@ -948,6 +952,7 @@ const es: Translations = {
   movingToDevice: 'Moviendo a descargas del dispositivo...',
   unableToMoveSomeFiles: 'No se pueden mover algunos archivos',
   deviceScanRunning: 'Escaneo de descargas del dispositivo en curso...',
+  readingDurations: 'Leyendo duraciones de los archivos...',
   deviceScanResults: 'Mostrando últimos resultados del escaneo',
   scanningDeviceFolder: 'Escaneando carpeta del dispositivo...',
   folderEmpty: 'Esta carpeta está vacía',
@@ -965,6 +970,7 @@ const es: Translations = {
   root: 'Raíz',
   filterAll: 'Filtrar todo',
   labels: 'etiquetas',
+  filterUnlabeled: 'Sin etiqueta',
   selected: 'seleccionados',
   deselectAll: 'Deseleccionar todo',
   selectAll: 'Seleccionar todo',
@@ -1344,6 +1350,7 @@ const fr: Translations = {
   movingToDevice: 'Déplacement vers les téléchargements de l\'appareil...',
   unableToMoveSomeFiles: 'Impossible de déplacer certains fichiers',
   deviceScanRunning: 'Analyse des téléchargements de l\'appareil en cours...',
+  readingDurations: 'Lecture des durées des médias...',
   deviceScanResults: 'Affichage des derniers résultats d\'analyse',
   scanningDeviceFolder: 'Analyse du dossier de l\'appareil...',
   folderEmpty: 'Ce dossier est vide',
@@ -1361,6 +1368,7 @@ const fr: Translations = {
   root: 'Racine',
   filterAll: 'Tout filtrer',
   labels: 'étiquettes',
+  filterUnlabeled: 'Sans étiquette',
   selected: 'sélectionnés',
   deselectAll: 'Tout désélectionner',
   selectAll: 'Tout sélectionner',
@@ -1740,6 +1748,7 @@ const de: Translations = {
   movingToDevice: 'Wird in Geräte-Downloads verschoben...',
   unableToMoveSomeFiles: 'Einige Dateien können nicht verschoben werden',
   deviceScanRunning: 'Geräte-Download-Scan läuft...',
+  readingDurations: 'Mediendauern werden gelesen...',
   deviceScanResults: 'Letzte Scan-Ergebnisse werden angezeigt',
   scanningDeviceFolder: 'Geräteordner wird gescannt...',
   folderEmpty: 'Dieser Ordner ist leer',
@@ -1757,6 +1766,7 @@ const de: Translations = {
   root: 'Stammverzeichnis',
   filterAll: 'Alle filtern',
   labels: 'Labels',
+  filterUnlabeled: 'Ohne Label',
   selected: 'ausgewählt',
   deselectAll: 'Alle abwählen',
   selectAll: 'Alle auswählen',
@@ -2136,6 +2146,7 @@ const ja: Translations = {
   movingToDevice: 'デバイスのダウンロードに移動中...',
   unableToMoveSomeFiles: '一部のファイルを移動できません',
   deviceScanRunning: 'デバイスダウンロードのスキャン中...',
+  readingDurations: '再生時間を読み取っています...',
   deviceScanResults: '最後のスキャン結果を表示中',
   scanningDeviceFolder: 'デバイスフォルダをスキャン中...',
   folderEmpty: 'このフォルダは空です',
@@ -2153,6 +2164,7 @@ const ja: Translations = {
   root: 'ルート',
   filterAll: 'すべてフィルター',
   labels: 'ラベル',
+  filterUnlabeled: 'ラベルなし',
   selected: '選択済み',
   deselectAll: 'すべて選択解除',
   selectAll: 'すべて選択',
@@ -2532,6 +2544,7 @@ const ko: Translations = {
   movingToDevice: '기기 다운로드로 이동 중...',
   unableToMoveSomeFiles: '일부 파일을 이동할 수 없습니다',
   deviceScanRunning: '기기 다운로드 스캔 진행 중...',
+  readingDurations: '미디어 재생 시간을 읽는 중...',
   deviceScanResults: '마지막 스캔 결과 표시 중',
   scanningDeviceFolder: '기기 폴더 스캔 중...',
   folderEmpty: '이 폴더는 비어 있습니다',
@@ -2549,6 +2562,7 @@ const ko: Translations = {
   root: '루트',
   filterAll: '전체 필터',
   labels: '라벨',
+  filterUnlabeled: '라벨 없음',
   selected: '선택됨',
   deselectAll: '전체 선택 해제',
   selectAll: '전체 선택',
@@ -2928,6 +2942,7 @@ const zhCN: Translations = {
   movingToDevice: '正在移动到设备下载...',
   unableToMoveSomeFiles: '无法移动部分文件',
   deviceScanRunning: '设备下载扫描进行中...',
+  readingDurations: '正在读取媒体时长...',
   deviceScanResults: '显示上次扫描结果',
   scanningDeviceFolder: '正在扫描设备文件夹...',
   folderEmpty: '此文件夹为空',
@@ -2945,6 +2960,7 @@ const zhCN: Translations = {
   root: '根目录',
   filterAll: '筛选全部',
   labels: '标签',
+  filterUnlabeled: '无标签',
   selected: '已选择',
   deselectAll: '取消全选',
   selectAll: '全选',
@@ -3324,6 +3340,7 @@ const ar: Translations = {
   movingToDevice: 'جارٍ النقل إلى تنزيلات الجهاز...',
   unableToMoveSomeFiles: 'تعذر نقل بعض الملفات',
   deviceScanRunning: 'جارٍ فحص تنزيلات الجهاز...',
+  readingDurations: 'جارٍ قراءة مدد الوسائط...',
   deviceScanResults: 'عرض آخر نتائج الفحص',
   scanningDeviceFolder: 'جارٍ فحص مجلد الجهاز...',
   folderEmpty: 'هذا المجلد فارغ',
@@ -3341,6 +3358,7 @@ const ar: Translations = {
   root: 'الجذر',
   filterAll: 'تصفية الكل',
   labels: 'تصنيفات',
+  filterUnlabeled: 'بدون تصنيف',
   selected: 'محدد',
   deselectAll: 'إلغاء تحديد الكل',
   selectAll: 'تحديد الكل',
@@ -3720,6 +3738,7 @@ const pt: Translations = {
   movingToDevice: 'Movendo para downloads do dispositivo...',
   unableToMoveSomeFiles: 'Não foi possível mover alguns arquivos',
   deviceScanRunning: 'Verificação de downloads do dispositivo em andamento...',
+  readingDurations: 'Lendo as durações das mídias...',
   deviceScanResults: 'Mostrando últimos resultados da verificação',
   scanningDeviceFolder: 'Verificando pasta do dispositivo...',
   folderEmpty: 'Esta pasta está vazia',
@@ -3737,6 +3756,7 @@ const pt: Translations = {
   root: 'Raiz',
   filterAll: 'Filtrar tudo',
   labels: 'rótulos',
+  filterUnlabeled: 'Sem rótulo',
   selected: 'selecionados',
   deselectAll: 'Desmarcar tudo',
   selectAll: 'Selecionar tudo',
@@ -4116,6 +4136,7 @@ const ru: Translations = {
   movingToDevice: 'Перемещение в загрузки устройства...',
   unableToMoveSomeFiles: 'Не удалось переместить некоторые файлы',
   deviceScanRunning: 'Сканирование загрузок устройства...',
+  readingDurations: 'Чтение длительности файлов...',
   deviceScanResults: 'Показаны последние результаты сканирования',
   scanningDeviceFolder: 'Сканирование папки устройства...',
   folderEmpty: 'Эта папка пуста',
@@ -4133,6 +4154,7 @@ const ru: Translations = {
   root: 'Корень',
   filterAll: 'Фильтровать всё',
   labels: 'метки',
+  filterUnlabeled: 'Без метки',
   selected: 'выбрано',
   deselectAll: 'Снять выделение',
   selectAll: 'Выбрать все',
@@ -4512,6 +4534,7 @@ const id: Translations = {
   movingToDevice: 'Memindahkan ke unduhan perangkat...',
   unableToMoveSomeFiles: 'Tidak dapat memindahkan beberapa file',
   deviceScanRunning: 'Pemindaian unduhan perangkat sedang berjalan...',
+  readingDurations: 'Membaca durasi media...',
   deviceScanResults: 'Menampilkan hasil pemindaian unduhan perangkat terakhir',
   scanningDeviceFolder: 'Memindai folder perangkat...',
   folderEmpty: 'Folder ini kosong',
@@ -4529,6 +4552,7 @@ const id: Translations = {
   root: 'Akar',
   filterAll: 'Semua Filter',
   labels: 'label',
+  filterUnlabeled: 'Belum dilabeli',
   selected: 'dipilih',
   deselectAll: 'Batalkan semua pilihan',
   selectAll: 'Pilih semua',

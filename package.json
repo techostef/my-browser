@@ -4,7 +4,12 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "android": "expo run:android",
+    "android": "expo run:android --variant obrowserDebug --app-id com.techoky.obrowser",
+    "android:legacy": "expo run:android --variant legacyDebug --app-id com.mybrowser.app",
+    "aab:obrowser": "cd android && gradlew.bat bundleObrowserRelease",
+    "aab:legacy": "cd android && gradlew.bat bundleLegacyRelease",
+    "apk:obrowser": "cd android && gradlew.bat assembleObrowserRelease",
+    "apk:legacy": "cd android && gradlew.bat assembleLegacyRelease",
     "ios": "expo run:ios",
     "start": "expo start",
     "web": "expo start --web",

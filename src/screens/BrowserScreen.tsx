@@ -4,6 +4,7 @@
 /** biome-ignore-all lint/suspicious/useIterableCallbackReturn: <explanation> */
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
+import * as ScreenOrientation from "expo-screen-orientation";
 import React, {
   useCallback,
   useEffect,
@@ -42,8 +43,9 @@ import MangaDownloadModal from "../components/manga/MangaDownloadModal";
 import PageErrorView, { PageError } from "../components/PageErrorView";
 import PopupBlockedBanner from "../components/PopupBlockedBanner";
 import VideoDetectedBanner from "../components/VideoDetectedBanner";
-import VideoPlayerController from "../components/VideoPlayerController";
-import VideoPreviewModal from "../components/VideoPreviewModal";
+import MediaPlayerModal from "../components/player/MediaPlayerModal";
+import type { VideoController } from "../components/player/types";
+import VideoControls from "../components/player/VideoControls";
 import { useMangaBgWebView } from "../context/MangaBgWebViewContext";
 import { AD_BLOCKER_JS } from "../services/adBlocker";
 import {
@@ -511,6 +513,10 @@ function BrowserScreen() {
   // Video preview modal state
   const [previewVideo, setPreviewVideo] = useState<DetectedVideo | null>(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  // Landscape for the in-page fullscreen video. app.json pins the app to
+  // portrait; ScreenOrientation overrides that at runtime, so every exit path
+  // below must unlock or the browser stays stuck sideways.
+  const [isVideoLandscape, setIsVideoLandscape] = useState(false);
 
   // Live video state — driven by VIDEO_STATE messages while fullscreen is active
   const [liveCurrentTime, setLiveCurrentTime] = useState(0);
@@ -590,6 +596,35 @@ function BrowserScreen() {
       `(function(){var v=document.querySelector('.__rn-playing');if(v){v.currentTime=Math.min(v.duration||0,v.currentTime+10);return;}var f=document.querySelector('iframe[data-rn-fullscreen="1"]');if(f){try{f.contentWindow.postMessage({type:'__RN_FS_SKIP_FORWARD'},'*');}catch(_){}}})();true;`,
     );
   }, [activeTabId]);
+
+  // The page's own <video> element is the playback engine here, so the
+  // controller is just the inject helpers above bundled into the shape
+  // VideoControls expects.
+  const liveController = useMemo<VideoController>(
+    () => ({
+      currentTime: liveCurrentTime,
+      duration: liveDuration,
+      isPaused: liveIsPaused,
+      isMuted: liveIsMuted,
+      isBuffering: false,
+      togglePlay: injectLiveTogglePlay,
+      toggleMute: injectLiveToggleMute,
+      seek: injectLiveSeek,
+      skipBack: injectLiveSkipBack,
+      skipForward: injectLiveSkipForward,
+    }),
+    [
+      liveCurrentTime,
+      liveDuration,
+      liveIsPaused,
+      liveIsMuted,
+      injectLiveTogglePlay,
+      injectLiveToggleMute,
+      injectLiveSeek,
+      injectLiveSkipBack,
+      injectLiveSkipForward,
+    ],
+  );
 
   const handleClosePreview = useCallback(() => {
     // If extraction is still in flight, mark it cancelled so the END handler
@@ -694,11 +729,42 @@ function BrowserScreen() {
   useEffect(() => {
     if (!isVideoPlaying) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      // Back leaves landscape first, and only exits fullscreen on the
+      // second press — same two-step as the download player.
+      if (isVideoLandscape) {
+        setIsVideoLandscape(false);
+        ScreenOrientation.unlockAsync();
+        return true;
+      }
       handleToggleFullscreen();
       return true;
     });
     return () => sub.remove();
-  }, [isVideoPlaying, handleToggleFullscreen]);
+  }, [isVideoPlaying, isVideoLandscape, handleToggleFullscreen]);
+
+  useEffect(() => {
+    if (isVideoLandscape) {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    } else {
+      ScreenOrientation.unlockAsync();
+    }
+  }, [isVideoLandscape]);
+
+  // Leaving fullscreen, switching tabs, or unmounting must all drop the
+  // landscape lock — otherwise the browser itself is left rotated.
+  useEffect(() => {
+    if (!isVideoPlaying) setIsVideoLandscape(false);
+  }, [isVideoPlaying]);
+
+  useEffect(() => {
+    setIsVideoLandscape(false);
+  }, [activeTabId]);
+
+  useEffect(() => {
+    return () => {
+      ScreenOrientation.unlockAsync();
+    };
+  }, []);
 
   // Hide the bottom tab bar while a video is in fullscreen, restore on exit.
   // BrowserScreen is registered as a Tab.Screen, so its own navigation is
@@ -1534,22 +1600,16 @@ function BrowserScreen() {
         />
 
         {isVideoPlaying && (
-          <VideoPlayerController
+          <VideoControls
+            controller={liveController}
             headerTitle={navbarTitle}
-            onMinimize={handleToggleFullscreen}
+            onClose={handleToggleFullscreen}
+            isLandscape={isVideoLandscape}
+            onToggleOrientation={() => setIsVideoLandscape((l) => !l)}
             playingUrl={activePlayingVideoUrl}
             segmentBlob={activeSegmentBlob}
             videos={activeDetectedVideos}
             onDownloadVariant={handleDownloadWithVariant}
-            currentTime={liveCurrentTime}
-            duration={liveDuration}
-            isPaused={liveIsPaused}
-            isMuted={liveIsMuted}
-            onTogglePlay={injectLiveTogglePlay}
-            onToggleMute={injectLiveToggleMute}
-            onSeek={injectLiveSeek}
-            onSkipBack={injectLiveSkipBack}
-            onSkipForward={injectLiveSkipForward}
           />
         )}
       </View>
@@ -1566,10 +1626,13 @@ function BrowserScreen() {
         />
       )}
 
-      <VideoPreviewModal
-        visible={previewVideo !== null}
-        video={previewVideo}
-        onDownload={handleDownload}
+      <MediaPlayerModal
+        source={previewVideo ? { kind: "remote", video: previewVideo } : null}
+        onDownload={() => {
+          if (!previewVideo) return;
+          handleDownload(previewVideo);
+          handleClosePreview();
+        }}
         onClose={handleClosePreview}
       />
 

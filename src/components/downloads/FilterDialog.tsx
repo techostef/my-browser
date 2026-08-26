@@ -22,9 +22,11 @@ type Props = {
   filterType: FilterType;
   labelFilter: string[];
   labelDefs: string[];
+  unlabeledOnly: boolean;
   isFilterActive: boolean;
   onFilterType: (f: FilterType) => void;
   onLabelFilter: (labels: string[]) => void;
+  onUnlabeledOnly: (v: boolean) => void;
   onClose: () => void;
   onClear: () => void;
 };
@@ -34,9 +36,11 @@ export default function FilterDialog({
   filterType,
   labelFilter,
   labelDefs,
+  unlabeledOnly,
   isFilterActive,
   onFilterType,
   onLabelFilter,
+  onUnlabeledOnly,
   onClose,
   onClear,
 }: Props) {
@@ -83,19 +87,42 @@ export default function FilterDialog({
             <>
               <Text style={styles.section}>{t("labels")}</Text>
               <View style={styles.chips}>
+                <TouchableOpacity
+                  style={[
+                    styles.chip,
+                    unlabeledOnly && styles.chipLabelActive,
+                  ]}
+                  onPress={() => {
+                    // Mutually exclusive with the label chips: the label filter
+                    // is AND-based, so "has no labels AND has label X" would
+                    // always match nothing.
+                    if (!unlabeledOnly) onLabelFilter([]);
+                    onUnlabeledOnly(!unlabeledOnly);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      unlabeledOnly && styles.chipTextActive,
+                    ]}
+                  >
+                    🏷 {t("filterUnlabeled")}
+                  </Text>
+                </TouchableOpacity>
                 {labelDefs.map((lbl) => {
                   const active = labelFilter.includes(lbl);
                   return (
                     <TouchableOpacity
                       key={lbl}
                       style={[styles.chip, active && styles.chipLabelActive]}
-                      onPress={() =>
+                      onPress={() => {
+                        if (!active) onUnlabeledOnly(false);
                         onLabelFilter(
                           active
                             ? labelFilter.filter((l) => l !== lbl)
                             : [...labelFilter, lbl],
-                        )
-                      }
+                        );
+                      }}
                     >
                       <Text
                         style={[

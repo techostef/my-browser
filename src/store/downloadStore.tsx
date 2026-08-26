@@ -10,7 +10,7 @@ import React, {
   useReducer,
   useRef,
 } from "react";
-import { downloadManager } from "../services/downloadManager";
+import { downloadManager, probeDurations } from "../services/downloadManager";
 import {
   DetectedVideo,
   DEVICE_DOWNLOAD_MOVE_TARGET,
@@ -79,6 +79,7 @@ interface DownloadContextValue extends DownloadState {
   removeDownload: (id: string) => Promise<string | null>;
   deleteFromTrash: (id: string) => void;
   prefetchDeviceFileSizes: (ids: string[]) => void;
+  ensureDurations: (ids: string[]) => Promise<void>;
 }
 
 const DEVICE_SCAN_CACHE_KEY = "@device_download_scan_cache_v2";
@@ -176,6 +177,18 @@ function downloadReducer(
         }),
       };
 
+    case "SET_FILE_DURATIONS":
+      return {
+        ...state,
+        downloads: state.downloads.map((d) => {
+          const next = action.payload.durations[d.id];
+          if (next === undefined || d.duration === next) {
+            return d;
+          }
+          return { ...d, duration: next };
+        }),
+      };
+
     case "REMOVE_DOWNLOAD":
       return {
         ...state,
@@ -221,9 +234,11 @@ interface DownloadActions {
   scanDeviceDownloadFolder: DownloadContextValue["scanDeviceDownloadFolder"];
   moveDownloadToFolder: DownloadContextValue["moveDownloadToFolder"];
   bulkMoveDownloadsToFolder: DownloadContextValue["bulkMoveDownloadsToFolder"];
+  countMoveConflicts: DownloadContextValue["countMoveConflicts"];
   removeDownload: DownloadContextValue["removeDownload"];
   deleteFromTrash: DownloadContextValue["deleteFromTrash"];
   prefetchDeviceFileSizes: DownloadContextValue["prefetchDeviceFileSizes"];
+  ensureDurations: DownloadContextValue["ensureDurations"];
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null);
@@ -236,6 +251,16 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
 
   const downloadsRef = useRef(state.downloads);
   downloadsRef.current = state.downloads;
+
+  const foldersRef = useRef(state.folders);
+  foldersRef.current = state.folders;
+
+  const deviceFoldersRef = useRef(state.deviceFolders);
+  deviceFoldersRef.current = state.deviceFolders;
+
+  // Ids already handed to a duration probe this session — probing is expensive and
+  // a miss stays a miss, so never queue the same file twice.
+  const requestedDurationIdsRef = useRef<Set<string>>(new Set());
 
   const persistDeviceScanCache = useCallback(
     async (files: DownloadTask[], folders: string[]) => {
@@ -1032,6 +1057,60 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Fill in durations for files that don't have one yet. Device files get their
+  // duration from MediaStore during the scan, but files MediaStore indexes as
+  // MEDIA_TYPE_NONE come back with 0 — and private files only get probed during a
+  // folder walk. Both cases end up here, probed on demand and written back to the
+  // persisted caches so the work happens once.
+  const ensureDurations = useCallback(async (ids: string[]) => {
+    const pending = ids.filter((id) => {
+      if (requestedDurationIdsRef.current.has(id)) {
+        return false;
+      }
+      const task = downloadsRef.current.find((d) => d.id === id);
+      return !!task && !!task.filePath && !task.duration;
+    });
+    // TEMPORARY DIAGNOSTIC — remove with the [dur] logging in downloadManager.
+    console.log('[dur] ensureDurations: asked=', ids.length, 'pending=', pending.length);
+    if (pending.length === 0) {
+      return;
+    }
+    for (const id of pending) {
+      requestedDurationIdsRef.current.add(id);
+    }
+
+    const items = pending
+      .map((id) => {
+        const task = downloadsRef.current.find((d) => d.id === id);
+        return task?.filePath ? { id, filePath: task.filePath } : null;
+      })
+      .filter((it): it is { id: string; filePath: string } => it !== null);
+
+    const durations = await probeDurations(items);
+    console.log('[dur] ensureDurations: resolved=', Object.keys(durations).length, 'of', items.length);
+    if (Object.keys(durations).length === 0) {
+      return;
+    }
+    dispatchRef.current({ type: "SET_FILE_DURATIONS", payload: { durations } });
+
+    // Persist so the next app start reads durations straight from cache.
+    const updated = downloadsRef.current.map((d) =>
+      durations[d.id] !== undefined ? { ...d, duration: durations[d.id] } : d,
+    );
+    const devices = updated.filter(
+      (d) => d.status === "completed" && d.source === "device",
+    );
+    const privates = updated.filter(
+      (d) => d.status === "completed" && d.source !== "device",
+    );
+    if (devices.some((d) => durations[d.id] !== undefined)) {
+      void persistDeviceScanCache(devices, deviceFoldersRef.current);
+    }
+    if (privates.some((d) => durations[d.id] !== undefined)) {
+      void persistPrivateCache(privates, foldersRef.current);
+    }
+  }, [persistDeviceScanCache, persistPrivateCache]);
+
   const removeDownload = useCallback(
     async (id: string): Promise<string | null> => {
       const task = downloadsRef.current.find((d) => d.id === id);
@@ -1105,6 +1184,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       removeDownload,
       deleteFromTrash,
       prefetchDeviceFileSizes,
+      ensureDurations,
     }),
     [
       startDownload,
@@ -1126,6 +1206,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       removeDownload,
       deleteFromTrash,
       prefetchDeviceFileSizes,
+      ensureDurations,
     ],
   );
 

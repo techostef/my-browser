@@ -46,7 +46,9 @@ import FolderPickerModal, {
 import LabelPickerModal from "../components/downloads/LabelPickerModal";
 import ManageLabelsModal from "../components/downloads/ManageLabelsModal";
 import MoveProgressModal from "../components/downloads/MoveProgressModal";
-import PreviewModal from "../components/downloads/PreviewModal";
+import EditVideoButton from "../components/downloads/EditVideoButton";
+import ImagePreviewModal from "../components/downloads/ImagePreviewModal";
+import MediaPlayerModal from "../components/player/MediaPlayerModal";
 import RenameModal from "../components/downloads/RenameModal";
 import {
   DownloadGridItem,
@@ -82,6 +84,7 @@ function DownloadsScreen() {
     removeDownload,
     deleteFromTrash,
     prefetchDeviceFileSizes,
+    ensureDurations,
   } = useDownloads();
   // ── state ──────────────────────────────────────────────────────────────────
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
@@ -111,6 +114,7 @@ function DownloadsScreen() {
   const [labelDefs, setLabelDefs] = useState<string[]>([]);
   const [fileLabels, setFileLabels] = useState<Record<string, string[]>>({});
   const [labelFilter, setLabelFilter] = useState<string[]>([]);
+  const [unlabeledOnly, setUnlabeledOnly] = useState(false);
   const [labelTaskTarget, setLabelTaskTarget] = useState<DownloadTask | null>(
     null,
   );
@@ -185,6 +189,13 @@ function DownloadsScreen() {
   }, []);
 
   // ── label helpers ──────────────────────────────────────────────────────────
+  // The "unlabeled" chip lives inside the labels section of the filter dialog,
+  // which is hidden while no labels are defined — so the filter would get stuck
+  // on with no way to clear it if the last definition is deleted.
+  useEffect(() => {
+    if (labelDefs.length === 0) setUnlabeledOnly(false);
+  }, [labelDefs]);
+
   const saveLabelDefs = useCallback((defs: string[]) => {
     setLabelDefs(defs);
     AsyncStorage.setItem("@label_definitions_v1", JSON.stringify(defs));
@@ -1119,11 +1130,14 @@ function DownloadsScreen() {
       .filter(
         (task) => filterType === "all" || getMediaType(task) === filterType,
       )
-      .filter(
-        (task) =>
+      .filter((task) => {
+        const labels = fileLabels[task.id] || [];
+        if (unlabeledOnly) return labels.length === 0;
+        return (
           labelFilter.length === 0 ||
-          labelFilter.every((lbl) => (fileLabels[task.id] || []).includes(lbl)),
-      )
+          labelFilter.every((lbl) => labels.includes(lbl))
+        );
+      })
       .map((task) => ({ type: "file" as const, task }));
 
     return files.slice().sort((a, b) => {
@@ -1141,9 +1155,19 @@ function DownloadsScreen() {
         case "size_smallest":
           return (a.task.totalBytes ?? 0) - (b.task.totalBytes ?? 0);
         case "duration_longest":
-          return (b.task.duration ?? 0) - (a.task.duration ?? 0);
-        case "duration_shortest":
-          return (a.task.duration ?? 0) - (b.task.duration ?? 0);
+        case "duration_shortest": {
+          // Files with no known duration (images, archives, or media not probed
+          // yet) sink to the bottom in BOTH directions rather than being treated
+          // as zero-length, which would scatter them through the real results.
+          const da = a.task.duration ?? 0;
+          const db = b.task.duration ?? 0;
+          if (!da && !db) {
+            return (a.task.fileName || "").localeCompare(b.task.fileName || "");
+          }
+          if (!da) return 1;
+          if (!db) return -1;
+          return sortKey === "duration_longest" ? db - da : da - db;
+        }
         case "type": {
           const ext = (t: DownloadTask) =>
             (t.fileName || "").split(".").pop()?.toLowerCase() || "";
@@ -1159,8 +1183,53 @@ function DownloadsScreen() {
     filterType,
     getMediaType,
     labelFilter,
+    unlabeledOnly,
     fileLabels,
   ]);
+
+  // Sorting by duration needs a duration for EVERY file in the folder, not just the
+  // ones on screen — so the viewability prefetch below isn't enough. When a duration
+  // sort is picked, probe whatever media in this folder is still missing one. The
+  // probe is cached and concurrency-capped in downloadManager, so this runs once.
+  const isDurationSort = sortKey.startsWith("duration_");
+  const [isProbingDurations, setIsProbingDurations] = useState(false);
+
+  useEffect(() => {
+    if (!isDurationSort) {
+      setIsProbingDurations(false);
+      return;
+    }
+    const missing = visibleDownloads
+      .filter(
+        (task) =>
+          task.status === "completed" &&
+          !!task.filePath &&
+          !task.duration &&
+          getMediaType(task) !== "other" &&
+          getMediaType(task) !== "image",
+      )
+      .map((task) => task.id);
+    // TEMPORARY DIAGNOSTIC — remove with the [dur] logging in downloadManager.
+    console.log('[dur] screen effect: sortKey=', sortKey,
+      'visible=', visibleDownloads.length, 'missingDuration=', missing.length);
+    if (missing.length === 0) {
+      setIsProbingDurations(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsProbingDurations(true);
+    ensureDurations(missing)
+      .catch((err) => {
+        console.warn("Duration probe failed:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setIsProbingDurations(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDurationSort, visibleDownloads, getMediaType, ensureDurations]);
 
   const gridData: DownloadGridItem[] = [
     ...(filterType === "all" ? visibleFolders : []),
@@ -1220,12 +1289,14 @@ function DownloadsScreen() {
         `${icon} ${filterType.charAt(0).toUpperCase() + filterType.slice(1)}`,
       );
     }
-    if (labelFilter.length === 1) parts.push(`🏷 ${labelFilter[0]}`);
+    if (unlabeledOnly) parts.push(`🏷 ${t("filterUnlabeled")}`);
+    else if (labelFilter.length === 1) parts.push(`🏷 ${labelFilter[0]}`);
     else if (labelFilter.length > 1)
       parts.push(`🏷 ${labelFilter.length} ${t("labels")}`);
     return parts.length > 0 ? parts.join(" · ") : t("filterAll");
-  }, [filterType, labelFilter]);
-  const isFilterActive = filterType !== "all" || labelFilter.length > 0;
+  }, [filterType, labelFilter, unlabeledOnly, t]);
+  const isFilterActive =
+    filterType !== "all" || labelFilter.length > 0 || unlabeledOnly;
 
   // ── viewability (device file size prefetch) ────────────────────────────────
   const viewabilityConfigRef = useRef({ itemVisiblePercentThreshold: 1 });
@@ -1390,6 +1461,7 @@ function DownloadsScreen() {
           onClear={() => {
             setFilterType("all");
             setLabelFilter([]);
+            setUnlabeledOnly(false);
           }}
         />
       )}
@@ -1400,6 +1472,14 @@ function DownloadsScreen() {
             {isDeviceScanRunning
               ? t("deviceScanRunning")
               : t("deviceScanResults")}
+          </Text>
+        </View>
+      )}
+
+      {isProbingDurations && (
+        <View style={styles.deviceScanStatusRow}>
+          <Text style={styles.deviceScanStatusText}>
+            {t("readingDurations")}
           </Text>
         </View>
       )}
@@ -1504,28 +1584,58 @@ function DownloadsScreen() {
         onClose={() => setBulkMoveToDeviceModalVisible(false)}
       />
 
-      <PreviewModal
-        task={previewTask}
-        mediaType={previewTask ? getMediaType(previewTask) : "other"}
-        onClose={() => setPreviewTask(null)}
-        onPrev={handlePreviewPrev}
-        onNext={handlePreviewNext}
-        hasPrev={previewIdx > 0}
-        hasNext={previewIdx >= 0 && previewIdx < playableTasks.length - 1}
-        onEditVideo={async () => {
-          const task = previewTask;
-          setPreviewTask(null);
-          if (task?.filePath) {
-            const name =
-              task.fileName || task.filePath.split("/").pop() || "Video";
-            await addOrUpdateProject(task.filePath, name, 0);
-            (navigation as any).navigate("Trim", {
-              videoUri: task.filePath,
-              duration: 0,
-            });
-          }
-        }}
-      />
+      {(() => {
+        const mediaType = previewTask ? getMediaType(previewTask) : "other";
+        const filePath = previewTask?.filePath;
+        if (!filePath || mediaType === "other") return null;
+
+        if (mediaType === "image") {
+          return (
+            <ImagePreviewModal
+              uri={filePath}
+              title={previewTask?.fileName}
+              onClose={() => setPreviewTask(null)}
+            />
+          );
+        }
+
+        return (
+          <MediaPlayerModal
+            source={{
+              kind: "local",
+              uri: filePath,
+              title: previewTask?.fileName,
+              mediaType,
+            }}
+            onClose={() => setPreviewTask(null)}
+            onPrev={handlePreviewPrev}
+            onNext={handlePreviewNext}
+            hasPrev={previewIdx > 0}
+            hasNext={previewIdx >= 0 && previewIdx < playableTasks.length - 1}
+            topAction={
+              mediaType === "video" ? (
+                <EditVideoButton
+                  onEdit={async () => {
+                    const task = previewTask;
+                    setPreviewTask(null);
+                    if (task?.filePath) {
+                      const name =
+                        task.fileName ||
+                        task.filePath.split("/").pop() ||
+                        "Video";
+                      await addOrUpdateProject(task.filePath, name, 0);
+                      (navigation as any).navigate("Trim", {
+                        videoUri: task.filePath,
+                        duration: 0,
+                      });
+                    }
+                  }}
+                />
+              ) : undefined
+            }
+          />
+        );
+      })()}
 
       <ActionsDropdown
         visible={actionsDialogVisible}
@@ -1556,13 +1666,16 @@ function DownloadsScreen() {
         filterType={filterType}
         labelFilter={labelFilter}
         labelDefs={labelDefs}
+        unlabeledOnly={unlabeledOnly}
         isFilterActive={isFilterActive}
         onFilterType={setFilterType}
         onLabelFilter={setLabelFilter}
+        onUnlabeledOnly={setUnlabeledOnly}
         onClose={() => setFilterDialogVisible(false)}
         onClear={() => {
           setFilterType("all");
           setLabelFilter([]);
+          setUnlabeledOnly(false);
         }}
       />
 

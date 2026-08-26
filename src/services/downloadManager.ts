@@ -1,16 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
+import { FFmpegKit, FFprobeKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { DownloadTask, HlsMasterInfo, HlsVariant } from '../types';
 
 const MEDIA_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp', 'mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac']);
-// All media files are probed with FFmpegKit (reads container headers, safe for all formats).
-const VIDEO_EXTS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', '3gp']);
 
-const DURATION_CACHE_KEY = '@media_duration_cache_v1';
+// v2: the v1 cache was written by the old Audio.Sound probe, which stored 0 for every
+// file it couldn't open and never retried. Those poisoned zeros survived the switch to
+// FFmpegKit and permanently suppressed durations. Starting a fresh namespace drops them.
+const DURATION_CACHE_KEY = '@media_duration_cache_v2';
+const LEGACY_DURATION_CACHE_KEY = '@media_duration_cache_v1';
 let durationCache: Record<string, number> | null = null;
 let durationCacheDirty = false;
+// A cached 0 means "probe failed". Failures are retried once per app session so a
+// transient error (or a fixed bug) can recover, without re-probing hundreds of files
+// on every Downloads focus.
+const retriedFailuresThisSession = new Set<string>();
 const IS_SHOW_MANGA_FOLDER = false;
 
 
@@ -90,6 +96,12 @@ async function removePersistedDownload(id: string): Promise<void> {
   }
 }
 
+// FFmpeg needs a plain filesystem path, not a file:// URI. Every other FFmpeg call
+// site normalizes the same way (toPath in lib/videoEditor/ffmpeg.ts, outputFsPath below).
+function toFsPath(uri: string): string {
+  return uri.startsWith('file://') ? uri.slice(7) : uri;
+}
+
 async function loadDurationCache(): Promise<Record<string, number>> {
   if (durationCache) { return durationCache; }
   try {
@@ -98,6 +110,8 @@ async function loadDurationCache(): Promise<Record<string, number>> {
   } catch {
     durationCache = {};
   }
+  // Drop the superseded v1 cache once — it only holds poisoned zeros now.
+  AsyncStorage.removeItem(LEGACY_DURATION_CACHE_KEY).catch(() => { /* best effort */ });
   return durationCache!;
 }
 
@@ -167,53 +181,126 @@ function releaseProbeSlot(): void {
   if (next) { next(); }
 }
 
-// Use FFmpegKit to read duration from a video file's container header.
+// Max time to wait for ffprobe's result to cross the React Native bridge.
+const PROBE_TIMEOUT_MS = 15000;
+
+// ── TEMPORARY DIAGNOSTIC — remove once the duration probe is confirmed working ──
+// Every failure path in this file is swallowed, so nothing about a broken probe is
+// observable. Filter logcat by "[dur]" to see what actually happens.
+const DEBUG_DURATION = true;
+const DEBUG_DETAIL_LIMIT = 3;
+let debugDetailCount = 0;
+const debugStats = {
+  called: 0, gatedByExt: 0, cacheHit: 0, cacheSkip: 0, probed: 0,
+  ok: 0, noInfo: 0, noDuration: 0, threw: 0, notExists: 0,
+};
+export function dumpDurationDebug(label: string): void {
+  if (!DEBUG_DURATION) { return; }
+  console.log(`[dur] STATS ${label}`, JSON.stringify(debugStats));
+}
+
+// ffprobe reports duration as a "seconds.microseconds" string, or omits it / reports
+// "N/A" for files whose container has no usable duration. Accepts number too: the
+// library's own typings declare getDuration(): number while the runtime actually
+// returns the raw string property, so handle whichever we're handed.
+// Exported for testing.
+export function parseFfprobeDurationMs(
+  raw?: string | number | null,
+): number | undefined {
+  if (raw === null || raw === undefined || raw === '') { return undefined; }
+  const seconds = typeof raw === 'number' ? raw : Number.parseFloat(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) { return undefined; }
+  return Math.round(seconds * 1000);
+}
+
+// Read duration from a media file's container header via ffprobe.
 // This handles any format (including MP4s with mov_text subtitle tracks) without
 // invoking Android's MediaPlayer, which native-crashes on unknown codec streams.
-async function probeVideoWithFFmpeg(filePath: string): Promise<number | undefined> {
+//
+// getMediaInformation returns structured JSON and takes a waitTimeout, so it blocks
+// until the result has actually been transmitted. The previous implementation ran
+// `ffmpeg -i` and scraped stderr via session.getLogs() — but getLogs() is documented
+// to return immediately WITHOUT waiting for undelivered async log messages, so the
+// "Duration:" line usually hadn't arrived yet and the probe reported nothing. That
+// race is why most files ended up with no duration while a few won it and worked.
+async function probeMediaWithFFprobe(filePath: string): Promise<number | undefined> {
+  const detail = DEBUG_DURATION && debugDetailCount < DEBUG_DETAIL_LIMIT;
+  if (detail) { debugDetailCount++; }
   try {
-    // Intentionally no output — FFmpeg exits with error but logs file metadata.
-    const session = await FFmpegKit.execute(`-hide_banner -i "${filePath}"`);
-    const logs = await session.getLogs();
-    for (const log of logs) {
-      const match = (log.getMessage() as string).match(
-        /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/,
-      );
-      if (match) {
-        const ms =
-          (parseInt(match[1], 10) * 3600 +
-            parseInt(match[2], 10) * 60 +
-            parseFloat(match[3])) *
-          1000;
-        return ms;
-      }
+    const fsPath = toFsPath(filePath);
+    if (detail) { console.log('[dur] probe start:', fsPath); }
+
+    const session = await FFprobeKit.getMediaInformation(fsPath, PROBE_TIMEOUT_MS);
+
+    if (detail) {
+      // Everything the session can tell us about why it did or didn't work.
+      const [state, rc, logs] = await Promise.all([
+        session.getState().catch((e: unknown) => `state-err:${e}`),
+        session.getReturnCode().catch((e: unknown) => `rc-err:${e}`),
+        session.getAllLogsAsString(3000).catch((e: unknown) => `logs-err:${e}`),
+      ]);
+      console.log('[dur] session state=', String(state),
+        'rc=', rc && typeof rc === 'object' && 'getValue' in rc ? (rc as any).getValue() : String(rc),
+        'failTrace=', String(session.getFailStackTrace()),
+        'logs=', String(logs).slice(0, 400));
     }
-  } catch { /* ignore */ }
+
+    const info = session.getMediaInformation();
+    if (!info) {
+      if (detail) { console.log('[dur] NO MediaInformation returned for', fsPath); }
+      debugStats.noInfo++;
+      return undefined;
+    }
+
+    const rawFormat = info.getDuration();
+    if (detail) {
+      console.log('[dur] format.duration=', JSON.stringify(rawFormat),
+        'typeof=', typeof rawFormat,
+        'streams=', info.getStreams().length);
+    }
+
+    const fromFormat = parseFfprobeDurationMs(rawFormat);
+    if (fromFormat) { debugStats.ok++; return fromFormat; }
+
+    // A few containers (raw streams, some MKVs) carry duration only per stream.
+    for (const stream of info.getStreams()) {
+      const rawStream = stream.getStringProperty('duration');
+      if (detail) { console.log('[dur] stream.duration=', JSON.stringify(rawStream)); }
+      const fromStream = parseFfprobeDurationMs(rawStream);
+      if (fromStream) { debugStats.ok++; return fromStream; }
+    }
+    debugStats.noDuration++;
+  } catch (err) {
+    debugStats.threw++;
+    console.warn('[dur] PROBE THREW for', filePath, err);
+  }
   return undefined;
 }
 
 async function probeMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
+  debugStats.called++;
   const ext = filePath.split('.').pop()?.toLowerCase().split('?')[0] || '';
   if (!MEDIA_EXTS.has(ext)) {
+    debugStats.gatedByExt++;
     return undefined;
   }
 
   const cache = await loadDurationCache();
   const key = durationCacheKey(filePath, size, mtime);
-  if (cache[key] !== undefined) {
-    return cache[key] || undefined;
+  const cached = cache[key];
+  if (cached !== undefined) {
+    // A real duration is final. A 0 means an earlier probe failed — give it one more
+    // chance per session, then stop so we don't re-probe the whole library on every scan.
+    if (cached > 0) { debugStats.cacheHit++; return cached; }
+    if (retriedFailuresThisSession.has(key)) { debugStats.cacheSkip++; return undefined; }
   }
+  retriedFailuresThisSession.add(key);
+  debugStats.probed++;
 
   await acquireProbeSlot();
   let durationMs: number | undefined;
   try {
-    if (VIDEO_EXTS.has(ext)) {
-      // FFmpegKit reads only the container header — safe for all formats including
-      // FFmpegKit reads only the container header — safe for all formats.
-      durationMs = await probeVideoWithFFmpeg(filePath);
-    } else {
-      durationMs = await probeVideoWithFFmpeg(filePath);
-    }
+    durationMs = await probeMediaWithFFprobe(filePath);
   } finally {
     releaseProbeSlot();
   }
@@ -223,6 +310,33 @@ async function probeMediaDuration(filePath: string, size: number, mtime: number)
   // Flush after each probe so a mid-walk crash doesn't reset the whole cache.
   void flushDurationCache();
   return durationMs;
+}
+
+// Probe a batch of files, returning only the ones that resolved to a real duration.
+// Goes through the same cache and PROBE_CONCURRENCY gate as the folder scan.
+export async function probeDurations(
+  items: Array<{ id: string; filePath: string }>,
+): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+  await concurrentMap(items, async ({ id, filePath }) => {
+    try {
+      const info = await FileSystem.getInfoAsync(filePath);
+      if (!info.exists) {
+        debugStats.notExists++;
+        console.warn('[dur] getInfoAsync says NOT EXISTS (skipped, never probed):', filePath);
+        return;
+      }
+      const anyInfo = info as any;
+      const size: number = typeof anyInfo.size === 'number' ? anyInfo.size : 0;
+      const mtime: number = typeof anyInfo.modificationTime === 'number' ? anyInfo.modificationTime : 0;
+      const durationMs = await probeMediaDuration(filePath, size, mtime);
+      if (durationMs && durationMs > 0) {
+        result[id] = durationMs;
+      }
+    } catch { /* best effort — a file we can't stat just keeps an unknown duration */ }
+  }, STAT_CONCURRENCY);
+  dumpDurationDebug(`probeDurations(${items.length} requested, ${Object.keys(result).length} resolved)`);
+  return result;
 }
 
 type ProgressCallback = (
@@ -615,6 +729,7 @@ class DownloadManager {
     };
 
     await walk(privateDir, '');
+    dumpDurationDebug(`listPrivateDownloads(${files.length} files)`);
     void flushDurationCache();
     files.sort((a, b) => b.createdAt - a.createdAt);
     return files;

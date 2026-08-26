@@ -1,88 +1,108 @@
-/** biome-ignore-all lint/correctness/useExhaustiveDependencies: <explanation> */
-/** biome-ignore-all lint/suspicious/noArrayIndexKey: <explanation> */
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+/** biome-ignore-all lint/correctness/useExhaustiveDependencies: gesture/animation effects run once by design */
+/** biome-ignore-all lint/suspicious/noArrayIndexKey: scrim steps and HLS variants have no stable id */
+import { Ionicons } from "@expo/vector-icons";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
-  GestureResponderEvent,
-  LayoutChangeEvent,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
   Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import { useTranslation } from "../i18n";
-import { DetectedVideo, HlsVariant } from "../types";
-import { isPlayingVideo, isPlayingVideoM4S } from "./VideoDetectedBanner";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { useTranslation } from "../../i18n";
+import type { DetectedVideo, HlsVariant } from "../../types";
+import { isPlayingVideo, isPlayingVideoM4S } from "../VideoDetectedBanner";
+import { SEEK_SECS, type VideoController } from "./types";
 
 function formatTime(secs: number): string {
-  if (!isFinite(secs) || isNaN(secs) || secs < 0) return "0:00";
+  if (!Number.isFinite(secs) || Number.isNaN(secs) || secs < 0) return "0:00";
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 interface Props {
-  currentTime: number;
-  duration: number;
-  isPaused: boolean;
-  isMuted: boolean;
-  onTogglePlay: () => void;
-  onToggleMute: () => void;
-  onSeek: (time: number) => void;
-  onSkipBack: () => void;
-  onSkipForward: () => void;
+  controller: VideoController;
+
+  /** Top bar */
   headerTitle?: string;
-  onMinimize?: () => void;
+  /** Shown as ✕ on the right of the top bar. */
+  onClose?: () => void;
+  /** Extra top-bar button, e.g. the "Edit" action on downloaded videos. */
+  topAction?: React.ReactNode;
+
+  /**
+   * Direct download. Renders the same ↓ button as the variant picker below —
+   * a surface uses one or the other, never both.
+   */
+  onDownload?: () => void;
+
+  /** HLS quality picker / download (browser side) */
   playingUrl?: string;
-  playingUrlM4S?: string;
   segmentBlob?: Record<string, string>;
   videos?: DetectedVideo[];
   onDownloadVariant?: (video: DetectedVideo, variant?: HlsVariant) => void;
+
+  /** Bottom nav row (downloads side) */
+  isLandscape?: boolean;
+  onToggleOrientation?: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+
+  /** Audio has no picture to skip through — hide the side tap zones. */
+  audioOnly?: boolean;
 }
 
-const SEEK_SECS = 10;
 const SEEK_THROTTLE_MS = 300;
 
 // Stepped pseudo-gradients (top: dark→clear, bottom: clear→dark)
 const TOP_SCRIM = [0.02];
 const BOTTOM_SCRIM = [0.02];
 
-export default function VideoPlayerController({
-  currentTime,
-  duration,
-  isPaused,
-  isMuted,
-  onTogglePlay,
-  onToggleMute,
-  onSeek,
-  onSkipBack,
-  onSkipForward,
+export default function VideoControls({
+  controller,
   headerTitle,
-  onMinimize,
+  onClose,
+  topAction,
+  onDownload,
   playingUrl,
   segmentBlob,
   videos,
   onDownloadVariant,
+  isLandscape,
+  onToggleOrientation,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+  audioOnly,
 }: Props) {
   const { t } = useTranslation();
+  const {
+    currentTime,
+    duration,
+    isPaused,
+    isMuted,
+    isBuffering,
+    togglePlay,
+    toggleMute,
+    seek,
+    skipBack,
+    skipForward,
+  } = controller;
+
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isVariantPickerVisible, setIsVariantPickerVisible] = useState(false);
-  const [filteredVideos, setFilteredVideos] = React.useState<DetectedVideo[]>(
-    [],
-  );
+  const [filteredVideos, setFilteredVideos] = useState<DetectedVideo[]>([]);
   const opacity = useRef(new Animated.Value(1)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [seekBarWidth, setSeekBarWidth] = useState(0);
@@ -142,6 +162,8 @@ export default function VideoPlayerController({
     }
   }, [isPaused]);
 
+  // Narrow the picker to the stream that's actually on screen, so the user
+  // isn't offered every variant the page happens to reference.
   useEffect(() => {
     if (!videos) return;
     if (!playingUrl) return;
@@ -157,9 +179,7 @@ export default function VideoPlayerController({
       }
     }
     const hslCount = videos.filter((v) => v.type === "hls").length;
-    const masterCount = videos.filter(
-      (v) => v.hlsInfo?.isMaster === true,
-    ).length;
+    const masterCount = videos.filter((v) => v.hlsInfo?.isMaster === true).length;
     if (hslCount === 1) {
       setFilteredVideos(videos.filter((v) => v.type === "hls"));
     } else if (masterCount === 1) {
@@ -169,10 +189,7 @@ export default function VideoPlayerController({
     }
   }, [videos, playingUrl]);
 
-  const flashSeekIndicator = (
-    opacityAnim: Animated.Value,
-    scaleAnim: Animated.Value,
-  ) => {
+  const flashSeekIndicator = (opacityAnim: Animated.Value, scaleAnim: Animated.Value) => {
     opacityAnim.stopAnimation();
     scaleAnim.stopAnimation();
     Animated.parallel([
@@ -217,25 +234,20 @@ export default function VideoPlayerController({
 
   const toggleControls = useCallback(() => {
     if (controlsVisible) {
-      cancelHide();
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => setControlsVisible(false));
+      hideControls();
     } else {
       showControls();
     }
-  }, [controlsVisible, opacity, cancelHide, showControls]);
+  }, [controlsVisible, hideControls, showControls]);
 
   // Stable refs so the gesture recognizers (memoized once) always call the
   // latest closures without rebuilding the gestures every render.
   const toggleControlsRef = useRef(toggleControls);
   toggleControlsRef.current = toggleControls;
-  const onSkipBackRef = useRef(onSkipBack);
-  onSkipBackRef.current = onSkipBack;
-  const onSkipForwardRef = useRef(onSkipForward);
-  onSkipForwardRef.current = onSkipForward;
+  const skipBackRef = useRef(skipBack);
+  skipBackRef.current = skipBack;
+  const skipForwardRef = useRef(skipForward);
+  skipForwardRef.current = skipForward;
   const hideControlsRef = useRef(hideControls);
   hideControlsRef.current = hideControls;
 
@@ -245,7 +257,7 @@ export default function VideoPlayerController({
       .maxDistance(50)
       .runOnJS(true)
       .onEnd(() => {
-        onSkipBackRef.current();
+        skipBackRef.current();
         flashSeekIndicator(leftOpacity, leftScale);
         hideControlsRef.current();
       });
@@ -265,7 +277,7 @@ export default function VideoPlayerController({
       .maxDistance(50)
       .runOnJS(true)
       .onEnd(() => {
-        onSkipForwardRef.current();
+        skipForwardRef.current();
         flashSeekIndicator(rightOpacity, rightScale);
         hideControlsRef.current();
       });
@@ -293,7 +305,7 @@ export default function VideoPlayerController({
 
   // Clear the optimistic seek override once the polled currentTime converges.
   // Require at least 500ms after seeking before accepting convergence — this
-  // avoids clearing on the optimistic value the parent set immediately.
+  // avoids clearing on the optimistic value the controller set immediately.
   useEffect(() => {
     if (seekingTime !== null) {
       const elapsed = Date.now() - seekingSetAtRef.current;
@@ -305,8 +317,7 @@ export default function VideoPlayerController({
 
   const effectiveTime = seekingTime !== null ? seekingTime : currentTime;
 
-  const progress =
-    duration > 0 ? Math.min(Math.max(effectiveTime / duration, 0), 1) : 0;
+  const progress = duration > 0 ? Math.min(Math.max(effectiveTime / duration, 0), 1) : 0;
   const fillWidth = seekBarWidth * progress;
   // 18 px thumb — keep center on fill position
   const thumbLeft = Math.max(0, Math.min(fillWidth - 9, seekBarWidth - 18));
@@ -316,7 +327,7 @@ export default function VideoPlayerController({
   // during a tap would commit to wherever the finger lifted (e.g. tap middle
   // → slide a few pixels → release near the left edge → jump to start).
   // This version updates seekingTime continuously so the thumb visually
-  // follows the finger, and only fires onSeek once on release with the final
+  // follows the finger, and only fires the seek once on release with the final
   // position the user actually sees.
 
   const measureSeekBar = useCallback(() => {
@@ -369,17 +380,26 @@ export default function VideoPlayerController({
     lastSeekAt.current = now;
     setSeekingTime(t);
     seekingSetAtRef.current = Date.now();
-    onSeek(t);
+    seek(t);
     showControls();
   };
 
-  const hasDownload =
-    (videos?.length ?? 0) > 0 && onDownloadVariant !== undefined;
-  const showTopBar = headerTitle !== undefined || hasDownload;
+  const hasVariantPicker = (videos?.length ?? 0) > 0 && onDownloadVariant !== undefined;
+  const showDownload = hasVariantPicker || onDownload !== undefined;
+  const showTopBar =
+    headerTitle !== undefined || showDownload || onClose !== undefined || topAction !== undefined;
+  const showNavRow =
+    onToggleOrientation !== undefined || onPrev !== undefined || onNext !== undefined;
 
+  // Same button either way: with detected variants it opens the quality
+  // sheet, otherwise it downloads what is playing straight away.
   const handleDownloadPress = () => {
-    setIsVariantPickerVisible(true);
-    cancelHide();
+    if (hasVariantPicker) {
+      setIsVariantPickerVisible(true);
+      cancelHide();
+      return;
+    }
+    onDownload?.();
   };
 
   const handlePickVariant = (video: DetectedVideo, variant?: HlsVariant) => {
@@ -392,99 +412,84 @@ export default function VideoPlayerController({
       <View style={StyleSheet.absoluteFill}>
         {/* ── Layer 1: Tap zones ── */}
         <View style={styles.backdropRow}>
-          <GestureDetector gesture={leftTapGesture}>
-            <View style={styles.sideZone} />
-          </GestureDetector>
+          {!audioOnly && (
+            <GestureDetector gesture={leftTapGesture}>
+              <View style={styles.sideZone} />
+            </GestureDetector>
+          )}
           <GestureDetector gesture={centerTapGesture}>
             <View style={styles.centerZone} />
           </GestureDetector>
-          <GestureDetector gesture={rightTapGesture}>
-            <View style={styles.sideZone} />
-          </GestureDetector>
+          {!audioOnly && (
+            <GestureDetector gesture={rightTapGesture}>
+              <View style={styles.sideZone} />
+            </GestureDetector>
+          )}
         </View>
 
         {/* ── Layer 2: Seek flash indicators ── */}
-        <View
-          style={[StyleSheet.absoluteFill, styles.seekIndicatorLayer]}
-          pointerEvents="none"
-        >
-          <View style={styles.seekSlot}>
-            <Animated.View
-              style={[
-                styles.seekBubble,
-                { opacity: leftOpacity, transform: [{ scale: leftScale }] },
-              ]}
-            >
-              <Text style={styles.seekBubbleIcon}>{"◀◀"}</Text>
-              <Text style={styles.seekBubbleLabel}>-{SEEK_SECS}s</Text>
-            </Animated.View>
+        {!audioOnly && (
+          <View style={[StyleSheet.absoluteFill, styles.seekIndicatorLayer]} pointerEvents="none">
+            <View style={styles.seekSlot}>
+              <Animated.View
+                style={[
+                  styles.seekBubble,
+                  { opacity: leftOpacity, transform: [{ scale: leftScale }] },
+                ]}
+              >
+                <Text style={styles.seekBubbleIcon}>{"◀◀"}</Text>
+                <Text style={styles.seekBubbleLabel}>-{SEEK_SECS}s</Text>
+              </Animated.View>
+            </View>
+            <View style={styles.seekSlotMid} />
+            <View style={styles.seekSlot}>
+              <Animated.View
+                style={[
+                  styles.seekBubble,
+                  { opacity: rightOpacity, transform: [{ scale: rightScale }] },
+                ]}
+              >
+                <Text style={styles.seekBubbleIcon}>{"▶▶"}</Text>
+                <Text style={styles.seekBubbleLabel}>+{SEEK_SECS}s</Text>
+              </Animated.View>
+            </View>
           </View>
-          <View style={styles.seekSlotMid} />
-          <View style={styles.seekSlot}>
-            <Animated.View
-              style={[
-                styles.seekBubble,
-                { opacity: rightOpacity, transform: [{ scale: rightScale }] },
-              ]}
-            >
-              <Text style={styles.seekBubbleIcon}>{"▶▶"}</Text>
-              <Text style={styles.seekBubbleLabel}>+{SEEK_SECS}s</Text>
-            </Animated.View>
-          </View>
-        </View>
+        )}
 
-        {/* ── Layer 3: Player controls ── */}
+        {/* ── Layer 3: Buffering ── */}
+        {isBuffering && (
+          <View style={styles.bufferOverlay} pointerEvents="none">
+            <ActivityIndicator size="large" color={TEAL} />
+          </View>
+        )}
+
+        {/* ── Layer 4: Player controls ── */}
         {controlsVisible && (
-          <Animated.View
-            style={[styles.controlsOverlay, { opacity }]}
-            pointerEvents="box-none"
-          >
+          <Animated.View style={[styles.controlsOverlay, { opacity }]} pointerEvents="box-none">
             {/* Cinematic top scrim (dark → transparent) */}
             <View style={styles.topScrim} pointerEvents="none">
               {TOP_SCRIM.map((a, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.scrimStep,
-                    { backgroundColor: `rgba(0,0,0,${a})` },
-                  ]}
-                />
+                <View key={i} style={[styles.scrimStep, { backgroundColor: `rgba(0,0,0,${a})` }]} />
               ))}
             </View>
 
             {/* Cinematic bottom scrim (transparent → dark) */}
             <View style={styles.bottomScrim} pointerEvents="none">
               {BOTTOM_SCRIM.map((a, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.scrimStep,
-                    { backgroundColor: `rgba(0,0,0,${a})` },
-                  ]}
-                />
+                <View key={i} style={[styles.scrimStep, { backgroundColor: `rgba(0,0,0,${a})` }]} />
               ))}
             </View>
 
             {/* ── Top bar ── */}
             {showTopBar && (
               <View style={styles.topBar}>
-                {onMinimize ? (
-                  <TouchableOpacity
-                    style={styles.topIconBtn}
-                    onPress={onMinimize}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Text style={styles.topIconText}>←</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.topSpacer} />
-                )}
-
                 <Text style={styles.topTitle} numberOfLines={1}>
                   {headerTitle ?? ""}
                 </Text>
 
-                {hasDownload ? (
+                {topAction}
+
+                {showDownload && (
                   <TouchableOpacity
                     style={styles.downloadBtn}
                     onPress={handleDownloadPress}
@@ -493,55 +498,65 @@ export default function VideoPlayerController({
                     <Text style={styles.downloadIcon}>↓</Text>
                     <Text style={styles.downloadLabel}>{t("save")}</Text>
                   </TouchableOpacity>
-                ) : (
-                  <View style={styles.topSpacer} />
+                )}
+
+                {onClose && (
+                  <TouchableOpacity
+                    style={[styles.topIconBtn, styles.topCloseBtn]}
+                    onPress={onClose}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.topIconText}>✕</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             )}
 
             {/* ── Center: skip · play · skip ── */}
             <View style={styles.centerRow}>
-              {/* Skip back */}
-              <TouchableOpacity
-                style={styles.skipWrap}
-                onPress={() => {
-                  onSkipBack();
-                  showControls();
-                }}
-              >
-                <View style={styles.skipCircle}>
-                  <Text style={styles.skipIcon}>⏮</Text>
-                </View>
-                <Text style={styles.skipLabel}>{SEEK_SECS}s</Text>
-              </TouchableOpacity>
+              {!audioOnly && (
+                <TouchableOpacity
+                  style={styles.skipWrap}
+                  onPress={() => {
+                    skipBack();
+                    showControls();
+                  }}
+                >
+                  <View style={styles.skipCircle}>
+                    <Text style={styles.skipIcon}>⏮</Text>
+                  </View>
+                  <Text style={styles.skipLabel}>{SEEK_SECS}s</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Play / Pause — teal glow ring */}
               <TouchableOpacity
                 style={styles.playBtn}
                 onPress={() => {
-                  onTogglePlay();
+                  togglePlay();
                   showControls();
                 }}
               >
                 <Text style={styles.playIcon}>{isPaused ? "▶" : "⏸"}</Text>
               </TouchableOpacity>
 
-              {/* Skip forward */}
-              <TouchableOpacity
-                style={styles.skipWrap}
-                onPress={() => {
-                  onSkipForward();
-                  showControls();
-                }}
-              >
-                <View style={styles.skipCircle}>
-                  <Text style={styles.skipIcon}>⏭</Text>
-                </View>
-                <Text style={styles.skipLabel}>{SEEK_SECS}s</Text>
-              </TouchableOpacity>
+              {!audioOnly && (
+                <TouchableOpacity
+                  style={styles.skipWrap}
+                  onPress={() => {
+                    skipForward();
+                    showControls();
+                  }}
+                >
+                  <View style={styles.skipCircle}>
+                    <Text style={styles.skipIcon}>⏭</Text>
+                  </View>
+                  <Text style={styles.skipLabel}>{SEEK_SECS}s</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {/* ── Bottom: seek bar + time/mute row ── */}
+            {/* ── Bottom: seek bar + time/mute row + nav row ── */}
             <View style={styles.bottomBar}>
               {/* Seek bar */}
               <View
@@ -564,38 +579,71 @@ export default function VideoPlayerController({
 
               {/* Time + mute */}
               <View style={styles.timeRow}>
-                <Text style={styles.timeCurrent}>
-                  {formatTime(effectiveTime)}
-                </Text>
+                <Text style={styles.timeCurrent}>{formatTime(effectiveTime)}</Text>
                 <Text style={styles.timeSep}> / </Text>
                 <Text style={styles.timeDuration}>{formatTime(duration)}</Text>
                 <View style={styles.timeFlex} />
-                {hasDownload && (
-                  <TouchableOpacity
-                    style={styles.dlBtn}
-                    onPress={handleDownloadPress}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={styles.dlBtnIcon}>↓</Text>
-                    <Text style={styles.dlBtnLabel}>{t("save")}</Text>
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   style={styles.muteBtn}
                   onPress={() => {
-                    onToggleMute();
+                    toggleMute();
                     showControls();
                   }}
                 >
                   <Text style={styles.muteIcon}>{isMuted ? "🔇" : "🔊"}</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Orientation + prev/next */}
+              {showNavRow && (
+                <View style={styles.navRow}>
+                  {onToggleOrientation && (
+                    <TouchableOpacity
+                      style={styles.orientationBtn}
+                      onPress={() => {
+                        onToggleOrientation();
+                        showControls();
+                      }}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name={isLandscape ? "phone-portrait-outline" : "phone-landscape-outline"}
+                        size={22}
+                        color="#FFF"
+                      />
+                    </TouchableOpacity>
+                  )}
+                  {onPrev && (
+                    <TouchableOpacity
+                      style={[styles.navBtn, !hasPrev && styles.navBtnDisabled]}
+                      onPress={onPrev}
+                      disabled={!hasPrev}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.navBtnText, !hasPrev && styles.navBtnTextDisabled]}>
+                        ⏮ {t("previous")}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {onNext && (
+                    <TouchableOpacity
+                      style={[styles.navBtn, !hasNext && styles.navBtnDisabled]}
+                      onPress={onNext}
+                      disabled={!hasNext}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.navBtnText, !hasNext && styles.navBtnTextDisabled]}>
+                        {t("next")} ⏭
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
           </Animated.View>
         )}
 
         {/* ── Variant picker modal ── */}
-        {/* ── Details modal ── */}
         <Modal
           visible={isVariantPickerVisible}
           animationType="slide"
@@ -621,14 +669,13 @@ export default function VideoPlayerController({
                   style={styles.list}
                   renderItem={({ item }) => {
                     const hasVariants =
-                      item.type === "hls" &&
-                      item.hlsInfo &&
-                      item.hlsInfo.variants.length > 0;
+                      item.type === "hls" && item.hlsInfo && item.hlsInfo.variants.length > 0;
                     return (
                       <View
                         style={[
                           styles.videoCard,
-                          isPlayingVideo(item, playingUrl!) &&
+                          playingUrl !== undefined &&
+                            isPlayingVideo(item, playingUrl) &&
                             styles.videoCardPlaying,
                         ]}
                       >
@@ -639,28 +686,23 @@ export default function VideoPlayerController({
                                 ? item.pageTitle || t("hlsStream")
                                 : item.type === "dash"
                                   ? item.pageTitle || t("dashStream")
-                                  : item.videoWidth ||
-                                    item.pageTitle ||
-                                    t("video")}
+                                  : item.videoWidth || item.pageTitle || t("video")}
                             </Text>
                           </View>
                         </View>
 
                         {hasVariants ? (
                           <View style={styles.variantList}>
-                            {item.hlsInfo!.variants.map((variant, vi) => (
+                            {(item.hlsInfo?.variants ?? []).map((variant, vi) => (
                               <View key={vi} style={styles.variantRow}>
                                 <View style={styles.variantInfo}>
                                   <Text style={styles.variantResolution}>
-                                    {variant.resolution ||
-                                      t("unknownResolution")}
+                                    {variant.resolution || t("unknownResolution")}
                                   </Text>
                                 </View>
                                 <TouchableOpacity
                                   style={styles.downloadVariantBtn}
-                                  onPress={() =>
-                                    handlePickVariant(item, variant)
-                                  }
+                                  onPress={() => handlePickVariant(item, variant)}
                                 >
                                   <Text style={styles.downloadVariantBtnText}>
                                     {t("downloadBtn")}
@@ -678,9 +720,7 @@ export default function VideoPlayerController({
                 />
               ) : (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>
-                    {t("noDownloadableVideos")}
-                  </Text>
+                  <Text style={styles.emptyStateText}>{t("noDownloadableVideos")}</Text>
                 </View>
               )}
             </View>
@@ -695,9 +735,9 @@ const TEAL = "#4ECDC4";
 
 const styles = StyleSheet.create({
   /* ── Tap zones ──
-     Mirror PreviewModal: leave the top bar (60px) and bottom bar (~140px)
-     clear so a tap on the seek bar / buttons can never be captured by a side
-     tap zone and misread as a double-tap-to-skip. */
+     Leave the top bar (60px) and bottom bar (~140px) clear so a tap on the
+     seek bar / buttons can never be captured by a side tap zone and misread
+     as a double-tap-to-skip. */
   backdropRow: {
     position: "absolute",
     top: 60,
@@ -731,6 +771,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
+  /* ── Buffering ── */
+  bufferOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   /* ── Controls overlay ── */
   controlsOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -759,6 +806,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 13,
+    gap: 8,
   },
   topIconBtn: {
     width: 38,
@@ -768,15 +816,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  topCloseBtn: { backgroundColor: "rgba(0,0,0,0.55)" },
   topIconText: { color: "#FFF", fontSize: 20, lineHeight: 22 },
   topTitle: {
     flex: 1,
     color: "#FFF",
     fontSize: 15,
     fontWeight: "600",
-    marginHorizontal: 12,
+    textShadowColor: "rgba(0,0,0,0.8)",
+    textShadowRadius: 4,
   },
-  topSpacer: { width: 38 },
   downloadBtn: {
     flexDirection: "row",
     height: 36,
@@ -878,26 +927,6 @@ const styles = StyleSheet.create({
   timeSep: { color: "rgba(255,255,255,0.4)", fontSize: 12 },
   timeDuration: { color: "rgba(255,255,255,0.55)", fontSize: 13 },
   timeFlex: { flex: 1 },
-  dlBtn: {
-    flexDirection: "row",
-    height: 36,
-    paddingHorizontal: 10,
-    borderRadius: 9,
-    backgroundColor: "rgba(255,160,50,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,160,50,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    marginRight: 8,
-  },
-  dlBtnIcon: {
-    color: "#FFA032",
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 17,
-  },
-  dlBtnLabel: { color: "#FFA032", fontSize: 12, fontWeight: "700" },
   muteBtn: {
     width: 36,
     height: 36,
@@ -908,73 +937,39 @@ const styles = StyleSheet.create({
   },
   muteIcon: { fontSize: 18 },
 
-  /* ── Variant picker modal ── */
-  pickerOverlay: {
+  /* ── Nav row (orientation + prev/next) ── */
+  navRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    gap: 12,
+  },
+  navBtn: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "flex-end",
-  },
-  pickerSheet: {
-    backgroundColor: "#1A1A2E",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    borderTopWidth: 1,
-    borderColor: "#2A2A45",
-    maxHeight: "70%",
-  },
-  pickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    backgroundColor: "rgba(43,43,43,0.85)",
+    paddingVertical: 11,
+    borderRadius: 10,
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#2A2A45",
   },
-  pickerTitle: { color: TEAL, fontSize: 15, fontWeight: "700" },
-  pickerClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    alignItems: "center",
-    justifyContent: "center",
+  navBtnDisabled: {
+    backgroundColor: "rgba(26,26,26,0.7)",
   },
-  pickerCloseText: { color: "#888", fontSize: 13 },
-  pickerList: { maxHeight: 420 },
-  pickerCard: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#2A2A45",
-  },
-  pickerVideoTitle: { color: "#BBBBBB", fontSize: 12, marginBottom: 6 },
-  pickerVariantRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#2A2A3E",
-  },
-  pickerVariantInfo: { flexDirection: "row", alignItems: "center", gap: 10 },
-  pickerResolution: {
+  navBtnText: {
     color: "#FFF",
     fontSize: 13,
     fontWeight: "600",
-    minWidth: 80,
   },
-  pickerBandwidth: { color: "#8AB4F8", fontSize: 12 },
-  pickerDlBtn: {
-    backgroundColor: TEAL,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 7,
+  navBtnTextDisabled: {
+    color: "#555",
   },
-  pickerDlBtnText: { color: "#1A1A2E", fontWeight: "700", fontSize: 12 },
+  orientationBtn: {
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-  /* ── Details modal ── */
+  /* ── Variant picker modal ── */
   closeBtn: {
     width: 28,
     height: 28,
@@ -1011,7 +1006,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#2A2A45",
   },
   modalTitle: {
-    color: "#4ECDC4",
+    color: TEAL,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -1062,12 +1057,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     minWidth: 80,
   },
-  variantBandwidth: {
-    color: "#8AB4F8",
-    fontSize: 11,
-  },
   downloadVariantBtn: {
-    backgroundColor: "#4ECDC4",
+    backgroundColor: TEAL,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
@@ -1076,20 +1067,6 @@ const styles = StyleSheet.create({
     color: "#1A1A2E",
     fontWeight: "700",
     fontSize: 12,
-  },
-  previewBtnRow: {
-    alignSelf: "flex-start",
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#4ECDC4",
-  },
-  previewBtnRowText: {
-    color: "#4ECDC4",
-    fontSize: 12,
-    fontWeight: "700",
   },
   emptyState: {
     paddingHorizontal: 16,
