@@ -1,7 +1,12 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { MangaTitle } from '../types/manga';
+
+const MANGA_ROOT = 'private_downloads/Manga/';
 
 export function sanitizeMangaName(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'Unknown';
+  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim();
+  // "." / ".." would resolve outside the manga's own folder
+  return cleaned && !/^\.+$/.test(cleaned) ? cleaned : 'Unknown';
 }
 
 export function padChapterNumber(n: number | string): string {
@@ -20,6 +25,23 @@ export function chapterFolderPath(mangaTitleSafe: string, chapterNumber: string)
 export function mangaTitleFolderPath(mangaTitleSafe: string): string {
   const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
   return `${baseDir}private_downloads/Manga/${mangaTitleSafe}/`;
+}
+
+/**
+ * Resolves a manga's folder on disk from the paths recorded at download time,
+ * so it stays correct after the user renames the title. Returns null when the
+ * result is not a direct child of the Manga root (never delete outside it).
+ */
+export function mangaFolderOf(manga: MangaTitle): string | null {
+  const recorded =
+    manga.chapters.find((ch) => ch.folderPath)?.folderPath || manga.coverImagePath;
+  const folder = recorded
+    ? recorded.replace(/[^/]+\/?$/, '')
+    : mangaTitleFolderPath(sanitizeMangaName(manga.title));
+  const idx = folder.indexOf(MANGA_ROOT);
+  if (idx < 0) return null;
+  const name = folder.slice(idx + MANGA_ROOT.length);
+  return /^[^/]+\/$/.test(name) && !/^\.+\/$/.test(name) ? folder : null;
 }
 
 /**
@@ -84,11 +106,10 @@ export async function getChapterSizeBytes(folderPath: string): Promise<number> {
 
 /**
  * Copies the first successfully downloaded image as the manga cover.
- * Cover is saved to private_downloads/Manga/{titleSafe}/cover.jpg
+ * Cover is saved to {mangaFolder}cover.jpg
  */
-export async function saveCoverImage(mangaTitleSafe: string, firstImagePath: string): Promise<string> {
-  const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
-  const coverPath = `${baseDir}private_downloads/Manga/${mangaTitleSafe}/cover.jpg`;
+export async function saveCoverImage(mangaFolder: string, firstImagePath: string): Promise<string> {
+  const coverPath = `${mangaFolder}cover.jpg`;
   const info = await FileSystem.getInfoAsync(coverPath);
   if (!info.exists) {
     await FileSystem.copyAsync({ from: firstImagePath, to: coverPath }).catch(() => {});

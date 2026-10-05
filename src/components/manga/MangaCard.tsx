@@ -6,11 +6,17 @@ import { MangaTitle } from "../../types/manga";
 
 interface Props {
   manga: MangaTitle;
-  onPress: () => void;
-  onLongPress: () => void;
+  onPress: (manga: MangaTitle) => void;
+  onLongPress: (manga: MangaTitle) => void;
 }
 
-export default function MangaCard({ manga, onPress, onLongPress }: Props) {
+// Memoized: download progress replaces only the affected title object, so
+// other cards skip re-rendering as long as the handlers are stable.
+export default React.memo(function MangaCard({
+  manga,
+  onPress,
+  onLongPress,
+}: Props) {
   const { themeColors: c } = useSettings();
   const { t } = useTranslation();
 
@@ -38,8 +44,8 @@ export default function MangaCard({ manga, onPress, onLongPress }: Props) {
         styles.card,
         { backgroundColor: c.surface, borderColor: c.border },
       ]}
-      onPress={onPress}
-      onLongPress={onLongPress}
+      onPress={() => onPress(manga)}
+      onLongPress={() => onLongPress(manga)}
       activeOpacity={0.7}
     >
       {manga.coverImagePath ? (
@@ -96,7 +102,7 @@ export default function MangaCard({ manga, onPress, onLongPress }: Props) {
       <Text style={[styles.chevron, { color: c.textSecondary }]}>›</Text>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

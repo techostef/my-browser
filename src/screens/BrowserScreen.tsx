@@ -60,6 +60,8 @@ import {
   chapterFolderPath,
   downloadChapterImages,
   getChapterSizeBytes,
+  mangaFolderOf,
+  mangaTitleFolderPath,
   sanitizeMangaName,
   saveCoverImage,
 } from "../services/mangaDownloadService";
@@ -1330,7 +1332,10 @@ function BrowserScreen() {
           });
 
           if (!coverSaved && filePaths.length > 0) {
-            const coverPath = await saveCoverImage(safeTitleName, filePaths[0]);
+            const coverPath = await saveCoverImage(
+              mangaTitleFolderPath(safeTitleName),
+              filePaths[0],
+            );
             updateTitle(mangaId, { coverImagePath: coverPath });
             coverSaved = true;
           }
@@ -1392,11 +1397,10 @@ function BrowserScreen() {
           sizeBytes,
         });
 
-        if (!manga.coverImagePath && filePaths.length > 0) {
-          const coverPath = await saveCoverImage(
-            sanitizeMangaName(manga.title),
-            filePaths[0],
-          );
+        // Folder comes from recorded paths, not the (possibly renamed) title
+        const mangaFolder = mangaFolderOf(manga);
+        if (!manga.coverImagePath && mangaFolder && filePaths.length > 0) {
+          const coverPath = await saveCoverImage(mangaFolder, filePaths[0]);
           updateTitle(mangaId, { coverImagePath: coverPath });
         }
       } catch (e) {

@@ -2,6 +2,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -15,14 +16,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { withErrorBoundary } from "../components/ErrorBoundary";
 import MangaCard from "../components/manga/MangaCard";
 import { useTranslation } from "../i18n";
-import { useManga } from "../store/mangaStore";
+import { isMangaDownloading, useManga } from "../store/mangaStore";
 import { useSettings } from "../store/settingsStore";
+import { MangaTitle } from "../types/manga";
 import { RootStackParamList } from "../types/videoEditor";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function MangaScreen() {
-  const { titles, removeTitle, updateTitle } = useManga();
+  const { titles, loaded, removeTitle, updateTitle, getTitle } = useManga();
   const navigation = useNavigation<Nav>();
   const { themeColors: c } = useSettings();
   const { t } = useTranslation();
@@ -30,20 +32,34 @@ function MangaScreen() {
   const [renameTarget, setRenameTarget] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
 
+  const handlePress = useCallback(
+    (manga: MangaTitle) => {
+      navigation.navigate("MangaChapters", { mangaId: manga.id });
+    },
+    [navigation],
+  );
+
   const handleLongPress = useCallback(
-    (mangaId: string, currentTitle: string) => {
-      Alert.alert(currentTitle, undefined, [
+    (manga: MangaTitle) => {
+      const mangaId = manga.id;
+      Alert.alert(manga.title, undefined, [
         {
           text: t("rename"),
           onPress: () => {
             setRenameTarget(mangaId);
-            setRenameText(currentTitle);
+            setRenameText(manga.title);
           },
         },
         {
           text: t("delete"),
           style: "destructive",
           onPress: () => {
+            // Deleting mid-download would let the download loop recreate
+            // the folder on disk after it was removed.
+            if (isMangaDownloading(getTitle(mangaId) ?? manga)) {
+              Alert.alert(t("deleteManga"), t("mangaDownloadInProgress"));
+              return;
+            }
             Alert.alert(t("deleteManga"), t("deleteMangaConfirm"), [
               { text: t("cancel"), style: "cancel" },
               {
@@ -57,7 +73,7 @@ function MangaScreen() {
         { text: t("cancel"), style: "cancel" },
       ]);
     },
-    [removeTitle],
+    [removeTitle, getTitle, t],
   );
 
   const confirmRename = () => {
@@ -75,7 +91,11 @@ function MangaScreen() {
         </Text>
       </View>
 
-      {titles.length === 0 ? (
+      {!loaded ? (
+        <View style={styles.empty}>
+          <ActivityIndicator color={c.textSecondary} />
+        </View>
+      ) : titles.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>📚</Text>
           <Text style={[styles.emptyTitle, { color: c.text }]}>
@@ -93,10 +113,8 @@ function MangaScreen() {
           renderItem={({ item }) => (
             <MangaCard
               manga={item}
-              onPress={() =>
-                navigation.navigate("MangaChapters", { mangaId: item.id })
-              }
-              onLongPress={() => handleLongPress(item.id, item.title)}
+              onPress={handlePress}
+              onLongPress={handleLongPress}
             />
           )}
         />
@@ -127,6 +145,8 @@ function MangaScreen() {
               onChangeText={setRenameText}
               autoFocus
               selectTextOnFocus
+              returnKeyType="done"
+              onSubmitEditing={confirmRename}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setRenameTarget(null)}>

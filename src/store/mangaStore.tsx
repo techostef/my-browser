@@ -6,10 +6,22 @@ import React, {
   useContext,
   useEffect,
   useReducer,
+  useRef,
 } from "react";
+import { AppState } from "react-native";
+import { mangaFolderOf } from "../services/mangaDownloadService";
 import { MangaChapter, MangaTitle } from "../types/manga";
 
 const STORAGE_KEY = "@manga_library_v1";
+// Download progress updates the store once per image; batch the disk writes.
+const PERSIST_DEBOUNCE_MS = 500;
+
+/** True while any chapter of the title is downloading or waiting in the queue. */
+export function isMangaDownloading(manga: MangaTitle): boolean {
+  return manga.chapters.some(
+    (ch) => ch.status === "downloading" || ch.status === "queued",
+  );
+}
 
 interface MangaState {
   titles: MangaTitle[];
@@ -116,6 +128,10 @@ const MangaContext = createContext<MangaContextValue | null>(null);
 
 export function MangaProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, { titles: [], loaded: false });
+  // Latest titles for callbacks, so they keep a stable identity across updates
+  const titlesRef = useRef(state.titles);
+  titlesRef.current = state.titles;
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load from AsyncStorage on mount
   useEffect(() => {
@@ -128,13 +144,32 @@ export function MangaProvider({ children }: { children: React.ReactNode }) {
       });
   }, []);
 
-  // Persist whenever titles change (after initial load)
-  useEffect(() => {
-    if (!state.loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state.titles)).catch(
+  const flushPersist = useCallback(() => {
+    if (!persistTimer.current) return;
+    clearTimeout(persistTimer.current);
+    persistTimer.current = null;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(titlesRef.current)).catch(
       () => {},
     );
-  }, [state.titles, state.loaded]);
+  }, []);
+
+  // Persist (debounced) whenever titles change (after initial load)
+  useEffect(() => {
+    if (!state.loaded) return;
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(flushPersist, PERSIST_DEBOUNCE_MS);
+  }, [state.titles, state.loaded, flushPersist]);
+
+  // Write pending changes right away when the app is backgrounded or unmounted
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s !== "active") flushPersist();
+    });
+    return () => {
+      sub.remove();
+      flushPersist();
+    };
+  }, [flushPersist]);
 
   const addTitle = useCallback((title: MangaTitle) => {
     dispatch({ type: "ADD_TITLE", payload: title });
@@ -147,23 +182,23 @@ export function MangaProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const removeTitle = useCallback(
-    async (id: string) => {
-      const title = state.titles.find((t) => t.id === id);
-      if (title) {
-        // Delete folder from disk
-        const baseDir =
-          FileSystem.documentDirectory || FileSystem.cacheDirectory;
-        const safeName = title.title.replace(/[\\/:*?"<>|]/g, "_").trim();
-        const folderUri = `${baseDir}private_downloads/Manga/${safeName}/`;
-        await FileSystem.deleteAsync(folderUri, { idempotent: true }).catch(
-          () => {},
-        );
-      }
-      dispatch({ type: "REMOVE_TITLE", payload: { id } });
-    },
-    [state.titles],
-  );
+  const removeTitle = useCallback(async (id: string) => {
+    const title = titlesRef.current.find((t) => t.id === id);
+    if (title) {
+      // Delete from disk. The folder is resolved from recorded paths because a
+      // renamed title no longer matches its folder name.
+      const folder = mangaFolderOf(title);
+      const paths = folder
+        ? [folder]
+        : title.chapters.map((ch) => ch.folderPath).filter(Boolean);
+      await Promise.all(
+        paths.map((p) =>
+          FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {}),
+        ),
+      );
+    }
+    dispatch({ type: "REMOVE_TITLE", payload: { id } });
+  }, []);
 
   const updateChapter = useCallback(
     (mangaId: string, chapterId: string, changes: Partial<MangaChapter>) => {
@@ -177,7 +212,7 @@ export function MangaProvider({ children }: { children: React.ReactNode }) {
 
   const removeChapter = useCallback(
     async (mangaId: string, chapterId: string) => {
-      const title = state.titles.find((t) => t.id === mangaId);
+      const title = titlesRef.current.find((t) => t.id === mangaId);
       const chapter = title?.chapters.find((c) => c.id === chapterId);
       if (chapter?.folderPath) {
         await FileSystem.deleteAsync(chapter.folderPath, {
@@ -186,15 +221,12 @@ export function MangaProvider({ children }: { children: React.ReactNode }) {
       }
       dispatch({ type: "REMOVE_CHAPTER", payload: { mangaId, chapterId } });
     },
-    [state.titles],
+    [],
   );
 
-  const getTitle = useCallback(
-    (id: string) => {
-      return state.titles.find((t) => t.id === id);
-    },
-    [state.titles],
-  );
+  const getTitle = useCallback((id: string) => {
+    return titlesRef.current.find((t) => t.id === id);
+  }, []);
 
   return (
     <MangaContext.Provider

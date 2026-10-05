@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { withErrorBoundary } from "../components/ErrorBoundary";
 import ChapterItem from "../components/manga/ChapterItem";
-import { useManga } from "../store/mangaStore";
+import { isMangaDownloading, useManga } from "../store/mangaStore";
 import { useSettings } from "../store/settingsStore";
 import { RootStackParamList } from "../types/videoEditor";
 
@@ -114,6 +114,13 @@ function MangaChapterListScreen() {
   }
 
   const handleDeleteManga = () => {
+    if (isMangaDownloading(manga)) {
+      Alert.alert(
+        `Delete "${manga.title}"?`,
+        "Wait for the download to finish before deleting this manga.",
+      );
+      return;
+    }
     Alert.alert(
       `Delete "${manga.title}"?`,
       "This will delete all downloaded chapters.",

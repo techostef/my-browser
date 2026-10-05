@@ -171,6 +171,7 @@ export interface Translations {
   noMangaHint: string;
   deleteManga: string;
   deleteMangaConfirm: string;
+  mangaDownloadInProgress: string;
   renameManga: string;
 
   // ── Projects screen ──
@@ -589,6 +590,7 @@ const en: Translations = {
   noMangaHint: 'Browse to a manga chapter and tap ⋮ → Download Manga',
   deleteManga: 'Delete manga?',
   deleteMangaConfirm: 'This will delete all downloaded chapters.',
+  mangaDownloadInProgress: 'Wait for the download to finish before deleting this manga.',
   renameManga: 'Rename Manga',
 
   projects: 'Projects',
@@ -994,6 +996,7 @@ const es: Translations = {
   noMangaHint: 'Navega a un capítulo de manga y toca ⋮ → Descargar Manga',
   deleteManga: '¿Eliminar manga?',
   deleteMangaConfirm: 'Esto eliminará todos los capítulos descargados.',
+  mangaDownloadInProgress: 'Espera a que termine la descarga antes de eliminar este manga.',
   renameManga: 'Renombrar Manga',
 
   projects: 'Proyectos',
@@ -1398,6 +1401,7 @@ const fr: Translations = {
   noMangaHint: 'Naviguez vers un chapitre de manga et appuyez sur ⋮ → Télécharger Manga',
   deleteManga: 'Supprimer le manga ?',
   deleteMangaConfirm: 'Cela supprimera tous les chapitres téléchargés.',
+  mangaDownloadInProgress: 'Attendez la fin du téléchargement avant de supprimer ce manga.',
   renameManga: 'Renommer le manga',
 
   projects: 'Projets',
@@ -1802,6 +1806,7 @@ const de: Translations = {
   noMangaHint: 'Navigieren Sie zu einem Manga-Kapitel und tippen Sie auf ⋮ → Manga herunterladen',
   deleteManga: 'Manga löschen?',
   deleteMangaConfirm: 'Alle heruntergeladenen Kapitel werden gelöscht.',
+  mangaDownloadInProgress: 'Warte, bis der Download abgeschlossen ist, bevor du diesen Manga löschst.',
   renameManga: 'Manga umbenennen',
 
   projects: 'Projekte',
@@ -2206,6 +2211,7 @@ const ja: Translations = {
   noMangaHint: 'マンガのチャプターに移動して ⋮ → マンガをダウンロード をタップ',
   deleteManga: 'マンガを削除しますか？',
   deleteMangaConfirm: 'ダウンロードしたすべてのチャプターが削除されます。',
+  mangaDownloadInProgress: 'このマンガを削除する前に、ダウンロードが完了するまでお待ちください。',
   renameManga: 'マンガの名前変更',
 
   projects: 'プロジェクト',
@@ -2610,6 +2616,7 @@ const ko: Translations = {
   noMangaHint: '만화 챕터로 이동하여 ⋮ → 만화 다운로드를 탭하세요',
   deleteManga: '만화를 삭제하시겠습니까?',
   deleteMangaConfirm: '다운로드된 모든 챕터가 삭제됩니다.',
+  mangaDownloadInProgress: '이 만화를 삭제하기 전에 다운로드가 끝날 때까지 기다려 주세요.',
   renameManga: '만화 이름 변경',
 
   projects: '프로젝트',
@@ -3014,6 +3021,7 @@ const zhCN: Translations = {
   noMangaHint: '浏览漫画章节并点击 ⋮ → 下载漫画',
   deleteManga: '删除漫画？',
   deleteMangaConfirm: '这将删除所有已下载的章节。',
+  mangaDownloadInProgress: '请等待下载完成后再删除此漫画。',
   renameManga: '重命名漫画',
 
   projects: '项目',
@@ -3418,6 +3426,7 @@ const ar: Translations = {
   noMangaHint: 'تصفح فصل مانجا واضغط على ⋮ → تنزيل المانجا',
   deleteManga: 'حذف المانجا؟',
   deleteMangaConfirm: 'سيتم حذف جميع الفصول المحملة.',
+  mangaDownloadInProgress: 'انتظر حتى ينتهي التنزيل قبل حذف هذه المانجا.',
   renameManga: 'إعادة تسمية المانجا',
 
   projects: 'المشاريع',
@@ -3822,6 +3831,7 @@ const pt: Translations = {
   noMangaHint: 'Navegue até um capítulo de mangá e toque em ⋮ → Baixar Mangá',
   deleteManga: 'Excluir mangá?',
   deleteMangaConfirm: 'Isso excluirá todos os capítulos baixados.',
+  mangaDownloadInProgress: 'Aguarde o download terminar antes de excluir este mangá.',
   renameManga: 'Renomear Mangá',
 
   projects: 'Projetos',
@@ -4226,6 +4236,7 @@ const ru: Translations = {
   noMangaHint: 'Перейдите к главе манги и нажмите ⋮ → Скачать мангу',
   deleteManga: 'Удалить мангу?',
   deleteMangaConfirm: 'Все загруженные главы будут удалены.',
+  mangaDownloadInProgress: 'Дождитесь окончания загрузки, прежде чем удалять эту мангу.',
   renameManga: 'Переименовать мангу',
 
   projects: 'Проекты',
@@ -4630,6 +4641,7 @@ const id: Translations = {
   noMangaHint: 'Jelajahi ke bab manga dan ketuk ⋮ → Unduh Manga',
   deleteManga: 'Hapus manga?',
   deleteMangaConfirm: 'Ini akan menghapus semua bab yang diunduh.',
+  mangaDownloadInProgress: 'Tunggu hingga unduhan selesai sebelum menghapus manga ini.',
   renameManga: 'Ganti Nama Manga',
 
   projects: 'Proyek',
