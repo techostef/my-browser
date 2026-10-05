@@ -131,30 +131,72 @@ export const VIDEO_DETECTOR_JS = `
         if (node === document.documentElement) break;
       }
     }
+    // Picks the video to fullscreen: the first playing one, or — when
+    // allowPaused — the largest visible video that has loaded metadata.
+    window.__rnPickVideo = function(allowPaused) {
+      var vids = document.querySelectorAll('video');
+      for (var i = 0; i < vids.length; i++) {
+        if (!vids[i].paused) return vids[i];
+      }
+      if (!allowPaused) return null;
+      var best = null, bestArea = 0;
+      for (var j = 0; j < vids.length; j++) {
+        var r = vids[j].getBoundingClientRect();
+        var area = r.width * r.height;
+        if (vids[j].readyState > 0 && area > bestArea) { best = vids[j]; bestArea = area; }
+      }
+      return best;
+    };
+    // Restores whatever this (top) frame fullscreened — the iframe path or
+    // the top-frame video path. Returns true if something was restored.
+    window.__rnExitFullscreen = function(pause) {
+      var fsIframe = document.querySelector('iframe[data-rn-fullscreen="1"]');
+      if (fsIframe) {
+        try { fsIframe.contentWindow.postMessage({ type: '__RN_FS_EXIT' }, '*'); } catch(_) {}
+        // Restore the original style attribute wholesale, since we may have
+        // written display:none with !important.
+        var hidden = document.querySelectorAll('[data-rn-fs-hidden="1"]');
+        for (var h = 0; h < hidden.length; h++) {
+          hidden[h].style.cssText = hidden[h].dataset.rnFsOrigCssText || '';
+          delete hidden[h].dataset.rnFsHidden;
+          delete hidden[h].dataset.rnFsOrigCssText;
+        }
+        fsIframe.setAttribute('style', fsIframe.dataset.rnOrigStyle || '');
+        delete fsIframe.dataset.rnFullscreen;
+        delete fsIframe.dataset.rnOrigStyle;
+        return true;
+      }
+      if (document.querySelector('.__rn-playing')) {
+        if (window.__rnVideoStateInterval) { clearInterval(window.__rnVideoStateInterval); window.__rnVideoStateInterval = null; }
+        window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles(pause);
+        return true;
+      }
+      return false;
+    };
     window.addEventListener('message', function(e) {
       if (!e || !e.data || typeof e.data !== 'object') return;
       var type = e.data.type;
       if (type === '__RN_FS_QUERY') {
         var queryId = e.data.id;
-        var vids = document.querySelectorAll('video');
-        for (var i = 0; i < vids.length; i++) {
-          var v = vids[i];
-          if (!v.paused) {
-            if (!v.dataset.rnIframeFsOrig) {
-              v.dataset.rnIframeFsOrig = v.getAttribute('style') || '';
-            }
-            v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:black!important;object-fit:contain!important;margin:0!important;padding:0!important;';
-            v.classList.add('__rn-iframe-playing');
-            hideAroundNode(v);
-            startStateInterval();
-            // Reply to our parent — intermediate frames also need to know
-            // (so they can hide their own UI around the iframe that led
-            // here). The message bubbles up the chain to the top frame.
-            try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId }, '*'); } catch(_) {}
-            return;
+        var allowPaused = !!e.data.allowPaused;
+        var v = window.__rnPickVideo(allowPaused);
+        if (v) {
+          if (!v.dataset.rnIframeFsOrig) {
+            v.dataset.rnIframeFsOrig = v.getAttribute('style') || '';
           }
+          v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:black!important;object-fit:contain!important;margin:0!important;padding:0!important;';
+          v.classList.add('__rn-iframe-playing');
+          hideAroundNode(v);
+          startStateInterval();
+          // Reply to our parent — intermediate frames also need to know
+          // (so they can hide their own UI around the iframe that led
+          // here). The message bubbles up the chain to the top frame.
+          if (window.parent !== window) {
+            try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId }, '*'); } catch(_) {}
+          }
+          return;
         }
-        forwardToChildren({ type: '__RN_FS_QUERY', id: queryId });
+        forwardToChildren({ type: '__RN_FS_QUERY', id: queryId, allowPaused: allowPaused });
       } else if (type === '__RN_FS_HAS_PLAYING') {
         // A descendant frame replied: hide our own UI around the child
         // iframe that produced this response, then forward up the chain.
@@ -168,7 +210,11 @@ export const VIDEO_DETECTOR_JS = `
             }
           }
         }
-        try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId2 }, '*'); } catch(_) {}
+        // In the top frame window.parent === window — forwarding there would
+        // re-deliver this message to ourselves forever.
+        if (window.parent !== window) {
+          try { window.parent.postMessage({ type: '__RN_FS_HAS_PLAYING', id: queryId2 }, '*'); } catch(_) {}
+        }
       } else if (type === '__RN_FS_EXIT') {
         var fsVids = document.querySelectorAll('.__rn-iframe-playing');
         for (var k = 0; k < fsVids.length; k++) {
@@ -324,14 +370,16 @@ export const VIDEO_DETECTOR_JS = `
     } catch(e) {}
   }
 
-  window.__removeVideoPlayingStyles = function() {
+  // pause=true pauses the video; otherwise playback continues inline.
+  window.__removeVideoPlayingStyles = function(pause) {
     try {
       var vids = document.querySelectorAll('.__rn-playing');
       for (var i = 0; i < vids.length; i++) {
         var v = vids[i];
         var parent = window.__rnPlayingParent;
         var sibling = window.__rnPlayingNextSibling;
-        try { v.pause(); } catch(_) {}
+        var wasPlaying = !v.paused;
+        if (pause === true) { try { v.pause(); } catch(_) {} }
         var backdrop = document.getElementById('__rn-playing-backdrop');
         if (backdrop) backdrop.parentNode.removeChild(backdrop);
         if (parent) {
@@ -343,10 +391,15 @@ export const VIDEO_DETECTOR_JS = `
           window.__rnPlayingParent = null;
           window.__rnPlayingNextSibling = null;
         }
-        if (v.dataset.rnOrigHadControls === '0') v.removeAttribute('controls');
+        if (v.dataset.rnOrigHadControls === '1') v.setAttribute('controls', '');
         v.setAttribute('style', v.dataset.rnOrigStyle || '');
         v.classList.remove('__rn-playing');
         delete v.dataset.rnOrigStyle;
+        delete v.dataset.rnOrigHadControls;
+        // Moving the element in the DOM can pause it on some engines.
+        if (pause !== true && wasPlaying && v.paused) {
+          try { var p = v.play(); if (p && p.catch) p.catch(function(){}); } catch(_) {}
+        }
       }
     } catch(e) {}
   };

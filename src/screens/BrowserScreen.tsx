@@ -4,6 +4,7 @@
 /** biome-ignore-all lint/suspicious/useIterableCallbackReturn: <explanation> */
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system/legacy";
+import * as NavigationBar from "expo-navigation-bar";
 import * as ScreenOrientation from "expo-screen-orientation";
 import React, {
   useCallback,
@@ -19,10 +20,12 @@ import {
   BackHandler,
   DeviceEventEmitter,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -86,11 +89,11 @@ const SUPPORTED_MANGA_DOMAINS = ["www.mangaread.org", "mangaread.org"];
 // Posts the currentTime of the most-advanced playing video element.
 const GET_VIDEO_TIME_JS = `(function(){try{var vids=document.querySelectorAll('video');var t=0;for(var i=0;i<vids.length;i++){if(vids[i].currentTime>t)t=vids[i].currentTime;}window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_CURRENT_TIME',payload:{time:t}}));}catch(e){}})();true;`;
 
-// Toggles fullscreen for the currently-playing video. Tries the top frame's
-// own <video> elements first (existing CSS-positioning path); if none are
-// playing, broadcasts to iframes via postMessage and — when an iframe replies
-// that it has a playing video — makes that iframe element fullscreen (covers
-// the WebView viewport). Restoration handles both paths.
+// Toggles fullscreen for the page's video. Exit is handled by
+// window.__rnExitFullscreen (videoDetector). Activation prefers a playing
+// video anywhere (top frame, then iframes via postMessage) over a paused one;
+// when an iframe replies that it owns the video, that iframe element is made
+// to cover the WebView viewport. Posts VIDEO_FULLSCREEN_FAILED if no video.
 const TOGGLE_FULLSCREEN_JS = `(function(){
   function rnLog(msg) {
     try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'DETECTOR_LOG', payload: msg})); } catch(_){}
@@ -98,85 +101,53 @@ const TOGGLE_FULLSCREEN_JS = `(function(){
   function notifyChanged(active) {
     try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_CHANGED', payload:{active:active}})); } catch(_){}
   }
-  try {
-    // 1. Restore path — iframe was fullscreen
-    var fsIframe = document.querySelector('iframe[data-rn-fullscreen="1"]');
-    if (fsIframe) {
-      try { fsIframe.contentWindow.postMessage({ type: '__RN_FS_EXIT' }, '*'); } catch(_) {}
-      // Un-hide everything we hid (restore the original style attribute
-      // wholesale, since we may have written display:none with !important).
-      var hidden = document.querySelectorAll('[data-rn-fs-hidden="1"]');
-      for (var h = 0; h < hidden.length; h++) {
-        hidden[h].style.cssText = hidden[h].dataset.rnFsOrigCssText || '';
-        delete hidden[h].dataset.rnFsHidden;
-        delete hidden[h].dataset.rnFsOrigCssText;
-      }
-      fsIframe.setAttribute('style', fsIframe.dataset.rnOrigStyle || '');
-      delete fsIframe.dataset.rnFullscreen;
-      delete fsIframe.dataset.rnOrigStyle;
-      rnLog('[FULLSCREEN] iframe restored');
-      notifyChanged(false);
-      return;
-    }
-    // 2. Restore path — top-frame video was fullscreen
-    var playing = document.querySelectorAll('.__rn-playing');
-    if (playing.length > 0) {
-      if (window.__rnVideoStateInterval) { clearInterval(window.__rnVideoStateInterval); window.__rnVideoStateInterval = null; }
-      window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles();
-      rnLog('[FULLSCREEN] top-frame video restored');
-      notifyChanged(false);
-      return;
-    }
-    // 3. Activate path — try top-frame videos
-    var vids = document.querySelectorAll('video');
-    rnLog('[FULLSCREEN] top-frame videos=' + vids.length);
-    for (var i = 0; i < vids.length; i++) {
-      var v = vids[i];
-      if (!v.paused) {
-        if (!v.dataset.rnOrigStyle) v.dataset.rnOrigStyle = v.getAttribute('style') || '';
-        window.__rnPlayingParent = v.parentNode;
-        window.__rnPlayingNextSibling = v.nextSibling;
-        var backdrop = document.createElement('div');
-        backdrop.id = '__rn-playing-backdrop';
-        backdrop.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:9998!important;background:black!important;';
-        v.dataset.rnOrigHadControls = v.hasAttribute('controls') ? '1' : '0';
-        document.body.appendChild(backdrop);
-        document.body.appendChild(v);
-        v.removeAttribute('controls');
-        v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:9999!important;transform:none!important;';
-        v.classList.add('__rn-playing');
-        if (window.__rnVideoStateInterval) clearInterval(window.__rnVideoStateInterval);
-        window.__rnVideoStateInterval = setInterval(function() {
-          var el = document.querySelector('.__rn-playing');
-          if (!el) { clearInterval(window.__rnVideoStateInterval); return; }
-          try {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'VIDEO_STATE',
-              currentTime: el.currentTime || 0,
-              duration: isFinite(el.duration) ? el.duration : 0,
-              paused: el.paused,
-              muted: el.muted,
-            }));
-          } catch(_) {}
-        }, 250);
-        rnLog('[FULLSCREEN] top-frame video[' + i + '] fullscreened');
-        notifyChanged(true);
-        return;
-      }
-    }
-    // 4. Activate path — query iframes (with id so nested-iframe replies
-    // can be mapped back to the top-level iframe).
+  function notifyFailed() {
+    rnLog('[FULLSCREEN] no video found');
+    try { window.ReactNativeWebView.postMessage(JSON.stringify({type:'VIDEO_FULLSCREEN_FAILED'})); } catch(_){}
+  }
+  function fsTopVideo(v) {
+    if (!v.dataset.rnOrigStyle) v.dataset.rnOrigStyle = v.getAttribute('style') || '';
+    window.__rnPlayingParent = v.parentNode;
+    window.__rnPlayingNextSibling = v.nextSibling;
+    var backdrop = document.createElement('div');
+    backdrop.id = '__rn-playing-backdrop';
+    backdrop.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:9998!important;background:black!important;';
+    v.dataset.rnOrigHadControls = v.hasAttribute('controls') ? '1' : '0';
+    document.body.appendChild(backdrop);
+    document.body.appendChild(v);
+    v.removeAttribute('controls');
+    v.style.cssText = 'position:fixed!important;top:0!important;left:0!important;width:100%!important;height:100%!important;z-index:9999!important;transform:none!important;';
+    v.classList.add('__rn-playing');
+    if (window.__rnVideoStateInterval) clearInterval(window.__rnVideoStateInterval);
+    window.__rnVideoStateInterval = setInterval(function() {
+      var el = document.querySelector('.__rn-playing');
+      if (!el) { clearInterval(window.__rnVideoStateInterval); return; }
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'VIDEO_STATE',
+          currentTime: el.currentTime || 0,
+          duration: isFinite(el.duration) ? el.duration : 0,
+          paused: el.paused,
+          muted: el.muted,
+        }));
+      } catch(_) {}
+    }, 250);
+    rnLog('[FULLSCREEN] top-frame video fullscreened');
+    notifyChanged(true);
+  }
+  // Ask every iframe (with an id so nested-iframe replies can be mapped back
+  // to the top-level iframe) whether it has a video to fullscreen.
+  function queryIframes(allowPaused, onTimeout) {
     var iframes = document.querySelectorAll('iframe');
-    rnLog('[FULLSCREEN] querying ' + iframes.length + ' iframe(s)');
-    if (iframes.length === 0) return;
+    rnLog('[FULLSCREEN] querying ' + iframes.length + ' iframe(s), allowPaused=' + allowPaused);
+    if (iframes.length === 0) { onTimeout(); return; }
     var handled = false;
     var listener = function(e) {
       if (handled) return;
       if (!e.data || typeof e.data !== 'object' || e.data.type !== '__RN_FS_HAS_PLAYING') return;
       var id = e.data.id;
       if (typeof id !== 'number') return;
-      var all = document.querySelectorAll('iframe');
-      var iframe = all[id];
+      var iframe = document.querySelectorAll('iframe')[id];
       if (!iframe) return;
       handled = true;
       window.removeEventListener('message', listener);
@@ -208,14 +179,29 @@ const TOGGLE_FULLSCREEN_JS = `(function(){
     };
     window.addEventListener('message', listener);
     for (var k = 0; k < iframes.length; k++) {
-      try { iframes[k].contentWindow.postMessage({ type: '__RN_FS_QUERY', id: k }, '*'); } catch(_) {}
+      try { iframes[k].contentWindow.postMessage({ type: '__RN_FS_QUERY', id: k, allowPaused: allowPaused }, '*'); } catch(_) {}
     }
     setTimeout(function() {
       if (!handled) {
         window.removeEventListener('message', listener);
-        rnLog('[FULLSCREEN] no iframe responded');
+        onTimeout();
       }
     }, 500);
+  }
+  try {
+    if (!window.__rnPickVideo) { notifyFailed(); return; }
+    if (window.__rnExitFullscreen && window.__rnExitFullscreen(false)) {
+      rnLog('[FULLSCREEN] restored');
+      notifyChanged(false);
+      return;
+    }
+    var playing = window.__rnPickVideo(false);
+    if (playing) { fsTopVideo(playing); return; }
+    queryIframes(false, function() {
+      var paused = window.__rnPickVideo(true);
+      if (paused) { fsTopVideo(paused); return; }
+      queryIframes(true, notifyFailed);
+    });
   } catch(e) {
     rnLog('[FULLSCREEN] error: ' + e.message);
   }
@@ -634,7 +620,8 @@ function BrowserScreen() {
     }
     setPreviewVideo(null);
     setIsVideoPlaying(false);
-    const REMOVE_JS = `if(window.__rnVideoStateInterval){clearInterval(window.__rnVideoStateInterval);window.__rnVideoStateInterval=null;} window.__removeVideoPlayingStyles && window.__removeVideoPlayingStyles(); true;`;
+    // Covers both the top-frame and the iframe fullscreen paths.
+    const REMOVE_JS = `window.__rnExitFullscreen && window.__rnExitFullscreen(true); true;`;
     Object.values(webViewRefs.current).forEach((ref) =>
       ref?.injectJavaScript(REMOVE_JS),
     );
@@ -763,8 +750,20 @@ function BrowserScreen() {
   useEffect(() => {
     return () => {
       ScreenOrientation.unlockAsync();
+      if (Platform.OS === "android") {
+        NavigationBar.setVisibilityAsync("visible").catch(() => {});
+      }
     };
   }, []);
+
+  // Immersive fullscreen: hide the Android navigation bar while a video is
+  // fullscreen (the status bar is hidden via <StatusBar hidden> below).
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    NavigationBar.setVisibilityAsync(isVideoPlaying ? "hidden" : "visible").catch(
+      () => {},
+    );
+  }, [isVideoPlaying]);
 
   // Hide the bottom tab bar while a video is in fullscreen, restore on exit.
   // BrowserScreen is registered as a Tab.Screen, so its own navigation is
@@ -892,6 +891,15 @@ function BrowserScreen() {
             const matchUrl = m3u8Url || src;
             if (matchUrl) {
               setPlayingVideoUrlMap((prev) => ({ ...prev, [tabId]: matchUrl }));
+            }
+            break;
+          }
+          case "VIDEO_FULLSCREEN_FAILED": {
+            if (Platform.OS === "android") {
+              ToastAndroid.show(
+                "Tidak ada video yang bisa ditampilkan layar penuh",
+                ToastAndroid.SHORT,
+              );
             }
             break;
           }
@@ -1518,12 +1526,16 @@ function BrowserScreen() {
         styles.container,
         {
           backgroundColor: c.background,
-          paddingTop: insets.top,
-          marginBottom: -15,
+          paddingTop: isVideoPlaying ? 0 : insets.top,
+          marginBottom: isVideoPlaying ? 0 : -15,
         },
       ]}
     >
-      <StatusBar barStyle={barStyle} backgroundColor={c.addressBar} />
+      <StatusBar
+        hidden={isVideoPlaying}
+        barStyle={barStyle}
+        backgroundColor={c.addressBar}
+      />
 
       {!isVideoPlaying && (
         <AddressBarContainer
