@@ -89,6 +89,9 @@ interface ChipRowProps {
   activeSubtitleId: number | null;
   editingId: number | null;
   chipContentW: number;
+  // Kept time ranges in seconds; chips outside all of them are dimmed
+  // because they won't appear in the export.
+  keptRanges: { start: number; end: number }[];
   onChipPress: (seg: SubtitleSegment) => void;
   onChipDelete: (seg: SubtitleSegment) => void;
 }
@@ -101,6 +104,7 @@ const SubtitleChipRow = React.memo(
         activeSubtitleId,
         editingId,
         chipContentW,
+        keptRanges,
         onChipPress,
         onChipDelete,
       },
@@ -146,6 +150,9 @@ const SubtitleChipRow = React.memo(
                   (seg.end - seg.start) * PX_PER_SEC - 2,
                   28,
                 );
+                const isCut = !keptRanges.some(
+                  (r) => seg.start < r.end && seg.end > r.start,
+                );
                 return (
                   <TouchableOpacity
                     key={seg.id}
@@ -156,6 +163,7 @@ const SubtitleChipRow = React.memo(
                       { left, width: chipWidth },
                       activeSubtitleId === seg.id && chipRowStyles.chipActive,
                       editingId === seg.id && chipRowStyles.chipSelected,
+                      isCut && chipRowStyles.chipCut,
                     ]}
                   >
                     <Text style={chipRowStyles.chipText} numberOfLines={1}>
@@ -207,6 +215,9 @@ const chipRowStyles = StyleSheet.create({
   chipSelected: {
     backgroundColor: "#2a2060",
     borderColor: "#6c63ff",
+  },
+  chipCut: {
+    opacity: 0.35,
   },
   chipText: {
     color: "#f0d9a0",
@@ -417,7 +428,22 @@ function TrimScreen({ navigation, route }: Props) {
         setDeletedSegments(new Set(session.deletedSegments));
         setSessionRestored(true);
       }
-      if (session?.subtitleSegments && session.subtitleSegments.length > 0) {
+      // Sessions saved before subtitleTimeBase existed may hold subtitles
+      // already remapped to a trimmed timeline. When a cut was active, prefer
+      // the cache, which always holds source-time subtitles.
+      const legacyRemapped =
+        !!session &&
+        session.subtitleTimeBase !== "source" &&
+        session.deletedSegments.length > 0;
+      const cachedForLegacy = legacyRemapped
+        ? await loadSubtitles(videoUri)
+        : null;
+      if (cachedForLegacy) {
+        setSubtitleSegments(cachedForLegacy);
+      } else if (
+        session?.subtitleSegments &&
+        session.subtitleSegments.length > 0
+      ) {
         setSubtitleSegments(session.subtitleSegments);
       } else {
         // No subtitles in session — fall back to the persistent cache so a
@@ -453,6 +479,7 @@ function TrimScreen({ navigation, route }: Props) {
         deletedSegments: [...deletedSegments],
         subtitleSegments:
           subtitleSegments.length > 0 ? subtitleSegments : undefined,
+        subtitleTimeBase: "source",
         subtitleStyle,
         updatedAt: Date.now(),
       });
@@ -480,6 +507,17 @@ function TrimScreen({ navigation, route }: Props) {
     }
     return segs;
   }, [sortedSplits, deletedSegments]);
+
+  const keptRanges = useMemo(
+    () =>
+      segments
+        .filter((s) => s.kept)
+        .map((s) => ({
+          start: s.startFrac * duration,
+          end: s.endFrac * duration,
+        })),
+    [segments, duration],
+  );
 
   // Ref for playback callback (avoids stale closure)
   const segmentsRef = useRef(segments);
@@ -803,14 +841,19 @@ function TrimScreen({ navigation, route }: Props) {
   // ─── Export ──────────────────────────────────────────────────────────────────
 
   const handleExport = () => {
+    const dur = durationRef.current;
+    // Editor subtitles are in source time; the export burns them onto the
+    // trimmed output, so drop cut sections and close the gaps first.
+    const exportSubs =
+      subtitleSegments.length > 0 && !isFullVideo(segments)
+        ? filterSegments(subtitleSegments, segments, dur)
+        : { segments: subtitleSegments, srt: segmentsToSrt(subtitleSegments) };
     navigation.navigate("Export", {
       videoUri,
       timelineSegments: segments,
-      duration: durationRef.current,
+      duration: dur,
       subtitleStyle,
-      ...(subtitleSegments.length > 0
-        ? { segments: subtitleSegments, srt: segmentsToSrt(subtitleSegments) }
-        : {}),
+      ...(exportSubs.segments.length > 0 ? exportSubs : {}),
     });
   };
 
@@ -877,8 +920,6 @@ function TrimScreen({ navigation, route }: Props) {
   const handleContinue = async (source: "ai" | "local" = "ai") => {
     setLoading(true);
     try {
-      const dur = durationRef.current;
-
       // Already have subtitles — nothing to do (they're shown inline)
       if (subtitleSegments.length > 0) return;
 
@@ -903,22 +944,14 @@ function TrimScreen({ navigation, route }: Props) {
         rawSrt = result.srt;
       }
 
-      let allSrtSegments = parseSrt(rawSrt);
+      const allSrtSegments = parseSrt(rawSrt);
 
-      // Save the full untrimmed transcription to the persistent cache first.
-      // Filtering for the current trim is a view-time concern; caching the
-      // full set means a different trim later still reuses the same Whisper
-      // result without paying for a re-transcription.
+      // Subtitles stay in source-video time while editing: the preview plays
+      // the untrimmed source, and handleExport remaps them to the trimmed
+      // output timeline. Cache the full set so a different trim later reuses
+      // the same transcription.
       await saveSubtitles(videoUri, allSrtSegments);
-
-      let finalSegments = allSrtSegments;
-      if (!isFullVideo(segments)) {
-        setStatusMsg(t("statusFiltering"));
-        const filtered = filterSegments(allSrtSegments, segments, dur);
-        finalSegments = filtered.segments;
-      }
-
-      setSubtitleSegments(finalSegments);
+      setSubtitleSegments(allSrtSegments);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t("errorLabel");
       Alert.alert(t("errorLabel"), msg);
@@ -1022,6 +1055,7 @@ function TrimScreen({ navigation, route }: Props) {
             activeSubtitleId={currentSubtitle?.id ?? null}
             editingId={editingId}
             chipContentW={chipContentW}
+            keptRanges={keptRanges}
             onChipPress={handleChipPress}
             onChipDelete={handleChipDelete}
           />

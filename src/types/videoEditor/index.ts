@@ -53,14 +53,6 @@ export type RootStackParamList = {
     videoUri: string;
     duration: number;
   };
-  SubtitleEditor: {
-    videoUri: string;
-    segments: Segment[];
-    srt: string;
-    timelineSegments: TimelineSegment[];
-    duration: number;
-    subtitleStyle?: SubtitleStyle;
-  };
   Export: {
     videoUri: string;
     timelineSegments: TimelineSegment[];

@@ -8,7 +8,10 @@ export interface EditSession {
   videoUri: string;
   splitPoints: number[];
   deletedSegments: number[];     // Set<number> serialised as array
-  subtitleSegments?: Segment[];  // saved from SubtitleEditorScreen
+  subtitleSegments?: Segment[];  // saved from TrimScreen
+  // 'source' = subtitle times are relative to the untrimmed video. Missing on
+  // older sessions, whose subtitles may already be remapped to the trim.
+  subtitleTimeBase?: 'source';
   subtitleStyle?: SubtitleStyle; // chosen before subtitle generation
   updatedAt: number;
 }

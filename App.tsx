@@ -12,7 +12,6 @@ import DownloadsScreen from './src/screens/DownloadsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ProjectsScreen from './src/screens/ProjectsScreen';
 import TrimScreen from './src/screens/videoEditor/TrimScreen';
-import SubtitleEditorScreen from './src/screens/videoEditor/SubtitleEditorScreen';
 import ExportScreen from './src/screens/videoEditor/ExportScreen';
 import MangaScreen from './src/screens/MangaScreen';
 import MangaChapterListScreen from './src/screens/MangaChapterListScreen';
@@ -152,7 +151,6 @@ function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="Trim" component={TrimScreen} />
-        <Stack.Screen name="SubtitleEditor" component={SubtitleEditorScreen} />
         <Stack.Screen name="Export" component={ExportScreen} />
         <Stack.Screen name="MangaChapters" component={MangaChapterListScreen} />
         <Stack.Screen name="MangaReader" component={MangaReaderScreen} />

@@ -101,7 +101,7 @@ async function transcribeWithApi(
         const chunkPath = `${tmpDir}chunk_${i}.m4a`;
 
         await extractAudioChunk(fileUri, start, CHUNK_SECS, chunkPath);
-        const info = await FileSystem.getInfoAsync(chunkPath, { size: true });
+        const info = await FileSystem.getInfoAsync(chunkPath);
         if (!info.exists || (info as any).size < 1000) return null;
 
         const segs = await uploadWithRetry(chunkPath, apiKey);
@@ -184,12 +184,12 @@ async function transcribeLocally(
           const chunkPath = `${tmpDir}chunk_${i}.wav`;
 
           await extractAudioChunkWav(fileUri, start, CHUNK_SECS, chunkPath);
-          const chunkInfo = await FileSystem.getInfoAsync(chunkPath, { size: true });
+          const chunkInfo = await FileSystem.getInfoAsync(chunkPath);
           if (!chunkInfo.exists || (chunkInfo as any).size < 1000) return null;
 
           const ctx = ctxPool[j];
           const { promise } = ctx.transcribe(chunkPath, {
-            language: 'ja',
+            language: 'auto',
             maxLen: 1,
             tokenTimestamps: true,
           });

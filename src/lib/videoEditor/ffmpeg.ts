@@ -1,4 +1,4 @@
-import { FFmpegKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
+import { FFmpegKit, FFprobeKit, ReturnCode } from '@wokcito/ffmpeg-kit-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { EncodingType } from 'expo-file-system/legacy';
 
@@ -99,9 +99,73 @@ async function runWithEncoderFallback(
   await runFFmpeg(build(SW_VENC(targetHeight, sourceKbps)), onStats);
 }
 
+// Re-encode audio near the source rate instead of FFmpeg's AAC default, so a
+// low-bitrate source track doesn't grow on export.
+function audioEncArgs(audioKbps?: number): string {
+  const kbps = audioKbps && audioKbps > 0 ? Math.min(192, Math.max(64, audioKbps)) : 128;
+  return `-c:a aac -b:a ${kbps}k`;
+}
+
+export type KeptRange = { start: number; end: number };
+
+// Lossless cut: no re-encode, so output size scales with the kept duration and
+// the export finishes in seconds. Cut points snap to the keyframe at or before
+// each range start. Falls back to trimAndConcat when the streams can't be
+// copied into MP4 (e.g. VP9/Opus from WebM sources on older muxers).
+export async function trimAndConcatCopy(
+  inputUri: string,
+  keptRanges: KeptRange[],
+  outputUri: string,
+  onProgress?: (msg: string) => void,
+  onEncodeProgress?: (fraction: number) => void,
+): Promise<void> {
+  if (keptRanges.length === 0) throw new Error('No segments to export');
+
+  const tmpDir = FileSystem.cacheDirectory + 'trimcopy_tmp_' + Date.now() + '/';
+  await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
+
+  try {
+    const segmentPaths: string[] = [];
+    for (let i = 0; i < keptRanges.length; i++) {
+      const { start, end } = keptRanges[i];
+      const segPath = `${tmpDir}seg_${i}.mp4`;
+      onProgress?.(`Cutting segment ${i + 1}/${keptRanges.length}…`);
+      await runFFmpeg(
+        `-ss ${start} -i "${toPath(inputUri)}" -t ${end - start}` +
+        ` -map 0:v:0 -map 0:a:0? -c copy -avoid_negative_ts make_zero` +
+        ` "${toPath(segPath)}" -y`,
+      );
+      segmentPaths.push(segPath);
+      onEncodeProgress?.((i + 1) / (keptRanges.length + 1));
+    }
+
+    if (segmentPaths.length === 1) {
+      await runFFmpeg(
+        `-i "${toPath(segmentPaths[0])}" -c copy -movflags +faststart "${toPath(outputUri)}" -y`,
+      );
+    } else {
+      const listPath = `${tmpDir}list.txt`;
+      const listContent = segmentPaths.map(p => `file '${toPath(p)}'`).join('\n');
+      await FileSystem.writeAsStringAsync(listPath, listContent);
+
+      onProgress?.('Joining segments…');
+      await runFFmpeg(
+        `-f concat -safe 0 -i "${toPath(listPath)}" -c copy -movflags +faststart "${toPath(outputUri)}" -y`,
+      );
+    }
+    onEncodeProgress?.(1);
+  } catch {
+    await FileSystem.deleteAsync(outputUri, { idempotent: true });
+    onEncodeProgress?.(0);
+    await trimAndConcat(inputUri, keptRanges, outputUri, onProgress, onEncodeProgress);
+  } finally {
+    await FileSystem.deleteAsync(tmpDir, { idempotent: true });
+  }
+}
+
 export async function trimAndConcat(
   inputUri: string,
-  keptRanges: { start: number; end: number }[],
+  keptRanges: KeptRange[],
   outputUri: string,
   onProgress?: (msg: string) => void,
   onEncodeProgress?: (fraction: number) => void,
@@ -110,7 +174,7 @@ export async function trimAndConcat(
 
   // Match the source's bitrate so output size scales with trim duration instead
   // of ballooning to the per-resolution ceiling.
-  const { videoKbps, height: srcH } = await probeVideoInfo(inputUri);
+  const { videoKbps, audioKbps, height: srcH } = await probeVideoInfo(inputUri);
 
   const tmpDir = FileSystem.cacheDirectory + 'trim_tmp_' + Date.now() + '/';
   await FileSystem.makeDirectoryAsync(tmpDir, { intermediates: true });
@@ -135,7 +199,7 @@ export async function trimAndConcat(
 
       const build = (enc: string) =>
         `-ss ${start} -i "${toPath(inputUri)}" -t ${segDur}` +
-        ` ${enc} -c:a aac -avoid_negative_ts make_zero` +
+        ` ${enc} ${audioEncArgs(audioKbps)} -avoid_negative_ts make_zero` +
         ` "${toPath(segPath)}" -y`;
       await runWithEncoderFallback(build, segPath, srcH, onStats, videoKbps);
       doneSecs += segDur;
@@ -154,8 +218,38 @@ export async function trimAndConcat(
         `-f concat -safe 0 -i "${toPath(listPath)}" -c copy "${toPath(outputUri)}" -y`,
       );
     }
+    await warnIfOversized(inputUri, outputUri, keptRanges);
   } finally {
     await FileSystem.deleteAsync(tmpDir, { idempotent: true });
+  }
+}
+
+async function fileSize(uri: string): Promise<number> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists ? info.size : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Diagnostics only: a re-encoded trim should be roughly proportional to the
+// kept duration. Anything far above that means bitrate detection failed.
+async function warnIfOversized(
+  inputUri: string,
+  outputUri: string,
+  keptRanges: KeptRange[],
+): Promise<void> {
+  const { durationSec } = await probeVideoInfo(inputUri);
+  const [srcBytes, outBytes] = await Promise.all([fileSize(inputUri), fileSize(outputUri)]);
+  if (!durationSec || !srcBytes || !outBytes) return;
+  const kept = keptRanges.reduce((s, r) => s + (r.end - r.start), 0);
+  const expected = srcBytes * (kept / durationSec);
+  if (outBytes > expected * 1.3) {
+    console.warn(
+      `[ffmpeg] trim output ${(outBytes / 1e6).toFixed(1)} MB exceeds expected ` +
+      `${(expected / 1e6).toFixed(1)} MB for ${kept.toFixed(1)}s of ${durationSec.toFixed(1)}s`,
+    );
   }
 }
 
@@ -209,77 +303,114 @@ export async function splitAudio(
   );
 }
 
-export async function probeVideoInfo(uri: string): Promise<{
+export interface VideoInfo {
   width: number;
   height: number;
   videoKbps: number;
+  audioKbps: number;
   durationSec: number;
-}> {
+  videoCodec: string;
+}
+
+function toKbps(bps: unknown): number {
+  const n = Number(bps);
+  return isFinite(n) && n > 0 ? Math.round(n / 1000) : 0;
+}
+
+// VideoInfo plus the container-level bitrate, used only as a fallback.
+type RawProbe = VideoInfo & { formatKbps: number };
+
+// Structured probe via ffprobe. Returns null when ffprobe can't read the file.
+async function probeWithFFprobe(uri: string): Promise<RawProbe | null> {
+  try {
+    const session = await FFprobeKit.getMediaInformation(toPath(uri));
+    const info = session.getMediaInformation();
+    if (!info) return null;
+
+    const streams = info.getStreams() ?? [];
+    const video = streams.find(s => s.getType() === 'video');
+    const audio = streams.find(s => s.getType() === 'audio');
+    if (!video) return null;
+
+    return {
+      width: Number(video.getWidth()) || 1280,
+      height: Number(video.getHeight()) || 720,
+      videoKbps: toKbps(video.getBitrate()),
+      audioKbps: audio ? toKbps(audio.getBitrate()) : 0,
+      durationSec: Number(info.getDuration()) || 0,
+      videoCodec: String(video.getCodec() ?? ''),
+      formatKbps: toKbps(info.getBitrate()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Fallback probe from `ffmpeg -i` logs. FFmpegKit delivers each av_log call
+// as its own message and the "Duration: …, bitrate: …" line is printed by
+// several calls, so the messages must be joined before matching.
+async function probeFromLogs(uri: string): Promise<RawProbe> {
   const session = await FFmpegKit.execute(`-hide_banner -i "${toPath(uri)}"`);
   const logs = await session.getLogs();
+  const text = logs.map((l: any) => String(l.getMessage())).join('');
 
   let width = 1280;
   let height = 720;
-  let videoKbps = 0;
-  let totalKbps = 0;
+  const sizeMatch = text.match(/\bVideo:[^\n]*?\b(\d{2,5})x(\d{2,5})\b/);
+  if (sizeMatch) {
+    width = parseInt(sizeMatch[1], 10);
+    height = parseInt(sizeMatch[2], 10);
+  }
+  const codecMatch = text.match(/\bVideo:\s*(\w+)/);
+  const vbrMatch = text.match(/\bVideo:[^\n]*?,\s*(\d+)\s*kb\/s/);
+  const abrMatch = text.match(/\bAudio:[^\n]*?,\s*(\d+)\s*kb\/s/);
+  const tbrMatch = text.match(/Duration:[^\n]*?bitrate:\s*(\d+)\s*kb\/s/);
+
   let durationSec = 0;
+  const durMatch = text.match(/Duration:\s*(\d+):(\d+):(\d+)(?:\.(\d+))?/);
+  if (durMatch) {
+    const frac = durMatch[4] ? parseInt(durMatch[4], 10) / Math.pow(10, durMatch[4].length) : 0;
+    durationSec =
+      parseInt(durMatch[1], 10) * 3600 +
+      parseInt(durMatch[2], 10) * 60 +
+      parseInt(durMatch[3], 10) +
+      frac;
+  }
 
-  for (const log of logs) {
-    const msg = String(log.getMessage());
+  return {
+    width,
+    height,
+    videoKbps: vbrMatch ? parseInt(vbrMatch[1], 10) : 0,
+    audioKbps: abrMatch ? parseInt(abrMatch[1], 10) : 0,
+    durationSec,
+    videoCodec: codecMatch ? codecMatch[1] : '',
+    formatKbps: tbrMatch ? parseInt(tbrMatch[1], 10) : 0,
+  };
+}
 
-    const sizeMatch = msg.match(/\bVideo:.*?\b(\d{2,5})x(\d{2,5})\b/);
-    if (sizeMatch) {
-      width = parseInt(sizeMatch[1], 10);
-      height = parseInt(sizeMatch[2], 10);
-    }
+export async function probeVideoInfo(uri: string): Promise<VideoInfo> {
+  const { formatKbps, ...info } =
+    (await probeWithFFprobe(uri)) ?? (await probeFromLogs(uri));
+  const audioGuess = info.audioKbps || 128;
 
-    // Per-stream video bitrate: "Video: ... , 1500 kb/s, 25 fps ..."
-    const vbrMatch = msg.match(/Video:.*?,\s*(\d+)\s*kb\/s/);
-    if (vbrMatch) {
-      videoKbps = parseInt(vbrMatch[1], 10);
-    }
+  // Fallback 1: container bitrate minus audio. Common for MKV/WebM and
+  // remuxed HLS/DASH downloads, which carry no per-stream video bitrate.
+  if (!info.videoKbps && formatKbps) {
+    info.videoKbps = Math.max(500, formatKbps - audioGuess);
+  }
 
-    // Container-level overall bitrate: "Duration: ..., bitrate: 1600 kb/s"
-    const tbrMatch = msg.match(/Duration:.*?bitrate:\s*(\d+)\s*kb\/s/);
-    if (tbrMatch) {
-      totalKbps = parseInt(tbrMatch[1], 10);
-    }
-
-    // \s* instead of \s+ to tolerate any whitespace variant; decimal part optional
-    const durMatch = msg.match(/Duration:\s*(\d+):(\d+):(\d+)(?:\.(\d+))?/);
-    if (durMatch) {
-      const frac = durMatch[4] ? parseInt(durMatch[4]) / Math.pow(10, durMatch[4].length) : 0;
-      durationSec =
-        parseInt(durMatch[1]) * 3600 +
-        parseInt(durMatch[2]) * 60 +
-        parseInt(durMatch[3]) +
-        frac;
+  // Fallback 2: file size over duration. Without a bitrate the encoder would
+  // use the per-resolution ceiling, which bloats trimmed exports past the
+  // size of the source.
+  if (!info.videoKbps && info.durationSec > 0) {
+    const fileBytes = await fileSize(uri);
+    if (fileBytes > 0) {
+      const overallKbps = (fileBytes * 8) / 1000 / info.durationSec;
+      info.videoKbps = Math.max(500, Math.round(overallKbps - audioGuess));
     }
   }
 
-  // Fallback 1: subtract typical AAC audio (128k) from container bitrate
-  if (!videoKbps && totalKbps) {
-    videoKbps = Math.max(500, totalKbps - 128);
-  }
-
-  // Fallback 2: compute from file size and duration. Catches files where
-  // FFmpeg's log doesn't include a bitrate field (some MP4s with stripped
-  // metadata or VBR streams). Without this we'd silently use the per-resolution
-  // ceiling — exactly the bug that bloats trimmed exports back to source size.
-  if (!videoKbps && durationSec > 0) {
-    try {
-      const info = await FileSystem.getInfoAsync(uri, { size: true });
-      const fileBytes = (info.exists && 'size' in info) ? ((info as any).size as number) : 0;
-      if (fileBytes > 0) {
-        const overallKbps = (fileBytes * 8) / 1000 / durationSec;
-        videoKbps = Math.max(500, Math.round(overallKbps - 128));
-      }
-    } catch {
-      // leave videoKbps at 0; chooseBitrate will use the resolution ceiling
-    }
-  }
-
-  return { width, height, videoKbps, durationSec };
+  return info;
 }
 
 export async function probeVideoSize(

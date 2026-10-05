@@ -18,6 +18,7 @@ import {
   probeVideoSize,
   transcodeVideo,
   trimAndConcat,
+  trimAndConcatCopy,
 } from "../../lib/videoEditor/ffmpeg";
 import { buildSubtitleRenderHtml } from "../../lib/videoEditor/subtitlePng";
 import { preCacheMediaDuration } from "../../services/downloadManager";
@@ -34,6 +35,10 @@ type WebViewMessage =
 
 type Resolution = { label: string; detail: string; height: number | null };
 
+// fast: stream-copy cut (no re-encode, keyframe-aligned)
+// precise: re-encode each kept range (frame-accurate)
+type CutMode = "fast" | "precise";
+
 function ExportScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const {
@@ -47,6 +52,7 @@ function ExportScreen({ navigation, route }: Props) {
   const effectiveStyle = subtitleStyle ?? DEFAULT_SUBTITLE_STYLE;
   const [status, setStatus] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
+  const [cutMode, setCutMode] = useState<CutMode>("fast");
   const [done, setDone] = useState(false);
   const [outputPath, setOutputPath] = useState("");
   const [error, setError] = useState("");
@@ -85,6 +91,8 @@ function ExportScreen({ navigation, route }: Props) {
       }));
     return keptRanges.reduce((sum, r) => sum + (r.end - r.start), 0);
   })();
+
+  const isTrimmed = Math.abs(outputDurationEst - duration) > 0.05;
 
   const resolutions: Resolution[] = (() => {
     if (!sourceInfo) {
@@ -143,7 +151,7 @@ function ExportScreen({ navigation, route }: Props) {
   const startExport = (targetHeight: number | null) => {
     if (hasStarted) return;
     setHasStarted(true);
-    runExport(targetHeight);
+    runExport(targetHeight, cutMode);
   };
 
   const renderSubtitlePngs = (
@@ -206,7 +214,8 @@ function ExportScreen({ navigation, route }: Props) {
     }
   };
 
-  const runExport = async (targetHeight: number | null) => {
+  const runExport = async (targetHeight: number | null, mode: CutMode) => {
+    let tmpUri: string | null = null;
     try {
       const outputDir =
         (FileSystem.documentDirectory ?? "") + "private_downloads/";
@@ -253,7 +262,7 @@ function ExportScreen({ navigation, route }: Props) {
 
       setProgress(0);
 
-      const tmpUri = `${outputDir}edited_${stamp}_tmp.mp4`;
+      tmpUri = `${outputDir}edited_${stamp}_tmp.mp4`;
       let sourceUri: string;
       let trimmedTmp = false;
 
@@ -261,7 +270,8 @@ function ExportScreen({ navigation, route }: Props) {
         sourceUri = videoUri;
         setProgress(P_TRIM);
       } else {
-        await trimAndConcat(videoUri, keptRanges, tmpUri, setStatus, (frac) =>
+        const trim = mode === "fast" ? trimAndConcatCopy : trimAndConcat;
+        await trim(videoUri, keptRanges, tmpUri, setStatus, (frac) =>
           setProgress(frac * P_TRIM),
         );
         sourceUri = tmpUri;
@@ -335,16 +345,12 @@ function ExportScreen({ navigation, route }: Props) {
       } else if (trimmedTmp) {
         setStatus(t("exportFinalising"));
         await FileSystem.moveAsync({ from: tmpUri, to: outputUri });
-        trimmedTmp = false;
+        tmpUri = null;
         setProgress(P_DONE);
       } else {
         setStatus(t("exportCopying"));
         await FileSystem.copyAsync({ from: videoUri, to: outputUri });
         setProgress(P_DONE);
-      }
-
-      if (trimmedTmp) {
-        await FileSystem.deleteAsync(tmpUri, { idempotent: true });
       }
 
       setProgress(98);
@@ -358,6 +364,12 @@ function ExportScreen({ navigation, route }: Props) {
       setDone(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("exportFailed"));
+    } finally {
+      if (tmpUri) {
+        await FileSystem.deleteAsync(tmpUri, { idempotent: true }).catch(
+          () => {},
+        );
+      }
     }
   };
 
@@ -404,6 +416,36 @@ function ExportScreen({ navigation, route }: Props) {
         <View style={styles.center}>
           <Text style={styles.pickerTitle}>{t("exportResolution")}</Text>
           <Text style={styles.pickerHint}>{t("exportResolutionHint")}</Text>
+          {isTrimmed && (
+            <View style={styles.modeBox}>
+              <View style={styles.modeRow}>
+                {(["fast", "precise"] as const).map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.modeBtn, cutMode === m && styles.modeBtnActive]}
+                    onPress={() => setCutMode(m)}
+                    activeOpacity={0.85}
+                  >
+                    <Text
+                      style={[
+                        styles.modeBtnText,
+                        cutMode === m && styles.modeBtnTextActive,
+                      ]}
+                    >
+                      {t(m === "fast" ? "exportModeFast" : "exportModePrecise")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.modeHint}>
+                {t(
+                  cutMode === "fast"
+                    ? "exportModeFastHint"
+                    : "exportModePreciseHint",
+                )}
+              </Text>
+            </View>
+          )}
           {resolutions.map((r) => (
             <TouchableOpacity
               key={r.label}
@@ -474,6 +516,40 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 28,
     lineHeight: 18,
+  },
+  modeBox: {
+    width: "100%",
+    marginBottom: 18,
+  },
+  modeRow: {
+    flexDirection: "row",
+    backgroundColor: "#1a1a1a",
+    borderRadius: 10,
+    padding: 3,
+  },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modeBtnActive: {
+    backgroundColor: "#6c63ff",
+  },
+  modeBtnText: {
+    color: "#888",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  modeBtnTextActive: {
+    color: "#fff",
+  },
+  modeHint: {
+    color: "#777",
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 17,
   },
   resBtn: {
     width: "100%",
