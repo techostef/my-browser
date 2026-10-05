@@ -464,7 +464,9 @@ const DownloadItem = memo(function DownloadItem({
                     setActionsVisible(false);
                   }}
                 >
-                  <Text style={styles.actionBtnText}>🗑 Move to Trash</Text>
+                  <Text style={styles.actionBtnText}>
+                    {task.source === "device" ? "🗑 Delete" : "🗑 Move to Trash"}
+                  </Text>
                 </TouchableOpacity>
               )}
               {canManageCompletedFile && onDeletePermanently && (

@@ -80,10 +80,9 @@ export default function DownloadsHeader({
       ) : null}
       <View style={{ marginRight: "auto" }}>
         <Text style={styles.title}>
-          {(currentFolderPath || t("root")).replace(
-            DEVICE_ROOT_PATH,
-            t("deviceDownload"),
-          )}{" "}
+          {(currentFolderPath || t("root"))
+            .replace(DEVICE_ROOT_PATH, t("deviceDownload"))
+            .replace(/^__trash__/, t("trashFolder"))}{" "}
           · {gridDataLength} {t("items")}
         </Text>
       </View>

@@ -226,6 +226,8 @@ export interface Translations {
   noDuplicatesFound: string;
   moveToTrashTitle: string;
   moveToTrashDesc: string;
+
+  trashFolder: string;
   clearAll: string;
   group: string;
   allButFirst: string;
@@ -640,6 +642,8 @@ const en: Translations = {
   noDuplicatesFound: 'No duplicate videos found',
   moveToTrashTitle: 'Move {count} file{s} to Trash',
   moveToTrashDesc: 'These videos will be moved to the Trash folder.',
+
+  trashFolder: 'Trash',
   clearAll: 'Clear all',
   group: 'Group',
   allButFirst: 'All but 1st',
@@ -1043,6 +1047,8 @@ const es: Translations = {
   noDuplicatesFound: 'No se encontraron videos duplicados',
   moveToTrashTitle: 'Mover {count} archivo{s} a la papelera',
   moveToTrashDesc: 'Estos videos serán movidos a la carpeta de papelera.',
+
+  trashFolder: 'Papelera',
   clearAll: 'Limpiar todo',
   group: 'Grupo',
   allButFirst: 'Todos menos el 1º',
@@ -1445,6 +1451,8 @@ const fr: Translations = {
   noDuplicatesFound: 'Aucune vidéo en double trouvée',
   moveToTrashTitle: 'Déplacer {count} fichier{s} vers la corbeille',
   moveToTrashDesc: 'Ces vidéos seront déplacées vers le dossier corbeille.',
+
+  trashFolder: 'Corbeille',
   clearAll: 'Tout effacer',
   group: 'Groupe',
   allButFirst: 'Tous sauf le 1er',
@@ -1847,6 +1855,8 @@ const de: Translations = {
   noDuplicatesFound: 'Keine doppelten Videos gefunden',
   moveToTrashTitle: '{count} Datei{s} in den Papierkorb verschieben',
   moveToTrashDesc: 'Diese Videos werden in den Papierkorb verschoben.',
+
+  trashFolder: 'Papierkorb',
   clearAll: 'Alle löschen',
   group: 'Gruppe',
   allButFirst: 'Alle außer 1.',
@@ -2249,6 +2259,8 @@ const ja: Translations = {
   noDuplicatesFound: '重複した動画はありません',
   moveToTrashTitle: '{count}ファイルをゴミ箱に移動',
   moveToTrashDesc: 'これらの動画はゴミ箱フォルダに移動されます。',
+
+  trashFolder: 'ゴミ箱',
   clearAll: 'すべてクリア',
   group: 'グループ',
   allButFirst: '1番目以外すべて',
@@ -2651,6 +2663,8 @@ const ko: Translations = {
   noDuplicatesFound: '중복 동영상이 없습니다',
   moveToTrashTitle: '{count}개 파일을 휴지통으로 이동',
   moveToTrashDesc: '이 동영상들은 휴지통 폴더로 이동됩니다.',
+
+  trashFolder: '휴지통',
   clearAll: '모두 지우기',
   group: '그룹',
   allButFirst: '첫 번째 외 전부',
@@ -3053,6 +3067,8 @@ const zhCN: Translations = {
   noDuplicatesFound: '未找到重复视频',
   moveToTrashTitle: '将{count}个文件移到回收站',
   moveToTrashDesc: '这些视频将被移到回收站文件夹。',
+
+  trashFolder: '回收站',
   clearAll: '全部清除',
   group: '分组',
   allButFirst: '除第1个外全部',
@@ -3455,6 +3471,8 @@ const ar: Translations = {
   noDuplicatesFound: 'لم يتم العثور على فيديوهات مكررة',
   moveToTrashTitle: 'نقل {count} ملف إلى سلة المحذوفات',
   moveToTrashDesc: 'سيتم نقل هذه الفيديوهات إلى مجلد سلة المحذوفات.',
+
+  trashFolder: 'سلة المحذوفات',
   clearAll: 'مسح الكل',
   group: 'مجموعة',
   allButFirst: 'الكل عدا الأول',
@@ -3857,6 +3875,8 @@ const pt: Translations = {
   noDuplicatesFound: 'Nenhum vídeo duplicado encontrado',
   moveToTrashTitle: 'Mover {count} arquivo{s} para a lixeira',
   moveToTrashDesc: 'Estes vídeos serão movidos para a pasta da lixeira.',
+
+  trashFolder: 'Lixeira',
   clearAll: 'Limpar tudo',
   group: 'Grupo',
   allButFirst: 'Todos menos o 1º',
@@ -4259,6 +4279,8 @@ const ru: Translations = {
   noDuplicatesFound: 'Дубликаты видео не найдены',
   moveToTrashTitle: 'Переместить {count} файл(ов) в корзину',
   moveToTrashDesc: 'Эти видео будут перемещены в папку корзины.',
+
+  trashFolder: 'Корзина',
   clearAll: 'Очистить всё',
   group: 'Группа',
   allButFirst: 'Все кроме 1-го',
@@ -4661,6 +4683,8 @@ const id: Translations = {
   noDuplicatesFound: 'Tidak ada video duplikat ditemukan',
   moveToTrashTitle: 'Pindahkan {count} file ke Sampah',
   moveToTrashDesc: 'Video ini akan dipindahkan ke folder Sampah.',
+
+  trashFolder: 'Sampah',
   clearAll: 'Hapus semua',
   group: 'Grup',
   allButFirst: 'Semua kecuali 1',

@@ -30,7 +30,7 @@ export default function FolderCard({
         </View>
       ) : null}
       <TouchableOpacity style={styles.folderCardBody} onPress={onOpen}>
-        <Text style={styles.folderIcon}>📁</Text>
+        <Text style={styles.folderIcon}>{item.isTrash ? "🗑" : "📁"}</Text>
         <Text style={styles.folderName} numberOfLines={1}>
           {item.name}
         </Text>

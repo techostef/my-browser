@@ -83,8 +83,10 @@ function DownloadsScreen() {
     countMoveConflicts,
     removeDownload,
     deleteFromTrash,
+    deleteDeviceFiles,
     prefetchDeviceFileSizes,
     ensureDurations,
+    subscribeIdMigrations,
   } = useDownloads();
   // ── state ──────────────────────────────────────────────────────────────────
   const [renameTask, setRenameTask] = useState<DownloadTask | null>(null);
@@ -142,18 +144,17 @@ function DownloadsScreen() {
   );
   const [showHidden, setShowHidden] = useState(false);
 
+  // Labels and hidden ids load asynchronously; id migrations must wait for them
+  // or they'd be applied to an empty map and then overwritten by the load.
+  const [labelsLoaded, setLabelsLoaded] = useState(false);
+  const [hiddenLoaded, setHiddenLoaded] = useState(false);
+
   // ── refs ───────────────────────────────────────────────────────────────────
   const currentFolderPathRef = useRef(currentFolderPath);
-  const selectedIdsRef = useRef(selectedIds);
-  selectedIdsRef.current = selectedIds;
-  const fileLabelsRef = useRef(fileLabels);
-  fileLabelsRef.current = fileLabels;
-  const hiddenFileIdsRef = useRef(hiddenFileIds);
-  hiddenFileIdsRef.current = hiddenFileIds;
-  const hiddenFolderPathsRef = useRef(hiddenFolderPaths);
-  hiddenFolderPathsRef.current = hiddenFolderPaths;
   const prefetchSizesRef = useRef(prefetchDeviceFileSizes);
   prefetchSizesRef.current = prefetchDeviceFileSizes;
+  const ensureDurationsRef = useRef(ensureDurations);
+  ensureDurationsRef.current = ensureDurations;
 
   useEffect(() => {
     currentFolderPathRef.current = currentFolderPath;
@@ -170,10 +171,12 @@ function DownloadsScreen() {
     Promise.all([
       AsyncStorage.getItem("@label_definitions_v1"),
       AsyncStorage.getItem("@file_labels_v1"),
-    ]).then(([defs, labels]) => {
-      if (defs) setLabelDefs(JSON.parse(defs));
-      if (labels) setFileLabels(JSON.parse(labels));
-    });
+    ])
+      .then(([defs, labels]) => {
+        if (defs) setLabelDefs(JSON.parse(defs));
+        if (labels) setFileLabels(JSON.parse(labels));
+      })
+      .finally(() => setLabelsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -181,11 +184,13 @@ function DownloadsScreen() {
       AsyncStorage.getItem("@hidden_files_v1"),
       AsyncStorage.getItem("@hidden_folders_v1"),
       AsyncStorage.getItem("@show_hidden_v1"),
-    ]).then(([files, folders, show]) => {
-      if (files) setHiddenFileIds(new Set(JSON.parse(files)));
-      if (folders) setHiddenFolderPaths(new Set(JSON.parse(folders)));
-      if (show === "1") setShowHidden(true);
-    });
+    ])
+      .then(([files, folders, show]) => {
+        if (files) setHiddenFileIds(new Set(JSON.parse(files)));
+        if (folders) setHiddenFolderPaths(new Set(JSON.parse(folders)));
+        if (show === "1") setShowHidden(true);
+      })
+      .finally(() => setHiddenLoaded(true));
   }, []);
 
   // ── label helpers ──────────────────────────────────────────────────────────
@@ -324,6 +329,22 @@ function DownloadsScreen() {
       return next;
     });
   }, []);
+
+  // A finished download changes id (dl_… → file_<path>); carry its labels and
+  // hidden flag over so they aren't orphaned.
+  useEffect(() => {
+    if (!labelsLoaded || !hiddenLoaded) return;
+    return subscribeIdMigrations((mapping) => {
+      migrateLabels(mapping);
+      migrateHidden(mapping);
+    });
+  }, [
+    labelsLoaded,
+    hiddenLoaded,
+    subscribeIdMigrations,
+    migrateLabels,
+    migrateHidden,
+  ]);
 
   const cleanupHidden = useCallback((id: string) => {
     setHiddenFileIds((prev) => {
@@ -536,6 +557,7 @@ function DownloadsScreen() {
     folderNameText,
     renameFolder,
     renameHiddenFolder,
+    t,
   ]);
 
   const runDeleteFolder = useCallback(
@@ -563,12 +585,20 @@ function DownloadsScreen() {
           Alert.alert(t("folderError"), message);
         });
     },
-    [deleteFolder, removeHiddenFolder],
+    [deleteFolder, removeHiddenFolder, t],
+  );
+
+  const getFolderDisplayName = useCallback(
+    (folderPath: string) =>
+      folderPath === TRASH_FOLDER_PATH
+        ? t("trashFolder")
+        : folderPath.split("/").pop() || folderPath,
+    [t],
   );
 
   const handleDeleteFolder = useCallback(
     (folderPath: string) => {
-      const folderName = folderPath.split("/").pop() || folderPath;
+      const folderName = getFolderDisplayName(folderPath);
       Alert.alert(
         t("deleteFolder"),
         t("deleteFolderConfirm", { name: folderName }),
@@ -582,12 +612,25 @@ function DownloadsScreen() {
         ],
       );
     },
-    [runDeleteFolder],
+    [runDeleteFolder, getFolderDisplayName, t],
   );
 
   const handleFolderAction = useCallback(
     (folderPath: string) => {
-      const folderName = folderPath.split("/").pop() || folderPath;
+      const folderName = getFolderDisplayName(folderPath);
+      // Trash is located by its fixed name — renaming or hiding it would lose
+      // the only way back to the trashed files.
+      if (folderPath === TRASH_FOLDER_PATH) {
+        Alert.alert(folderName, t("folderOptions"), [
+          {
+            text: t("delete"),
+            style: "destructive",
+            onPress: () => handleDeleteFolder(folderPath),
+          },
+          { text: t("cancel"), style: "cancel" },
+        ]);
+        return;
+      }
       const isHidden = hiddenFolderPaths.has(folderPath);
       Alert.alert(folderName, t("folderOptions"), [
         { text: t("rename"), onPress: () => openRenameFolder(folderPath) },
@@ -603,7 +646,14 @@ function DownloadsScreen() {
         { text: t("cancel"), style: "cancel" },
       ]);
     },
-    [handleDeleteFolder, openRenameFolder, hiddenFolderPaths, toggleHideFolder],
+    [
+      handleDeleteFolder,
+      openRenameFolder,
+      hiddenFolderPaths,
+      toggleHideFolder,
+      getFolderDisplayName,
+      t,
+    ],
   );
 
   // ── rename file ────────────────────────────────────────────────────────────
@@ -650,21 +700,44 @@ function DownloadsScreen() {
     setDeleteConfirm({ ids: [id] });
   }, []);
 
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteConfirm) return;
-    const ids = deleteConfirm.ids;
-    const permanent = deletePermanent;
-    setDeleteConfirm(null);
-    setDeletePermanent(false);
-    setSelectedIds(new Set());
+  // Device files have no trash: they're deleted for real, all in one call so
+  // the system shows a single confirmation instead of one per file.
+  const splitDeviceIds = useCallback(
+    (ids: string[]) => {
+      const device: string[] = [];
+      const other: string[] = [];
+      for (const id of ids) {
+        const task = downloads.find((d) => d.id === id);
+        (task?.source === "device" ? device : other).push(id);
+      }
+      return { device, other };
+    },
+    [downloads],
+  );
 
-    if (permanent) {
-      ids.forEach((id) => {
-        deleteFromTrash(id);
-        cleanupLabels(id);
-        cleanupHidden(id);
-      });
-    } else {
+  const deleteDeviceIds = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      deleteDeviceFiles(ids)
+        .then((deleted) => {
+          deleted.forEach((id) => {
+            cleanupLabels(id);
+            cleanupHidden(id);
+          });
+        })
+        .catch((err) => {
+          Alert.alert(
+            t("delete"),
+            err instanceof Error ? err.message : String(err),
+          );
+        });
+    },
+    [deleteDeviceFiles, cleanupLabels, cleanupHidden, t],
+  );
+
+  const moveIdsToTrash = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
       Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
         const mapping: Record<string, string> = {};
         for (let i = 0; i < ids.length; i++) {
@@ -676,17 +749,45 @@ function DownloadsScreen() {
           migrateHidden(mapping);
         }
       });
+    },
+    [removeDownload, migrateLabels, migrateHidden],
+  );
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteConfirm) return;
+    const { device, other } = splitDeviceIds(deleteConfirm.ids);
+    const permanent = deletePermanent;
+    setDeleteConfirm(null);
+    setDeletePermanent(false);
+    setSelectedIds(new Set());
+
+    deleteDeviceIds(device);
+    if (permanent) {
+      other.forEach((id) => {
+        deleteFromTrash(id);
+        cleanupLabels(id);
+        cleanupHidden(id);
+      });
+    } else {
+      moveIdsToTrash(other);
     }
   }, [
     deleteConfirm,
     deletePermanent,
+    splitDeviceIds,
+    deleteDeviceIds,
     deleteFromTrash,
     cleanupLabels,
     cleanupHidden,
-    removeDownload,
-    migrateLabels,
-    migrateHidden,
+    moveIdsToTrash,
   ]);
+
+  const deleteConfirmIsDeviceOnly = useMemo(
+    () =>
+      !!deleteConfirm &&
+      splitDeviceIds(deleteConfirm.ids).other.length === 0,
+    [deleteConfirm, splitDeviceIds],
+  );
 
   const handleDeletePermanently = useCallback(
     (id: string) => {
@@ -703,7 +804,7 @@ function DownloadsScreen() {
         },
       ]);
     },
-    [deleteFromTrash, cleanupLabels, cleanupHidden],
+    [deleteFromTrash, cleanupLabels, cleanupHidden, t],
   );
 
   // ── preview ────────────────────────────────────────────────────────────────
@@ -935,7 +1036,7 @@ function DownloadsScreen() {
         );
       })
       .finally(() => setMoveProgress(null));
-  }, [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden]);
+  }, [bulkMoveDownloadsToFolder, selectedIds, migrateLabels, migrateHidden, t]);
 
   // ── duplicates ─────────────────────────────────────────────────────────────
   const handleOpenDuplicatePicker = useCallback(() => {
@@ -950,19 +1051,11 @@ function DownloadsScreen() {
   const handleDeleteDuplicates = useCallback(
     (ids: string[]) => {
       if (ids.length === 0) return;
-      Promise.all(ids.map((id) => removeDownload(id))).then((results) => {
-        const mapping: Record<string, string> = {};
-        for (let i = 0; i < ids.length; i++) {
-          const newId = results[i];
-          if (newId) mapping[ids[i]] = newId;
-        }
-        if (Object.keys(mapping).length > 0) {
-          migrateLabels(mapping);
-          migrateHidden(mapping);
-        }
-      });
+      const { device, other } = splitDeviceIds(ids);
+      deleteDeviceIds(device);
+      moveIdsToTrash(other);
     },
-    [removeDownload, migrateLabels, migrateHidden],
+    [splitDeviceIds, deleteDeviceIds, moveIdsToTrash],
   );
 
   // ── device rescan ──────────────────────────────────────────────────────────
@@ -973,7 +1066,7 @@ function DownloadsScreen() {
         err instanceof Error ? err.message : t("unableToScanDevice"),
       );
     });
-  }, [scanDeviceDownloadFolder]);
+  }, [scanDeviceDownloadFolder, t]);
 
   // ── folder item count ──────────────────────────────────────────────────────
   const getParentPath = useCallback((folderPath: string): string => {
@@ -1027,6 +1120,12 @@ function DownloadsScreen() {
   >(
     () =>
       folders
+        // Files reach the trash only through Delete, never as a move target.
+        .filter(
+          (path) =>
+            path !== TRASH_FOLDER_PATH &&
+            !path.startsWith(`${TRASH_FOLDER_PATH}/`),
+        )
         .slice()
         .sort((a, b) => a.localeCompare(b))
         .map((path) => {
@@ -1053,8 +1152,9 @@ function DownloadsScreen() {
           .map((fp) => ({
             type: "folder" as const,
             path: fp,
-            name: fp.split("/").pop() || fp,
+            name: getFolderDisplayName(fp),
             source: "private" as const,
+            isTrash: fp === TRASH_FOLDER_PATH,
           }))
       : [];
 
@@ -1101,6 +1201,8 @@ function DownloadsScreen() {
     currentDeviceFolderPath,
     showHidden,
     hiddenFolderPaths,
+    getFolderDisplayName,
+    t,
   ]);
 
   const visibleDownloads = useMemo(
@@ -1209,9 +1311,6 @@ function DownloadsScreen() {
           getMediaType(task) !== "image",
       )
       .map((task) => task.id);
-    // TEMPORARY DIAGNOSTIC — remove with the [dur] logging in downloadManager.
-    console.log('[dur] screen effect: sortKey=', sortKey,
-      'visible=', visibleDownloads.length, 'missingDuration=', missing.length);
     if (missing.length === 0) {
       setIsProbingDurations(false);
       return;
@@ -1307,16 +1406,22 @@ function DownloadsScreen() {
       viewableItems: Array<{ item: DownloadGridItem }>;
     }) => {
       const ids: string[] = [];
+      const missingDuration: string[] = [];
       for (const v of viewableItems) {
-        if (
-          v.item.type === "file" &&
-          v.item.task.source === "device" &&
-          v.item.task.totalBytes === 0
-        ) {
-          ids.push(v.item.task.id);
+        if (v.item.type !== "file") continue;
+        const task = v.item.task;
+        if (task.source === "device" && task.totalBytes === 0) {
+          ids.push(task.id);
+        }
+        // The folder scan only reads cached durations; probe what's on screen.
+        if (task.status === "completed" && task.filePath && !task.duration) {
+          missingDuration.push(task.id);
         }
       }
       if (ids.length > 0) prefetchSizesRef.current(ids);
+      if (missingDuration.length > 0) {
+        ensureDurationsRef.current(missingDuration).catch(() => {});
+      }
     },
   );
 
@@ -1330,7 +1435,7 @@ function DownloadsScreen() {
         onPress: () => onSelect(f.path),
       })),
     ],
-    [privateFolderTreeOptions],
+    [privateFolderTreeOptions, t],
   );
 
   const copyModalOptions = useMemo<FolderPickerOption[]>(() => {
@@ -1344,7 +1449,7 @@ function DownloadsScreen() {
         onPress: () => handleCopyToFolder(DEVICE_DOWNLOAD_MOVE_TARGET),
       },
     ];
-  }, [copyTask, privateFolderPickerOptions, handleCopyToFolder]);
+  }, [copyTask, privateFolderPickerOptions, handleCopyToFolder, t]);
 
   // ── render item ────────────────────────────────────────────────────────────
   const renderItem = useCallback(
@@ -1358,7 +1463,7 @@ function DownloadsScreen() {
               isDeviceScanRunning={isDeviceScanRunning}
               isHidden={
                 item.source === "private" &&
-                hiddenFolderPathsRef.current.has(item.path)
+                hiddenFolderPaths.has(item.path)
               }
               onOpen={() => handleOpenFolder(item)}
               onAction={
@@ -1388,12 +1493,12 @@ function DownloadsScreen() {
               isInTrash ? handleDeletePermanently : undefined
             }
             isSelectionMode={isSelectionMode}
-            isSelected={selectedIdsRef.current.has(item.task.id)}
+            isSelected={selectedIds.has(item.task.id)}
             onLongPress={handleEnterSelection}
             onSelect={handleToggleSelect}
-            labels={fileLabelsRef.current[item.task.id]}
+            labels={fileLabels[item.task.id]}
             onLabel={setLabelTaskTarget}
-            isHidden={hiddenFileIdsRef.current.has(item.task.id)}
+            isHidden={hiddenFileIds.has(item.task.id)}
             onToggleHide={
               item.task.source !== "device" ? toggleHideFile : undefined
             }
@@ -1421,7 +1526,18 @@ function DownloadsScreen() {
       isInTrash,
       handleDeletePermanently,
       toggleHideFile,
+      selectedIds,
+      fileLabels,
+      hiddenFileIds,
+      hiddenFolderPaths,
     ],
+  );
+
+  // Per-item state (selection, labels, hidden) isn't part of the item objects,
+  // so hand FlatList a value that changes whenever any of it does.
+  const listExtraData = useMemo(
+    () => ({ selectedIds, fileLabels, hiddenFileIds, hiddenFolderPaths, showHidden }),
+    [selectedIds, fileLabels, hiddenFileIds, hiddenFolderPaths, showHidden],
   );
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -1511,7 +1627,7 @@ function DownloadsScreen() {
           }
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.listRow}
-          extraData={`${isSelectionMode}|${hiddenFileIds.size}|${hiddenFolderPaths.size}|${showHidden}`}
+          extraData={listExtraData}
           renderItem={renderItem}
           viewabilityConfig={viewabilityConfigRef.current}
           onViewableItemsChanged={onViewableItemsChangedRef.current}
@@ -1721,7 +1837,7 @@ function DownloadsScreen() {
       <DeleteConfirmModal
         visible={!!deleteConfirm}
         count={deleteConfirm?.ids.length ?? 0}
-        permanent={deletePermanent}
+        permanent={deletePermanent || deleteConfirmIsDeviceOnly}
         onTogglePermanent={() => setDeletePermanent((v) => !v)}
         onCancel={() => {
           setDeleteConfirm(null);

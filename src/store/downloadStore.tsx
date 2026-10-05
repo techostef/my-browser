@@ -78,8 +78,17 @@ interface DownloadContextValue extends DownloadState {
   ) => Promise<number>;
   removeDownload: (id: string) => Promise<string | null>;
   deleteFromTrash: (id: string) => void;
+  // Deletes device (shared storage) files for real. One system confirmation
+  // covers the whole batch; resolves to the ids that were actually deleted.
+  deleteDeviceFiles: (ids: string[]) => Promise<string[]>;
   prefetchDeviceFileSizes: (ids: string[]) => void;
   ensureDurations: (ids: string[]) => Promise<void>;
+  // A finished download is re-keyed from its dl_… id to file_<path>. Listeners
+  // get { oldId: newId } so per-id data (labels, hidden) can follow it. Mappings
+  // emitted while nobody listens are delivered on the next subscribe.
+  subscribeIdMigrations: (
+    cb: (mapping: Record<string, string>) => void,
+  ) => () => void;
 }
 
 const DEVICE_SCAN_CACHE_KEY = "@device_download_scan_cache_v2";
@@ -237,8 +246,10 @@ interface DownloadActions {
   countMoveConflicts: DownloadContextValue["countMoveConflicts"];
   removeDownload: DownloadContextValue["removeDownload"];
   deleteFromTrash: DownloadContextValue["deleteFromTrash"];
+  deleteDeviceFiles: DownloadContextValue["deleteDeviceFiles"];
   prefetchDeviceFileSizes: DownloadContextValue["prefetchDeviceFileSizes"];
   ensureDurations: DownloadContextValue["ensureDurations"];
+  subscribeIdMigrations: DownloadContextValue["subscribeIdMigrations"];
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null);
@@ -261,6 +272,37 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   // Ids already handed to a duration probe this session — probing is expensive and
   // a miss stays a miss, so never queue the same file twice.
   const requestedDurationIdsRef = useRef<Set<string>>(new Set());
+
+  const idMigrationListenersRef = useRef(
+    new Set<(mapping: Record<string, string>) => void>(),
+  );
+  const pendingIdMigrationsRef = useRef<Record<string, string>>({});
+
+  const emitIdMigration = useCallback((mapping: Record<string, string>) => {
+    const listeners = idMigrationListenersRef.current;
+    if (listeners.size === 0) {
+      Object.assign(pendingIdMigrationsRef.current, mapping);
+      return;
+    }
+    for (const cb of listeners) {
+      cb(mapping);
+    }
+  }, []);
+
+  const subscribeIdMigrations = useCallback(
+    (cb: (mapping: Record<string, string>) => void) => {
+      idMigrationListenersRef.current.add(cb);
+      const pending = pendingIdMigrationsRef.current;
+      if (Object.keys(pending).length > 0) {
+        pendingIdMigrationsRef.current = {};
+        cb(pending);
+      }
+      return () => {
+        idMigrationListenersRef.current.delete(cb);
+      };
+    },
+    [],
+  );
 
   const persistDeviceScanCache = useCallback(
     async (files: DownloadTask[], folders: string[]) => {
@@ -588,6 +630,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           payload: { id, filePath },
         });
       }
+      if (status === "completed" && filePath) {
+        // The next private scan lists this file as file_<path>; tell listeners
+        // now and swap the dl_… entry for it right away.
+        emitIdMigration({ [id]: `file_${filePath}` });
+        refreshDownloads().catch((err) => {
+          console.warn("Refresh after download completed failed:", err);
+        });
+      }
     });
 
     (async () => {
@@ -647,6 +697,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     restorePrivateCache,
     refreshDownloads,
     scanDeviceDownloadFolder,
+    emitIdMigration,
   ]);
 
   const createFolder = useCallback(
@@ -769,8 +820,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       }
       await Promise.all(workers);
 
-      // Refresh once at the end, not per-file
-      await Promise.all([refreshDownloads(), scanDeviceDownloadFolder()]);
+      // Refresh once at the end, not per-file. Device→private is a copy, so the
+      // device folder only changes when files were copied into it.
+      await Promise.all([
+        refreshDownloads(),
+        folderName === DEVICE_DOWNLOAD_MOVE_TARGET
+          ? scanDeviceDownloadFolder()
+          : undefined,
+      ]);
 
       if (errors.length > 0) {
         throw new Error(
@@ -817,7 +874,12 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
           newId = `file_${newPath}`;
         }
 
-        await Promise.all([refreshDownloads(), scanDeviceDownloadFolder()]);
+        await Promise.all([
+          refreshDownloads(),
+          folderName === DEVICE_DOWNLOAD_MOVE_TARGET
+            ? scanDeviceDownloadFolder()
+            : undefined,
+        ]);
         return newId;
       } catch (err) {
         console.warn("Move to folder failed:", err);
@@ -1070,8 +1132,6 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       const task = downloadsRef.current.find((d) => d.id === id);
       return !!task && !!task.filePath && !task.duration;
     });
-    // TEMPORARY DIAGNOSTIC — remove with the [dur] logging in downloadManager.
-    console.log('[dur] ensureDurations: asked=', ids.length, 'pending=', pending.length);
     if (pending.length === 0) {
       return;
     }
@@ -1087,7 +1147,6 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       .filter((it): it is { id: string; filePath: string } => it !== null);
 
     const durations = await probeDurations(items);
-    console.log('[dur] ensureDurations: resolved=', Object.keys(durations).length, 'of', items.length);
     if (Object.keys(durations).length === 0) {
       return;
     }
@@ -1111,9 +1170,57 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     }
   }, [persistDeviceScanCache, persistPrivateCache]);
 
+  const deleteDeviceFiles = useCallback(
+    async (ids: string[]): Promise<string[]> => {
+      const targets = ids
+        .map((id) => downloadsRef.current.find((d) => d.id === id))
+        .filter(
+          (t): t is DownloadTask =>
+            !!t && t.source === "device" && t.id.startsWith("device_"),
+        );
+      if (targets.length === 0) {
+        return [];
+      }
+
+      const deleted = await downloadManager.deleteDeviceAssets(
+        targets.map((t) => t.id.slice(7)),
+      );
+      if (!deleted) {
+        // User declined the system confirmation — leave everything in place.
+        return [];
+      }
+
+      const deletedIds = targets.map((t) => t.id);
+      for (const id of deletedIds) {
+        dispatchRef.current({ type: "REMOVE_DOWNLOAD", payload: { id } });
+      }
+      // Keep the startup cache in sync so the files don't reappear on relaunch.
+      const removed = new Set(deletedIds);
+      const remainingDevice = downloadsRef.current.filter(
+        (d) =>
+          d.status === "completed" &&
+          d.source === "device" &&
+          !removed.has(d.id),
+      );
+      void persistDeviceScanCache(remainingDevice, deviceFoldersRef.current);
+      return deletedIds;
+    },
+    [persistDeviceScanCache],
+  );
+
   const removeDownload = useCallback(
     async (id: string): Promise<string | null> => {
       const task = downloadsRef.current.find((d) => d.id === id);
+
+      // Device files have no trash — they're deleted through MediaStore.
+      if (task?.status === "completed" && task.source === "device") {
+        try {
+          await deleteDeviceFiles([id]);
+        } catch (err) {
+          console.warn("Delete device file failed:", err);
+        }
+        return null;
+      }
 
       if (
         task?.status === "completed" &&
@@ -1146,11 +1253,17 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       dispatchRef.current({ type: "REMOVE_DOWNLOAD", payload: { id } });
       return null;
     },
-    [refreshDownloads],
+    [refreshDownloads, deleteDeviceFiles],
   );
 
   const deleteFromTrash = useCallback((id: string) => {
     const task = downloadsRef.current.find((d) => d.id === id);
+    if (task?.status === "completed" && task.source === "device") {
+      deleteDeviceFiles([id]).catch((err) => {
+        console.warn("Delete device file failed:", err);
+      });
+      return;
+    }
     if (
       task?.status === "completed" &&
       task.filePath &&
@@ -1161,7 +1274,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       });
     }
     dispatchRef.current({ type: "REMOVE_DOWNLOAD", payload: { id } });
-  }, []);
+  }, [deleteDeviceFiles]);
 
   const actions = useMemo<DownloadActions>(
     () => ({
@@ -1183,8 +1296,10 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       countMoveConflicts,
       removeDownload,
       deleteFromTrash,
+      deleteDeviceFiles,
       prefetchDeviceFileSizes,
       ensureDurations,
+      subscribeIdMigrations,
     }),
     [
       startDownload,
@@ -1205,8 +1320,10 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       countMoveConflicts,
       removeDownload,
       deleteFromTrash,
+      deleteDeviceFiles,
       prefetchDeviceFileSizes,
       ensureDurations,
+      subscribeIdMigrations,
     ],
   );
 

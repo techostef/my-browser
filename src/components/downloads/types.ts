@@ -7,6 +7,7 @@ export type DownloadGridItem =
       name: string;
       source: "private" | "device";
       isDeviceRoot?: boolean;
+      isTrash?: boolean;
     }
   | { type: "file"; task: DownloadTask };
 

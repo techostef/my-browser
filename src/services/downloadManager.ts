@@ -48,7 +48,13 @@ interface PersistedDownload {
   // HLS-only
   hlsInfo?: HlsMasterInfo;
   selectedVariant?: HlsVariant;
+  // Finished MPEG-TS parts (in order) and the final .mp4 they merge into.
+  hlsParts?: string[];
+  hlsOutputPath?: string;
 }
+
+// Partial HLS parts live here, outside private_downloads/, until merged.
+const HLS_PARTS_DIR_NAME = 'hls_parts/';
 
 let persistedCache: Record<string, PersistedDownload> | null = null;
 
@@ -184,21 +190,6 @@ function releaseProbeSlot(): void {
 // Max time to wait for ffprobe's result to cross the React Native bridge.
 const PROBE_TIMEOUT_MS = 15000;
 
-// ── TEMPORARY DIAGNOSTIC — remove once the duration probe is confirmed working ──
-// Every failure path in this file is swallowed, so nothing about a broken probe is
-// observable. Filter logcat by "[dur]" to see what actually happens.
-const DEBUG_DURATION = true;
-const DEBUG_DETAIL_LIMIT = 3;
-let debugDetailCount = 0;
-const debugStats = {
-  called: 0, gatedByExt: 0, cacheHit: 0, cacheSkip: 0, probed: 0,
-  ok: 0, noInfo: 0, noDuration: 0, threw: 0, notExists: 0,
-};
-export function dumpDurationDebug(label: string): void {
-  if (!DEBUG_DURATION) { return; }
-  console.log(`[dur] STATS ${label}`, JSON.stringify(debugStats));
-}
-
 // ffprobe reports duration as a "seconds.microseconds" string, or omits it / reports
 // "N/A" for files whose container has no usable duration. Accepts number too: the
 // library's own typings declare getDuration(): number while the runtime actually
@@ -224,66 +215,41 @@ export function parseFfprobeDurationMs(
 // "Duration:" line usually hadn't arrived yet and the probe reported nothing. That
 // race is why most files ended up with no duration while a few won it and worked.
 async function probeMediaWithFFprobe(filePath: string): Promise<number | undefined> {
-  const detail = DEBUG_DURATION && debugDetailCount < DEBUG_DETAIL_LIMIT;
-  if (detail) { debugDetailCount++; }
   try {
-    const fsPath = toFsPath(filePath);
-    if (detail) { console.log('[dur] probe start:', fsPath); }
-
-    const session = await FFprobeKit.getMediaInformation(fsPath, PROBE_TIMEOUT_MS);
-
-    if (detail) {
-      // Everything the session can tell us about why it did or didn't work.
-      const [state, rc, logs] = await Promise.all([
-        session.getState().catch((e: unknown) => `state-err:${e}`),
-        session.getReturnCode().catch((e: unknown) => `rc-err:${e}`),
-        session.getAllLogsAsString(3000).catch((e: unknown) => `logs-err:${e}`),
-      ]);
-      console.log('[dur] session state=', String(state),
-        'rc=', rc && typeof rc === 'object' && 'getValue' in rc ? (rc as any).getValue() : String(rc),
-        'failTrace=', String(session.getFailStackTrace()),
-        'logs=', String(logs).slice(0, 400));
-    }
-
+    const session = await FFprobeKit.getMediaInformation(toFsPath(filePath), PROBE_TIMEOUT_MS);
     const info = session.getMediaInformation();
-    if (!info) {
-      if (detail) { console.log('[dur] NO MediaInformation returned for', fsPath); }
-      debugStats.noInfo++;
-      return undefined;
-    }
+    if (!info) { return undefined; }
 
-    const rawFormat = info.getDuration();
-    if (detail) {
-      console.log('[dur] format.duration=', JSON.stringify(rawFormat),
-        'typeof=', typeof rawFormat,
-        'streams=', info.getStreams().length);
-    }
-
-    const fromFormat = parseFfprobeDurationMs(rawFormat);
-    if (fromFormat) { debugStats.ok++; return fromFormat; }
+    const fromFormat = parseFfprobeDurationMs(info.getDuration());
+    if (fromFormat) { return fromFormat; }
 
     // A few containers (raw streams, some MKVs) carry duration only per stream.
     for (const stream of info.getStreams()) {
-      const rawStream = stream.getStringProperty('duration');
-      if (detail) { console.log('[dur] stream.duration=', JSON.stringify(rawStream)); }
-      const fromStream = parseFfprobeDurationMs(rawStream);
-      if (fromStream) { debugStats.ok++; return fromStream; }
+      const fromStream = parseFfprobeDurationMs(stream.getStringProperty('duration'));
+      if (fromStream) { return fromStream; }
     }
-    debugStats.noDuration++;
   } catch (err) {
-    debugStats.threw++;
-    console.warn('[dur] PROBE THREW for', filePath, err);
+    console.warn('Duration probe failed for', filePath, err);
   }
   return undefined;
 }
 
-async function probeMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
-  debugStats.called++;
+function isMediaFile(filePath: string): boolean {
   const ext = filePath.split('.').pop()?.toLowerCase().split('?')[0] || '';
-  if (!MEDIA_EXTS.has(ext)) {
-    debugStats.gatedByExt++;
-    return undefined;
-  }
+  return MEDIA_EXTS.has(ext);
+}
+
+// Cache-only lookup: never spawns an ffprobe session. Used by the folder walk so a
+// Downloads refresh stays cheap; missing durations are filled in on demand.
+async function getCachedMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
+  if (!isMediaFile(filePath)) { return undefined; }
+  const cache = await loadDurationCache();
+  const cached = cache[durationCacheKey(filePath, size, mtime)];
+  return cached && cached > 0 ? cached : undefined;
+}
+
+async function probeMediaDuration(filePath: string, size: number, mtime: number): Promise<number | undefined> {
+  if (!isMediaFile(filePath)) { return undefined; }
 
   const cache = await loadDurationCache();
   const key = durationCacheKey(filePath, size, mtime);
@@ -291,11 +257,10 @@ async function probeMediaDuration(filePath: string, size: number, mtime: number)
   if (cached !== undefined) {
     // A real duration is final. A 0 means an earlier probe failed — give it one more
     // chance per session, then stop so we don't re-probe the whole library on every scan.
-    if (cached > 0) { debugStats.cacheHit++; return cached; }
-    if (retriedFailuresThisSession.has(key)) { debugStats.cacheSkip++; return undefined; }
+    if (cached > 0) { return cached; }
+    if (retriedFailuresThisSession.has(key)) { return undefined; }
   }
   retriedFailuresThisSession.add(key);
-  debugStats.probed++;
 
   await acquireProbeSlot();
   let durationMs: number | undefined;
@@ -321,11 +286,7 @@ export async function probeDurations(
   await concurrentMap(items, async ({ id, filePath }) => {
     try {
       const info = await FileSystem.getInfoAsync(filePath);
-      if (!info.exists) {
-        debugStats.notExists++;
-        console.warn('[dur] getInfoAsync says NOT EXISTS (skipped, never probed):', filePath);
-        return;
-      }
+      if (!info.exists) { return; }
       const anyInfo = info as any;
       const size: number = typeof anyInfo.size === 'number' ? anyInfo.size : 0;
       const mtime: number = typeof anyInfo.modificationTime === 'number' ? anyInfo.modificationTime : 0;
@@ -335,7 +296,6 @@ export async function probeDurations(
       }
     } catch { /* best effort — a file we can't stat just keeps an unknown duration */ }
   }, STAT_CONCURRENCY);
-  dumpDurationDebug(`probeDurations(${items.length} requested, ${Object.keys(result).length} resolved)`);
   return result;
 }
 
@@ -386,9 +346,17 @@ interface ActiveTask {
   pageTitle: string;
   pageUrl?: string;
   cookies?: string;
-  // HLS-only — preserved so resumeDownload can restart the FFmpeg job from scratch.
+  // HLS-only — preserved so resumeDownload can restart the FFmpeg job.
   hlsInfo?: HlsMasterInfo;
   selectedVariant?: HlsVariant;
+  // Id of the FFmpeg run that owns this entry (see startHlsDownload).
+  hlsRunId?: number;
+  // Parts finished before the current run; fileUri is the part being written.
+  hlsParts?: string[];
+  hlsOutputPath?: string;
+  // Bytes in hlsParts, added to the current part's size for progress.
+  hlsCarriedBytes?: number;
+  hlsMerging?: boolean;
 }
 
 interface DeviceFolderScanResult {
@@ -414,6 +382,7 @@ class DownloadManager {
   private privateFolderUri: string | null = null;
   private stallWatchdogHandle: ReturnType<typeof setInterval> | null = null;
   private persistProgressTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private hlsRunCounter = 0;
 
   setProgressCallback(cb: ProgressCallback) {
     this.onProgress = cb;
@@ -470,6 +439,8 @@ class DownloadManager {
       savable,
       hlsInfo: active.hlsInfo,
       selectedVariant: active.selectedVariant,
+      hlsParts: active.hlsParts,
+      hlsOutputPath: active.hlsOutputPath,
     });
   }
 
@@ -500,6 +471,7 @@ class DownloadManager {
       for (const [id, active] of this.activeTasks) {
         if (active.paused) { continue; }
         anyActive = true;
+        if (active.hlsMerging) { continue; }
         const last = active.lastProgressAt ?? active.createdAt;
         if (now - last > STALL_THRESHOLD_MS) {
           this.autoPauseStalled(id).catch(err => {
@@ -564,13 +536,16 @@ class DownloadManager {
         const info = await FileSystem.getInfoAsync(active.fileUri);
         const diskSize = (info as any).size;
         if (typeof diskSize === 'number' && diskSize > 0) {
-          const prevDiskSize = active.lastDiskSize ?? active.bytesDownloaded;
+          // fileUri is only the current part, so compare part sizes and add the
+          // earlier parts back in for the reported total.
+          const prevDiskSize = active.lastDiskSize ?? 0;
           active.lastDiskSize = diskSize;
           if (diskSize > prevDiskSize) {
-            active.bytesDownloaded = diskSize;
+            const total = (active.hlsCarriedBytes ?? 0) + diskSize;
+            active.bytesDownloaded = total;
             active.lastProgressAt = Date.now();
             active.stallCount = 0;
-            this.onProgress?.(id, diskSize, 0);
+            this.onProgress?.(id, total, 0);
             return;
           }
           active.stallCount = (active.stallCount ?? 0) + 1;
@@ -588,11 +563,7 @@ class DownloadManager {
     active.stallCount = 0;
     active.paused = true;
     if (active.type === 'hls') {
-      if (active.ffmpegSessionId !== undefined) {
-        const sessionId = active.ffmpegSessionId;
-        active.ffmpegSessionId = undefined;
-        FFmpegKit.cancel(sessionId);
-      }
+      this.suspendHls(active);
       this.onStatusChange?.(id, 'paused', undefined, 'Connection lost — tap Resume to continue');
       await this.persistFromActive(id);
       return;
@@ -676,7 +647,6 @@ class DownloadManager {
       const rawTasks = await concurrentMap(fileEntries, async ({ entry, entryPath, size, modificationTime }) => {
         const createdAt = this.normalizeTimestamp(modificationTime);
         const mtime = modificationTime;
-        const duration = await probeMediaDuration(entryPath, size, mtime);
 
         // Corrupted editor exports (failed writes with no moov atom) have undefined
         // duration and will crash Android's MediaMetadataRetriever during thumbnail
@@ -685,11 +655,16 @@ class DownloadManager {
         // until they explicitly purge them. A duration probe in trash can also miss
         // the cache (filePath changes when moved), so a transient undefined here
         // would otherwise wipe the file out from under the user.
-        if (
-          duration === undefined &&
-          folderPath === '' &&
-          /^edited_\d+(?:_tmp)?\.(mp4|mov)$/i.test(entry)
-        ) {
+        // Only these files get a real ffprobe during the walk; everything else reads
+        // the duration cache and is probed on demand (ensureDurations), so a refresh
+        // of a large library never queues hundreds of probe sessions.
+        const isEditorExport =
+          folderPath === '' && /^edited_\d+(?:_tmp)?\.(mp4|mov)$/i.test(entry);
+        const duration = isEditorExport
+          ? await probeMediaDuration(entryPath, size, mtime)
+          : await getCachedMediaDuration(entryPath, size, mtime);
+
+        if (isEditorExport && duration === undefined) {
           try { await FileSystem.deleteAsync(entryPath, { idempotent: true }); } catch { /* ignore */ }
           return null;
         }
@@ -729,7 +704,6 @@ class DownloadManager {
     };
 
     await walk(privateDir, '');
-    dumpDurationDebug(`listPrivateDownloads(${files.length} files)`);
     void flushDurationCache();
     files.sort((a, b) => b.createdAt - a.createdAt);
     return files;
@@ -1138,6 +1112,18 @@ class DownloadManager {
     await FileSystem.deleteAsync(filePath, { idempotent: true });
   }
 
+  // Device files live in shared storage, so they can only be removed through
+  // MediaStore. On Android 11+ the system shows its own confirmation dialog;
+  // returns false when the user declines it.
+  async deleteDeviceAssets(assetIds: string[]): Promise<boolean> {
+    if (assetIds.length === 0) { return true; }
+    const permission = await MediaLibrary.requestPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error('Storage permission is required to delete device files');
+    }
+    return MediaLibrary.deleteAssetsAsync(assetIds);
+  }
+
   async renamePrivateFile(filePath: string, newFileName: string): Promise<string> {
     const safeName = this.sanitizeProvidedFileName(newFileName);
     // Keep the file in its current directory (e.g. a subfolder) instead of
@@ -1310,6 +1296,88 @@ class DownloadManager {
     }
   }
 
+  private async ensureHlsPartsDir(): Promise<string> {
+    const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+    if (!baseDir) {
+      throw new Error('No writable file directory available');
+    }
+    // Outside private_downloads/ so the Downloads walk never lists partial parts.
+    const dir = `${baseDir}${HLS_PARTS_DIR_NAME}`;
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    return dir;
+  }
+
+  private async deleteHlsFiles(paths: Array<string | undefined>): Promise<void> {
+    await Promise.all(
+      paths
+        .filter((p): p is string => !!p)
+        .map(p => FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {})),
+    );
+  }
+
+  // Stop the FFmpeg job but keep what it wrote: the current part joins the list
+  // of finished parts so resume can continue from the end of it.
+  private suspendHls(active: ActiveTask): void {
+    if (active.ffmpegSessionId !== undefined) {
+      const sessionId = active.ffmpegSessionId;
+      active.ffmpegSessionId = undefined;
+      FFmpegKit.cancel(sessionId);
+    }
+    const parts = active.hlsParts ?? [];
+    if (active.fileUri && !parts.includes(active.fileUri)) {
+      active.hlsParts = [...parts, active.fileUri];
+    }
+  }
+
+  // Keep the leading parts whose duration is readable; the timeline after an
+  // unreadable part can't be trusted, so it and everything after it is dropped.
+  private async collectResumableParts(
+    parts: string[],
+  ): Promise<{ parts: string[]; offsetMs: number; bytes: number }> {
+    const kept: string[] = [];
+    let offsetMs = 0;
+    let bytes = 0;
+    for (let i = 0; i < parts.length; i++) {
+      const info = await FileSystem.getInfoAsync(parts[i]).catch(() => null);
+      const size = info?.exists ? ((info as any).size as number) || 0 : 0;
+      const durationMs = size > 0 ? await probeMediaWithFFprobe(parts[i]) : undefined;
+      if (!durationMs) {
+        await this.deleteHlsFiles(parts.slice(i));
+        break;
+      }
+      kept.push(parts[i]);
+      offsetMs += durationMs;
+      bytes += size;
+    }
+    return { parts: kept, offsetMs, bytes };
+  }
+
+  private async mergeHlsParts(parts: string[], outputPath: string, partsDir: string, id: string): Promise<void> {
+    const outputFsPath = toFsPath(outputPath);
+    let listPath: string | undefined;
+    let args: string[];
+    if (parts.length === 1) {
+      args = ['-i', toFsPath(parts[0]), '-c', 'copy', '-y', outputFsPath];
+    } else {
+      listPath = `${partsDir}${id}_list.txt`;
+      const listBody = parts
+        .map(p => `file '${toFsPath(p).replace(/'/g, "'\\''")}'`)
+        .join('\n');
+      await FileSystem.writeAsStringAsync(listPath, listBody);
+      args = ['-f', 'concat', '-safe', '0', '-i', toFsPath(listPath), '-c', 'copy', '-y', outputFsPath];
+    }
+    try {
+      const session = await FFmpegKit.executeWithArguments(args);
+      const rc = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(rc)) {
+        const logs = await session.getAllLogsAsString();
+        throw new Error(logs?.slice(-300) || 'Failed to merge HLS parts');
+      }
+    } finally {
+      await this.deleteHlsFiles([listPath]);
+    }
+  }
+
   private async startHlsDownload(
     id: string,
     url: string,
@@ -1318,18 +1386,34 @@ class DownloadManager {
     cookies?: string,
     hslInfo?: HlsMasterInfo,
     selectedVariant?: HlsVariant,
+    resumeState?: { parts: string[]; outputPath?: string; createdAt: number },
   ): Promise<string> {
     const privateDir = await this.ensurePrivateFolder();
+    const partsDir = await this.ensureHlsPartsDir();
 
     this.onStatusChange?.(id, 'downloading');
-    this.onProgress?.(id, 0, 0);
 
     const safe = (pageTitle || 'video')
       .replace(/[^a-zA-Z0-9 ]/g, '')
       .replace(/\s+/g, '_')
       .substring(0, 40);
-    const outputPath = `${privateDir}${safe}_${Date.now()}.mp4`;
-    const outputFsPath = outputPath.replace(/^file:\/\//, '');
+    const outputPath = resumeState?.outputPath ?? `${privateDir}${safe}_${Date.now()}.mp4`;
+
+    // Continue after the parts already on disk instead of starting over.
+    const resumable = resumeState?.parts.length
+      ? await this.collectResumableParts(resumeState.parts)
+      : { parts: [] as string[], offsetMs: 0, bytes: 0 };
+    const priorParts = resumable.parts;
+    const carriedBytes = resumable.bytes;
+    const seekArgs = resumable.offsetMs > 0 ? ['-ss', (resumable.offsetMs / 1000).toFixed(3)] : [];
+
+    // MPEG-TS parts stay readable even when FFmpeg is stopped mid-write, which
+    // is what makes a paused download resumable.
+    const partPath = `${partsDir}${id}_${Date.now()}.ts`;
+    const partFsPath = toFsPath(partPath);
+    const outputArgs = ['-c', 'copy', '-f', 'mpegts', '-y', partFsPath];
+
+    this.onProgress?.(id, carriedBytes, 0);
 
     // Build headers argument
     const headerLines = [
@@ -1358,35 +1442,37 @@ class DownloadManager {
         args = [
           '-headers', headersValue,
           '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+          ...seekArgs,
           '-i', videoUrl,
           '-headers', headersValue,
+          ...seekArgs,
           '-i', audioUrl,
           '-map', '0:v',
           '-map', '1:a',
-          '-c', 'copy',
-          '-y',
-          outputFsPath,
+          ...outputArgs,
         ];
       } else {
         args = [
           '-headers', headersValue,
           '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+          ...seekArgs,
           '-i', videoUrl,
-          '-c', 'copy',
-          '-y',
-          outputFsPath,
+          ...outputArgs,
         ];
       }
     } else {
       args = [
         '-headers', headersValue,
         '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+        ...seekArgs,
         '-i', url,
-        '-c', 'copy',
-        '-y',
-        outputFsPath,
+        ...outputArgs,
       ];
     }
+
+    // Identifies this FFmpeg run. A resume replaces the map entry with a new
+    // run, so a late completion callback from the old run must not touch it.
+    const runId = ++this.hlsRunCounter;
 
     try {
       let resolveCompletion!: () => void;
@@ -1411,9 +1497,9 @@ class DownloadManager {
         },
         undefined,
         (stats) => {
-          const size = stats.getSize();
+          const size = carriedBytes + stats.getSize();
           const active = this.activeTasks.get(id);
-          if (active) {
+          if (active?.hlsRunId === runId) {
             active.bytesDownloaded = size;
             active.lastProgressAt = Date.now();
           }
@@ -1421,16 +1507,18 @@ class DownloadManager {
         },
       );
 
-      const createdAt = Date.now();
+      const createdAt = resumeState?.createdAt ?? Date.now();
       this.activeTasks.set(id, {
         type: 'hls',
         ffmpegSessionId: session.getSessionId(),
+        hlsRunId: runId,
         url,
-        fileUri: outputPath,
+        fileUri: partPath,
         fileName: outputPath.split('/').pop() || '',
-        bytesDownloaded: 0,
+        bytesDownloaded: carriedBytes,
         totalBytes: 0,
-        lastProgressAt: createdAt,
+        lastProgressAt: Date.now(),
+        lastDiskSize: 0,
         createdAt,
         // Preserve original args so pauseDownload can keep the task alive and
         // resumeDownload can restart the FFmpeg job with the same parameters.
@@ -1439,28 +1527,31 @@ class DownloadManager {
         cookies,
         hlsInfo: hslInfo,
         selectedVariant,
+        hlsParts: priorParts,
+        hlsOutputPath: outputPath,
+        hlsCarriedBytes: carriedBytes,
       });
 
-      void upsertPersistedDownload({
-        id,
-        type: 'hls',
-        url,
-        fileUri: outputPath,
-        fileName: outputPath.split('/').pop() || '',
-        pageTitle,
-        pageUrl,
-        cookies,
-        expectedTotalBytes: 0,
-        bytesDownloaded: 0,
-        createdAt,
-        status: 'paused',
-        hlsInfo: hslInfo,
-        selectedVariant,
-      });
+      void this.persistFromActive(id);
 
       this.ensureStallWatchdog();
 
       await done;
+
+      const active = this.activeTasks.get(id);
+      if (active?.hlsRunId !== runId) {
+        return '';
+      }
+      const allParts = [...priorParts, partPath];
+      // The part stops growing while merging; keep the stall watchdog off it.
+      active.hlsMerging = true;
+      await this.mergeHlsParts(allParts, outputPath, partsDir, id);
+      await this.deleteHlsFiles(allParts);
+      if (this.activeTasks.get(id)?.hlsRunId !== runId) {
+        // Cancelled during the merge.
+        await this.deleteHlsFiles([outputPath]);
+        return '';
+      }
 
       this.activeTasks.delete(id);
       this.clearPersistTimer(id);
@@ -1468,24 +1559,26 @@ class DownloadManager {
       this.onStatusChange?.(id, 'completed', outputPath);
       return outputPath;
     } catch (err: any) {
-      await FileSystem.deleteAsync(outputPath, { idempotent: true }).catch(() => {});
-      const stillActive = this.activeTasks.get(id);
-      if (stillActive?.paused) {
-        // Pause path: status is already 'paused' and the task record stays in
-        // the map so resumeDownload can restart it.
+      const current = this.activeTasks.get(id);
+      if (!current || current.hlsRunId !== runId) {
+        // Cancelled (cancelDownload already cleaned up) or superseded by a resume.
         return '';
       }
+      if (current.paused) {
+        // Pause path: status is already 'paused', the part was kept by
+        // suspendHls, and the record stays in the map so resume can continue.
+        return '';
+      }
+      const allParts = [...(current.hlsParts ?? priorParts), partPath];
+      await this.deleteHlsFiles([...allParts, outputPath]);
+      this.activeTasks.delete(id);
+      this.clearPersistTimer(id);
+      void removePersistedDownload(id);
       if (err?.message === 'cancelled') {
-        this.activeTasks.delete(id);
-        this.clearPersistTimer(id);
-        void removePersistedDownload(id);
         this.onStatusChange?.(id, 'cancelled');
         return '';
       }
       console.error('[HLS-FFmpeg] download failed:', err?.message);
-      this.activeTasks.delete(id);
-      this.clearPersistTimer(id);
-      void removePersistedDownload(id);
       this.onStatusChange?.(id, 'failed', undefined, err?.message || 'HLS download failed');
       throw err;
     }
@@ -1638,12 +1731,8 @@ class DownloadManager {
     if (!active) { return; }
     active.paused = true;
     if (active.type === 'hls') {
-      if (active.ffmpegSessionId !== undefined) {
-        const sessionId = active.ffmpegSessionId;
-        active.ffmpegSessionId = undefined;
-        FFmpegKit.cancel(sessionId);
-        FileSystem.deleteAsync(active.fileUri, { idempotent: true }).catch(() => {});
-      }
+      // Keeps the partial part on disk so resume continues from it.
+      this.suspendHls(active);
       this.onStatusChange?.(id, 'paused');
       void this.persistFromActive(id);
       return;
@@ -1667,12 +1756,17 @@ class DownloadManager {
       throw new Error('No paused task found for this download');
     }
 
-    // HLS: restart FFmpeg from scratch with the stored args.
+    // HLS: start a new FFmpeg run that continues after the parts kept on pause.
     if (active.type === 'hls') {
-      const { url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant } = active;
+      this.suspendHls(active);
+      const { url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant, hlsParts, hlsOutputPath, createdAt } = active;
       this.activeTasks.delete(id);
       this.clearPersistTimer(id);
-      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant);
+      return this.startHlsDownload(id, url, pageTitle, pageUrl, cookies, hlsInfo, selectedVariant, {
+        parts: hlsParts ?? [],
+        outputPath: hlsOutputPath,
+        createdAt,
+      });
     }
 
     // Direct: if the in-memory task is gone (e.g. restored from persistence),
@@ -1747,7 +1841,7 @@ class DownloadManager {
         active.task?.cancelAsync().catch(() => {});
       }
       // Delete partial bytes so a stale file doesn't survive across restarts.
-      FileSystem.deleteAsync(active.fileUri, { idempotent: true }).catch(() => {});
+      void this.deleteHlsFiles([active.fileUri, ...(active.hlsParts ?? []), active.hlsOutputPath]);
       this.activeTasks.delete(id);
     }
     this.clearPersistTimer(id);
@@ -1762,8 +1856,12 @@ class DownloadManager {
   getActiveFileUris(): Set<string> {
     const uris = new Set<string>();
     for (const task of this.activeTasks.values()) {
-      uris.add(task.fileUri);
-      uris.add(task.fileUri.replace(/^file:\/\//, ''));
+      // An HLS merge writes straight into private_downloads/ — hide it until done.
+      for (const uri of [task.fileUri, task.hlsOutputPath]) {
+        if (!uri) { continue; }
+        uris.add(uri);
+        uris.add(uri.replace(/^file:\/\//, ''));
+      }
     }
     return uris;
   }
@@ -1823,7 +1921,7 @@ class DownloadManager {
           url: record.url,
           fileUri: record.fileUri,
           fileName: record.fileName,
-          bytesDownloaded: 0,
+          bytesDownloaded: record.bytesDownloaded,
           totalBytes: 0,
           paused: true,
           createdAt: record.createdAt,
@@ -1832,10 +1930,15 @@ class DownloadManager {
           cookies: record.cookies,
           hlsInfo: record.hlsInfo,
           selectedVariant: record.selectedVariant,
+          hlsParts: record.hlsParts,
+          hlsOutputPath: record.hlsOutputPath,
         });
       }
 
-      const sizeForTask = existingBytes || record.bytesDownloaded;
+      // For HLS, fileUri is only the last part; the record holds the running total.
+      const sizeForTask = record.type === 'hls'
+        ? record.bytesDownloaded || existingBytes
+        : existingBytes || record.bytesDownloaded;
       const totalForTask = record.expectedTotalBytes || sizeForTask;
       const progress = totalForTask > 0 ? Math.min(99, Math.round((sizeForTask / totalForTask) * 100)) : 0;
       restored.push({
