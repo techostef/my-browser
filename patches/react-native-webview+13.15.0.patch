@@ -1,11 +1,52 @@
 diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
-index 251939e..0000000 100644
+index 251939e..4018b79 100644
 --- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
 +++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewClient.java
-@@ -94,6 +94,179 @@ public class RNCWebViewClient extends WebViewClient {
+@@ -53,6 +53,34 @@ public class RNCWebViewClient extends WebViewClient {
+         basicAuthCredential = credential;
+     }
+ 
++    // ── Patched: no injected JS on search-engine pages ────────────────────────
++    // Neither the top frame (onPageStarted) nor its iframes
++    // (shouldInterceptRequest) get injectedJSBeforeContentLoaded while the
++    // top-level page is a search engine. Keep in sync with SEARCH_ENGINE_HOSTS
++    // in src/store/settingsStore.tsx.
++    private static final String[] SEARCH_ENGINE_HOSTS = {
++        "google.com", "bing.com", "duckduckgo.com", "yahoo.com", "brave.com", "ecosia.org",
++    };
++    // Written on the main-frame request (IO thread) and onPageStarted (UI
++    // thread), read by subframe requests on IO threads.
++    private volatile boolean mTopIsSearchEngine = false;
++
++    static boolean isSearchEngineUrl(@Nullable String url) {
++        if (url == null) return false;
++        String host;
++        try {
++            host = android.net.Uri.parse(url).getHost();
++        } catch (Exception e) {
++            return false;
++        }
++        if (host == null) return false;
++        host = host.toLowerCase().replaceFirst("^(www|m|search)\\.", "");
++        for (String engine : SEARCH_ENGINE_HOSTS) {
++            if (host.equals(engine) || host.endsWith("." + engine)) return true;
++        }
++        return false;
++    }
++
+     @Override
+     public void onPageFinished(WebView webView, String url) {
+         super.onPageFinished(webView, url);
+@@ -90,10 +118,193 @@ public class RNCWebViewClient extends WebViewClient {
+       super.onPageStarted(webView, url, favicon);
+       mLastLoadFailed = false;
+ 
++      mTopIsSearchEngine = isSearchEngineUrl(url);
++      if (mTopIsSearchEngine) return;
+       RNCWebView reactWebView = (RNCWebView) webView;
        reactWebView.callInjectedJavaScriptBeforeContentLoaded();
      }
-
+ 
 +    // ── Patched: (1) native ad-domain blocking, (2) inject JS into cross-origin
 +    // iframe HTML responses. Without shouldInterceptRequest, injected JS only runs
 +    // in the top frame on Android WebView.
@@ -41,6 +82,14 @@ index 251939e..0000000 100644
 +    @Override
 +    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
 +        if (request == null) {
++            return super.shouldInterceptRequest(view, request);
++        }
++        // The main-frame request arrives before onPageStarted, so record the
++        // new top-level page here already; its iframes are requested right after.
++        if (request.isForMainFrame()) {
++            mTopIsSearchEngine = isSearchEngineUrl(request.getUrl() != null ? request.getUrl().toString() : null);
++        }
++        if (mTopIsSearchEngine) {
 +            return super.shouldInterceptRequest(view, request);
 +        }
 +        RNCWebView reactWebView = (view instanceof RNCWebView) ? (RNCWebView) view : null;

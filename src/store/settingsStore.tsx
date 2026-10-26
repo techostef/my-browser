@@ -39,6 +39,9 @@ const STRIP_SUBDOMAIN_RE = /^(www|m|search)\./i;
 const normalizeHost = (host: string) =>
   host.replace(STRIP_SUBDOMAIN_RE, "").toLowerCase();
 
+// Mirrored in the native WebView patch (RNCWebViewClient.SEARCH_ENGINE_HOSTS
+// in patches/react-native-webview+*.patch), which skips script injection on
+// these hosts. Update both when changing SEARCH_ENGINES/SEARCH_ENGINE_HOME.
 export const SEARCH_ENGINE_HOSTS: ReadonlySet<string> = new Set(
   [...Object.values(SEARCH_ENGINES), ...Object.values(SEARCH_ENGINE_HOME)]
     .map((url) => {

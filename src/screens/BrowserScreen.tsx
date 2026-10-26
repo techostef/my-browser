@@ -70,7 +70,7 @@ import { useAdActions } from "../store/adStore";
 import { useDownloadActions } from "../store/downloadStore";
 import { useManga } from "../store/mangaStore";
 import {
-  SEARCH_ENGINE_HOSTS,
+  isSearchEngineHost,
   useSettings,
   useThemeColors,
 } from "../store/settingsStore";
@@ -86,24 +86,14 @@ import { MangaChapterInfo } from "../types/manga";
 
 const SUPPORTED_MANGA_DOMAINS = ["www.mangaread.org", "mangaread.org"];
 
-// Wraps the injected scripts so they skip search-engine pages. The check runs
-// in the page against its own top-level hostname: deciding in RN from the
-// active tab's URL was stale at load start (a result opened from Google still
-// saw google.com and got no scripts) and applied to every tab at once.
-// location.ancestorOrigins gives iframes their top origin even cross-origin.
-const skipOnSearchEngines = (js: string) => `(function(){
-  var engines = ${JSON.stringify([...SEARCH_ENGINE_HOSTS])};
-  var host = location.hostname;
+const isSearchEngineUrl = (url: string | undefined) => {
   try {
-    var ao = location.ancestorOrigins;
-    if (ao && ao.length) host = new URL(ao[ao.length - 1]).hostname;
-  } catch (e) {}
-  host = host.replace(/^(www|m|search)\\./i, '').toLowerCase();
-  for (var i = 0; i < engines.length; i++) {
-    if (host === engines[i] || host.endsWith('.' + engines[i])) return;
+    return isSearchEngineHost(new URL(url ?? "").hostname);
+  } catch {
+    return false;
   }
-${js}
-})(); true;`;
+};
+
 
 // Injected into the browser WebView when the user taps Preview on a stream.
 // Posts the currentTime of the most-advanced playing video element.
@@ -247,11 +237,15 @@ function BrowserScreen() {
   const { startDownload } = useDownloadActions();
   const { requestDownload } = useAdActions();
   const { settings, pushHistory, setSetting } = useSettings();
+  // Applies to every page: the native WebView patch
+  // (patches/react-native-webview+*.patch, RNCWebViewClient) skips injecting
+  // it on search-engine pages and their iframes. Deciding here from the
+  // active tab's URL was stale at load start and hit every tab at once.
   const injectedJavaScript = useMemo(() => {
     let js = VIDEO_DETECTOR_JS;
     if (settings.adBlockEnabled) js = AD_BLOCKER_JS + js;
     if (settings.popupBlockEnabled) js = POPUP_BLOCKER_JS + js;
-    return skipOnSearchEngines(js);
+    return js;
   }, [settings.adBlockEnabled, settings.popupBlockEnabled]);
   const previousUrl = useRef("");
   const navigation = useNavigation();
@@ -386,6 +380,9 @@ function BrowserScreen() {
   const activeBannerDismissed = bannerDismissedMap[activeTabId] || false;
   const activePlayingVideoUrl = playingVideoUrlMap[activeTabId] || "";
   const activeSegmentBlob = segmentBlobMap[activeTabId] || {};
+  // Videos detected on an earlier page stay in the tab's list, so hide the
+  // banner outright while the tab is on a search engine.
+  const activeOnSearchEngine = isSearchEngineUrl(activeTab?.url);
   const navbarTitle =
     activeDetectedVideos[0]?.pageTitle || activeTab?.title || "Video";
 
@@ -705,6 +702,17 @@ function BrowserScreen() {
       try {
         const message = JSON.parse(event.nativeEvent.data);
 
+        // No video detection on search-engine pages (e.g. Bing/Google video
+        // results). The injected scripts already skip these hosts; this also
+        // drops messages that slip through while the tab's URL catches up.
+        if (
+          (message.type === "VIDEO_DETECTED" ||
+            message.type === "M3U8_INFO") &&
+          isSearchEngineUrl(getTabsSnapshot().find((t) => t.id === tabId)?.url)
+        ) {
+          return;
+        }
+
         switch (message.type) {
           case "VIDEO_DETECTED": {
             const items: DetectedVideo[] = message.payload || [];
@@ -892,7 +900,13 @@ function BrowserScreen() {
         // Ignore non-JSON messages from websites
       }
     },
-    [setBlockedPopupUrl, loadBgWebView, clearBgWebView, getTitle],
+    [
+      setBlockedPopupUrl,
+      loadBgWebView,
+      clearBgWebView,
+      getTitle,
+      getTabsSnapshot,
+    ],
   );
 
   // Stable ref wrappers — Browser is memoized so its onMessage / onShouldStartLoad
@@ -1432,7 +1446,9 @@ function BrowserScreen() {
         )}
 
         <VideoDetectedBanner
-          visible={!isVideoPlaying && !activeBannerDismissed}
+          visible={
+            !isVideoPlaying && !activeBannerDismissed && !activeOnSearchEngine
+          }
           videos={activeDetectedVideos}
           playingUrl={activePlayingVideoUrl}
           segmentBlob={activeSegmentBlob}
