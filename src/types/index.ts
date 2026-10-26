@@ -44,19 +44,14 @@ export interface HlsMasterInfo {
 
 export interface DetectedVideo {
   url: string;
-  type: 'mp4' | 'webm' | 'hls' | 'dash' | 'blob' | 'blob-ready' | 'unknown';
+  type: 'mp4' | 'webm' | 'hls' | 'dash' | 'blob' | 'unknown';
   pageUrl: string;
   pageTitle: string;
   timestamp: number;
   cookies?: string;
-  blobSize?: number;
   videoWidth?: string;
   isValid?: boolean;
   startTime?: number;
-  // Populated for blob/blob-ready videos after extraction-to-cache so the
-  // preview modal can play the captured bytes via file:// (the original
-  // blob: URL is scoped to the page that created it and is unusable elsewhere).
-  localUri?: string;
   // Populated when an M3U8 master playlist is fetched and parsed
   hlsInfo?: HlsMasterInfo;
 }

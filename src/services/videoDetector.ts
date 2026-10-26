@@ -1,10 +1,14 @@
 /**
- * JavaScript code injected into the WebView to detect <video> elements
- * and extract their source URLs. Uses MutationObserver for dynamic content.
+ * Maps DASH .m4s segment requests to the blob: URL of the <video> playing
+ * them. Interpolated into VIDEO_DETECTOR_JS.
  */
 export const MATCHING_M4S = `
   var m4sToBlob = {};
   var blobToM4s = {};
+  // blobUrl -> { segmentDir: true }. RN only needs one segment per
+  // variant/track to identify the playlist, so post once per directory
+  // instead of once per segment.
+  var reportedM4sDirs = {};
 
   function findPlayingBlobUrl() {
     try {
@@ -38,6 +42,11 @@ export const MATCHING_M4S = `
     if (blobToM4s[blobUrl].indexOf(absUrl) === -1) {
       blobToM4s[blobUrl].push(absUrl);
     }
+    var dir = absUrl.split('?')[0];
+    dir = dir.substring(0, dir.lastIndexOf('/') + 1);
+    if (!reportedM4sDirs[blobUrl]) reportedM4sDirs[blobUrl] = {};
+    if (reportedM4sDirs[blobUrl][dir]) return;
+    reportedM4sDirs[blobUrl][dir] = true;
     try {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -62,11 +71,18 @@ export const MATCHING_M4S = `
 export const VIDEO_DETECTOR_JS = `
 (function() {
   'use strict';
-  
-  ${MATCHING_M4S}
+
+  // JavaScript injected into every frame of the WebView: detects <video>
+  // elements and network video URLs, and coordinates fullscreen/extraction.
+
   // Prevent double-injection
   if (window.__VIDEO_DETECTOR_INSTALLED__) return;
   window.__VIDEO_DETECTOR_INSTALLED__ = true;
+
+  // Must come after the guard: a re-injection would otherwise replace
+  // window.__getM4sForBlob with empty maps while the original XHR/fetch
+  // hooks keep writing to the old ones.
+  ${MATCHING_M4S}
 
   // Cross-frame fullscreen coordination.
   //   __RN_FS_QUERY: if this frame has a playing <video>, fullscreen it
@@ -265,107 +281,26 @@ export const VIDEO_DETECTOR_JS = `
   const detectedUrls = new Set();
   var lastM3u8Url = '';
 
-  // ---- Extraction guard (SPA click interceptor + visibility shield) ----
-  // RN bumps __extractionGuardCount when a blob download starts and decrements
-  // when it ends. While it's > 0:
-  //   1. In-page anchor clicks that would navigate the top frame are
-  //      intercepted in the capture phase, so the page's own click handlers
-  //      (e.g. Twitter's pushState routing) never run and the video element
-  //      stays mounted.
-  //   2. document.hidden / visibilityState are forced to "visible" and
-  //      visibilitychange events are swallowed. Without this, when the tab
-  //      gets parked in the background after a click, Android WebView fires
-  //      Page Visibility, the page pauses video playback, MSE buffering
-  //      stops, and the extraction's waitForReady poll spins forever at the
-  //      same byte count.
-  window.__extractionGuardCount = window.__extractionGuardCount || 0;
-  try {
-    var __origHiddenDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
-    var __origVisStateDesc = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState');
-    Object.defineProperty(document, 'hidden', {
-      configurable: true,
-      get: function() {
-        if ((window.__extractionGuardCount || 0) > 0) return false;
-        return __origHiddenDesc && __origHiddenDesc.get
-          ? __origHiddenDesc.get.call(document) : false;
-      }
-    });
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      get: function() {
-        if ((window.__extractionGuardCount || 0) > 0) return 'visible';
-        return __origVisStateDesc && __origVisStateDesc.get
-          ? __origVisStateDesc.get.call(document) : 'visible';
-      }
-    });
-    document.addEventListener('visibilitychange', function(e) {
-      if ((window.__extractionGuardCount || 0) > 0) {
-        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-        e.stopPropagation();
-      }
-    }, true);
-  } catch (err) {}
-  try {
-    document.addEventListener('click', function(e) {
-      if ((window.__extractionGuardCount || 0) <= 0) return;
-      var el = e.target;
-      while (el && el.nodeType === 1) {
-        if (el.tagName === 'A' && el.href) break;
-        el = el.parentElement;
-      }
-      if (!el || !el.href) return;
-      var href = el.href;
-      try {
-        var linkUrl = new URL(href, location.href);
-        var curUrl = new URL(location.href);
-        if (linkUrl.href === curUrl.href) return;
-        if (linkUrl.origin === curUrl.origin &&
-            linkUrl.pathname === curUrl.pathname &&
-            linkUrl.search === curUrl.search) return; // hash-only
-      } catch (err) {}
-      e.preventDefault();
-      e.stopPropagation();
-      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-      try {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'EXTRACTION_LINK_CLICK',
-          payload: { href: href }
-        }));
-      } catch (err) {}
-    }, true);
-  } catch (err) {}
-
-  // Keep video elements playing while extraction is active. A paused video
-  // stops requesting MSE segments (Twitter's player pauses when out of view
-  // or after another video starts playing). Muting prevents audio-focus
-  // conflict with whatever's loading in the visible foreground tab.
-  setInterval(function() {
-    if ((window.__extractionGuardCount || 0) <= 0) return;
-    try {
-      var vids = document.querySelectorAll('video');
-      for (var i = 0; i < vids.length; i++) {
-        var v = vids[i];
-        try {
-          v.muted = true;
-          if (v.preload !== 'auto') v.preload = 'auto';
-          if (v.paused && v.readyState > 0) {
-            var p = v.play();
-            if (p && typeof p.catch === 'function') p.catch(function(){});
-          }
-        } catch (err2) {}
-      }
-    } catch (err) {}
-  }, 1000);
-  // ---------------------------------------------------------------------
-
+  // RN discards these logs (it only keeps [FULLSCREEN]), so don't pay for
+  // the bridge round-trip unless debugging the detector.
+  var DETECTOR_DEBUG = false;
   function log(msg) {
     // console.log('[VideoDetector] ' + msg);
+    if (!DETECTOR_DEBUG) return;
     try {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'DETECTOR_LOG',
           payload: msg
         }));
+      }
+    } catch(e) {}
+  }
+
+  function postToRN(message) {
+    try {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(message));
       }
     } catch(e) {}
   }
@@ -408,7 +343,7 @@ export const VIDEO_DETECTOR_JS = `
     if (!url) return 'unknown';
     var lower = url.toLowerCase();
     if (lower.startsWith('blob:')) return 'blob';
-    if (lower.includes('.m3u8') || lower.includes('m3u8')) return 'hls';
+    if (lower.includes('m3u8')) return 'hls';
     if (lower.includes('.mpd') || lower.includes('application/dash')) return 'dash';
     // .m4s files are DASH segment fragments — not standalone videos, skip them
     if (lower.includes('.m4s')) return 'unknown';
@@ -523,8 +458,8 @@ export const VIDEO_DETECTOR_JS = `
   // ===== M3U8 PLAYLIST PARSE (from intercepted responses) =====
   var m3u8Parsed = {};
   function parseM3U8Content(m3u8Url, text) {
-    log('[M3U8] m3u8Url :' + JSON.stringify(m3u8Url) )
     if (!text || m3u8Parsed[m3u8Url]) return;
+    log('[M3U8] m3u8Url :' + JSON.stringify(m3u8Url));
     m3u8Parsed[m3u8Url] = true;
 
     var isMaster = text.indexOf('#EXT-X-STREAM-INF') !== -1;
@@ -667,12 +602,12 @@ export const VIDEO_DETECTOR_JS = `
     vEl.addEventListener('play', function() {
       var src = vEl.currentSrc || vEl.src || '';
       log('[VIDEO_PLAYING] src=' + src.substring(0, 120) + ' lastM3u8Url=' + lastM3u8Url.substring(0, 120));
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src } }));
+      postToRN({ type: 'VIDEO_PLAYING', payload: { src: src } });
     });
     // If already playing when listener was attached (first-load race), report immediately
     if (!vEl.paused && (vEl.currentSrc || vEl.src)) {
       var src = vEl.currentSrc || vEl.src || '';
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIDEO_PLAYING', payload: { src: src } }));
+      postToRN({ type: 'VIDEO_PLAYING', payload: { src: src } });
     }
   }
 
@@ -722,15 +657,20 @@ export const VIDEO_DETECTOR_JS = `
 
   // Intercept XHR to detect video URLs in network requests
   var origOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url) {
-    if (typeof url === 'string') {
+  XMLHttpRequest.prototype.open = function(method, rawUrl) {
+    // open() also accepts URL objects
+    var url = typeof rawUrl === 'string' ? rawUrl : (rawUrl && rawUrl.href) || '';
+    if (url) {
       var lower = url.toLowerCase();
       if (lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
           lower.includes('.mpd') || lower.includes('application/dash') ||
           lower.includes('video/') || lower.includes('mime=video') ||
           lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
+        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
+        if (!lower.includes('.m4s')) {
           log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
           sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
+        }
       }
       if (lower.includes('.m4s')) {
         trackM4sRequest(url);
@@ -823,7 +763,8 @@ export const VIDEO_DETECTOR_JS = `
   // Intercept fetch to detect video URLs
   var origFetch = window.fetch;
   window.fetch = function(input) {
-    var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+    // input may be a string, a Request (.url) or a URL object (.href)
+    var url = typeof input === 'string' ? input : (input && (input.url || input.href)) || '';
     if (url) {
       var lower = url.toLowerCase();
       if (lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
@@ -915,13 +856,13 @@ export const VIDEO_DETECTOR_JS = `
     setInterval(scanForVideos, SCAN_INTERVAL_MS);
 
     // Notify RN that injection succeeded
-    window.ReactNativeWebView.postMessage(JSON.stringify({
+    postToRN({
       type: 'PAGE_INFO',
       payload: {
         title: document.title,
         url: window.location.href
       }
-    }));
+    });
   }
 
   if (document.readyState === 'loading') {

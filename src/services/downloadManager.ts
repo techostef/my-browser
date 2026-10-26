@@ -1958,36 +1958,6 @@ class DownloadManager {
 
     return restored;
   }
-
-  async saveBlobData(
-    id: string,
-    pageTitle: string,
-    base64Data: string,
-  ): Promise<string> {
-    const safe = (pageTitle || 'video')
-      .replace(/[^a-zA-Z0-9 ]/g, '')
-      .replace(/\s+/g, '_')
-      .substring(0, 40);
-    const fileName = `${safe}_${Date.now()}.mp4`;
-    const privateDir = await this.ensurePrivateFolder();
-    const destPath = `${privateDir}${fileName}`;
-
-    this.onStatusChange?.(id, 'downloading');
-
-    try {
-      await FileSystem.writeAsStringAsync(destPath, base64Data, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      this.onStatusChange?.(id, 'completed', destPath);
-      return destPath;
-    } catch (err: any) {
-      // Clean up on failure
-      FileSystem.deleteAsync(destPath, { idempotent: true }).catch(() => {});
-      this.onStatusChange?.(id, 'failed', undefined, err?.message || 'Blob save failed');
-      throw err;
-    }
-  }
 }
 
 // Singleton

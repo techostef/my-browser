@@ -55,10 +55,8 @@ function RemoteEngine({ video, controls }: { video: DetectedVideo; controls: Sha
   const webViewRef = useRef<WebView>(null);
   const { controller, onMessage, hasError } = useWebViewController(webViewRef);
 
-  // Blob videos are played from the extracted cache copy (file://…); the
-  // original blob: URL is scoped to the page that created it.
-  const playbackUrl = video.localUri ? video.localUri : video.url;
-  const playbackType = video.localUri ? (video.type === "webm" ? "webm" : "mp4") : video.type;
+  const playbackUrl = video.url;
+  const playbackType = video.type;
   const startTime = video.startTime ?? 0;
 
   const html =
@@ -74,11 +72,8 @@ function RemoteEngine({ video, controls }: { video: DetectedVideo; controls: Sha
         ref={webViewRef}
         source={{
           html,
-          // For locally-extracted blob previews the HTML must share the
-          // file:// origin with the video file, or the <video> tag is not
-          // allowed to load it. For remote URLs keep the original page origin
-          // so cookies/CORS continue to work.
-          baseUrl: video.localUri ? video.localUri.replace(/[^/]+$/, "") : video.pageUrl,
+          // Keep the original page origin so cookies/CORS continue to work.
+          baseUrl: video.pageUrl,
         }}
         style={styles.webview}
         onMessage={onMessage}
@@ -174,7 +169,7 @@ export default function MediaPlayerModal({
     source === null
       ? null
       : source.kind === "remote"
-        ? source.video.localUri || source.video.url
+        ? source.video.url
         : source.uri;
 
   useEffect(() => {
