@@ -161,6 +161,9 @@ export const LANGUAGE_CODES: Record<string, string> = {
 
 export type VideoBannerPosition = "top" | "left" | "right" | "bottom";
 
+export type NetworkMode = "off" | "secureDns" | "proxy";
+export type DohProvider = "cloudflare" | "google" | "adguard" | "custom";
+
 export interface SettingsState {
   searchEngine: string;
   language: string;
@@ -170,6 +173,10 @@ export interface SettingsState {
   popupBlockEnabled: boolean;
   shortcuts: Shortcut[];
   videoBannerPosition: VideoBannerPosition;
+  networkMode: NetworkMode;
+  dohProvider: DohProvider;
+  dohCustomUrl: string;
+  proxyUrl: string;
 }
 
 const DEFAULT_SETTINGS: SettingsState = {
@@ -181,6 +188,10 @@ const DEFAULT_SETTINGS: SettingsState = {
   popupBlockEnabled: true,
   shortcuts: DEFAULT_SHORTCUTS,
   videoBannerPosition: "top",
+  networkMode: "off",
+  dohProvider: "cloudflare",
+  dohCustomUrl: "",
+  proxyUrl: "",
 };
 
 type SettingsAction =

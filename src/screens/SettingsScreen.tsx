@@ -27,7 +27,14 @@ import {
 } from "../lib/videoEditor/subtitleCache";
 import { LOCAL_MODEL_PATH } from "../lib/videoEditor/whisper";
 import {
+  DOH_PROVIDERS,
+  isValidDohUrl,
+  isValidProxyUrl,
+} from "../services/networkProxy";
+import {
+  DohProvider,
   HistoryEntry,
+  NetworkMode,
   useSettings,
   useThemeColors,
 } from "../store/settingsStore";
@@ -385,6 +392,156 @@ function AppearanceScreen({ onBack }: { onBack: () => void }) {
             trackColor={{ true: "#4ECDC4" }}
           />
         </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function NetworkScreen({ onBack }: { onBack: () => void }) {
+  const { settings, setSetting } = useSettings();
+  const c = useThemeColors();
+  const { t } = useTranslation();
+  const [dohUrl, setDohUrl] = useState(settings.dohCustomUrl);
+  const [proxyUrl, setProxyUrl] = useState(settings.proxyUrl);
+
+  const modes: Array<{ key: NetworkMode; label: string }> = [
+    { key: "off", label: t("networkOff") },
+    { key: "secureDns", label: t("secureDns") },
+    { key: "proxy", label: t("manualProxy") },
+  ];
+  const providers: Array<{ key: DohProvider; label: string }> = [
+    ...(Object.keys(DOH_PROVIDERS) as Array<keyof typeof DOH_PROVIDERS>).map(
+      (k) => ({ key: k, label: DOH_PROVIDERS[k].label }),
+    ),
+    { key: "custom", label: t("customDohUrl") },
+  ];
+
+  const saveDohUrl = () => {
+    if (!isValidDohUrl(dohUrl)) {
+      Alert.alert(t("invalidAddress"), "https://example.com/dns-query");
+      return;
+    }
+    setSetting("dohCustomUrl", dohUrl.trim());
+  };
+  const saveProxyUrl = () => {
+    if (!isValidProxyUrl(proxyUrl)) {
+      Alert.alert(t("invalidAddress"), "host:port, http://host:port, socks://host:port");
+      return;
+    }
+    setSetting("proxyUrl", proxyUrl.trim());
+  };
+
+  const renderInput = (
+    value: string,
+    onChange: (v: string) => void,
+    placeholder: string,
+    saved: string,
+    onSave: () => void,
+  ) => (
+    <View
+      style={[s.keyCard, { backgroundColor: c.surface, borderColor: c.border }]}
+    >
+      <View style={[s.keyInputRow, { borderColor: c.border }]}>
+        <TextInput
+          style={[s.keyInput, { color: c.text }]}
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={c.textSecondary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+      </View>
+      <View style={s.keyBtnRow}>
+        <TouchableOpacity
+          style={[
+            s.keyBtn,
+            {
+              backgroundColor: "#6c63ff",
+              opacity: value.trim() && value.trim() !== saved ? 1 : 0.4,
+            },
+          ]}
+          onPress={onSave}
+          disabled={!value.trim() || value.trim() === saved}
+        >
+          <Text style={s.keyBtnText}>
+            {value.trim() && value.trim() === saved ? t("saved") : t("save")}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView
+      style={[s.root, { backgroundColor: c.surfaceSecondary }]}
+      edges={["top"]}
+    >
+      <ScreenHeader title={t("networkDns")} onBack={onBack} />
+      <ScrollView keyboardShouldPersistTaps="handled">
+        {modes.map((m) => (
+          <TouchableOpacity
+            key={m.key}
+            style={[
+              s.row,
+              { backgroundColor: c.surface, borderBottomColor: c.border },
+            ]}
+            onPress={() => setSetting("networkMode", m.key)}
+          >
+            <Text style={[s.rowLabel, { color: c.text }]}>{m.label}</Text>
+            {settings.networkMode === m.key && (
+              <Text style={s.checkmark}>✓</Text>
+            )}
+          </TouchableOpacity>
+        ))}
+        {settings.networkMode === "secureDns" && (
+          <>
+            <Text style={[s.sectionHeader, { color: c.textSecondary }]}>
+              {t("dnsProvider")}
+            </Text>
+            {providers.map((p) => (
+              <TouchableOpacity
+                key={p.key}
+                style={[
+                  s.row,
+                  { backgroundColor: c.surface, borderBottomColor: c.border },
+                ]}
+                onPress={() => setSetting("dohProvider", p.key)}
+              >
+                <Text style={[s.rowLabel, { color: c.text }]}>{p.label}</Text>
+                {settings.dohProvider === p.key && (
+                  <Text style={s.checkmark}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+            {settings.dohProvider === "custom" &&
+              renderInput(
+                dohUrl,
+                setDohUrl,
+                "https://example.com/dns-query",
+                settings.dohCustomUrl,
+                saveDohUrl,
+              )}
+          </>
+        )}
+        {settings.networkMode === "proxy" && (
+          <>
+            <Text style={[s.sectionHeader, { color: c.textSecondary }]}>
+              {t("proxyAddress")}
+            </Text>
+            {renderInput(
+              proxyUrl,
+              setProxyUrl,
+              "socks://1.2.3.4:1080",
+              settings.proxyUrl,
+              saveProxyUrl,
+            )}
+          </>
+        )}
+        <Text style={[s.keyHint, { color: c.textSecondary }]}>
+          {t("networkHint")}
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -749,6 +906,7 @@ type SubScreen =
   | "history"
   | "bookmarks"
   | "appearance"
+  | "network"
   | "aiSubtitles"
   | "whisperModel"
   | "about"
@@ -799,6 +957,7 @@ function SettingsScreen() {
     return <BookmarksScreen onBack={() => setSub(null)} />;
   if (sub === "appearance")
     return <AppearanceScreen onBack={() => setSub(null)} />;
+  if (sub === "network") return <NetworkScreen onBack={() => setSub(null)} />;
   if (sub === "aiSubtitles")
     return <AISubtitlesScreen onBack={() => setSub(null)} />;
   if (sub === "whisperModel")
@@ -832,6 +991,17 @@ function SettingsScreen() {
           label: `🚫  ${t("popupBlocker")}`,
           value: settings.popupBlockEnabled,
           onToggle: (v) => setSetting("popupBlockEnabled", v),
+        },
+        {
+          kind: "nav",
+          label: `🔒  ${t("networkDns")}`,
+          value:
+            settings.networkMode === "secureDns"
+              ? t("secureDns")
+              : settings.networkMode === "proxy"
+                ? t("manualProxy")
+                : t("networkOff"),
+          onPress: () => setSub("network"),
         },
         {
           kind: "nav",

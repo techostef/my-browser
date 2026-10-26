@@ -16,15 +16,18 @@ import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
+import com.techoky.obrowser.network.NetworkProxyManager
+import com.techoky.obrowser.network.NetworkProxyPackage
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
         this,
         object : DefaultReactNativeHost(this) {
           override fun getPackages(): List<ReactPackage> {
-            // Packages that cannot be autolinked yet can be added manually here, for example:
-            // packages.add(new MyReactNativePackage());
-            return PackageList(this).packages
+            return PackageList(this).packages.apply {
+              add(NetworkProxyPackage())
+            }
           }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
@@ -41,6 +44,8 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    // Must run before any OkHttpClient is built so they all use the app proxy selector.
+    NetworkProxyManager.install()
     SoLoader.init(this, OpenSourceMergedSoMapping)
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // If you opted-in for the New Architecture, we load the native entry point for this app.

@@ -49,6 +49,7 @@ import MediaPlayerModal from "../components/player/MediaPlayerModal";
 import type { VideoController } from "../components/player/types";
 import VideoControls from "../components/player/VideoControls";
 import { useMangaBgWebView } from "../context/MangaBgWebViewContext";
+import { useTranslation } from "../i18n";
 import { AD_BLOCKER_JS } from "../services/adBlocker";
 import {
   MANGA_CHAPTER_LIST_EXTRACTOR_JS,
@@ -64,6 +65,7 @@ import {
   sanitizeMangaName,
   saveCoverImage,
 } from "../services/mangaDownloadService";
+import { applyNetworkConfig } from "../services/networkProxy";
 import { POPUP_BLOCKER_JS } from "../services/popupBlocker";
 import { VIDEO_DETECTOR_JS } from "../services/videoDetector";
 import { useAdActions } from "../store/adStore";
@@ -236,7 +238,13 @@ function BrowserScreen() {
   } = useTabActions();
   const { startDownload } = useDownloadActions();
   const { requestDownload } = useAdActions();
-  const { settings, pushHistory, setSetting } = useSettings();
+  const {
+    settings,
+    pushHistory,
+    setSetting,
+    isReady: settingsReady,
+  } = useSettings();
+  const { t } = useTranslation();
   // Applies to every page: the native WebView patch
   // (patches/react-native-webview+*.patch, RNCWebViewClient) skips injecting
   // it on search-engine pages and their iframes. Deciding here from the
@@ -566,6 +574,32 @@ function BrowserScreen() {
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
+
+  // Secure DNS / proxy: re-apply whenever the network settings change (and
+  // once at startup), then reload the active tab so it uses the new route.
+  const networkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!settingsReady) return;
+    const isFirst = !networkAppliedRef.current;
+    networkAppliedRef.current = true;
+    applyNetworkConfig({
+      networkMode: settings.networkMode,
+      dohProvider: settings.dohProvider,
+      dohCustomUrl: settings.dohCustomUrl,
+      proxyUrl: settings.proxyUrl,
+    })
+      .then(() => {
+        if (isFirst && settings.networkMode === "off") return;
+        webViewRefs.current[activeTabIdRef.current]?.reload();
+      })
+      .catch((e) => Alert.alert(t("networkApplyFailed"), String(e?.message ?? e)));
+  }, [
+    settingsReady,
+    settings.networkMode,
+    settings.dohProvider,
+    settings.dohCustomUrl,
+    settings.proxyUrl,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
