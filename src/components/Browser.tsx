@@ -18,9 +18,9 @@ interface Props {
     request: ShouldStartLoadRequest,
   ) => boolean;
   onOpenWindow?: (event: WebViewOpenWindowEvent) => void;
-  onLoadStart?: () => void;
+  onLoadStart?: (event: { nativeEvent: { url: string } }) => void;
   onLoadProgress?: (progress: number) => void;
-  onLoadEnd?: () => void;
+  onLoadEnd?: (event: { nativeEvent: { url: string } }) => void;
   onLoadError?: (event: WebViewErrorEvent) => void;
   onHttpError?: (event: WebViewHttpErrorEvent) => void;
 }

@@ -568,6 +568,16 @@ export const VIDEO_DETECTOR_JS = `
     return url && url.toLowerCase().indexOf('.m3u8') !== -1;
   }
 
+  // Network URLs worth reporting. Individual DASH .m4s segments are
+  // fragments, not full videos, so they're excluded.
+  function isVideoRequestUrl(lower) {
+    if (lower.includes('.m4s')) return false;
+    return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
+        lower.includes('.mpd') || lower.includes('application/dash') ||
+        lower.includes('video/') || lower.includes('mime=video') ||
+        lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/');
+  }
+
   // Per-element loadedmetadata listener: fires when the browser confirms
   // currentSrc is actually playable. If the element's URL changed since it
   // was first detected (e.g. quality negotiation, redirect, signed-URL refresh),
@@ -662,15 +672,9 @@ export const VIDEO_DETECTOR_JS = `
     var url = typeof rawUrl === 'string' ? rawUrl : (rawUrl && rawUrl.href) || '';
     if (url) {
       var lower = url.toLowerCase();
-      if (lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
-          lower.includes('.mpd') || lower.includes('application/dash') ||
-          lower.includes('video/') || lower.includes('mime=video') ||
-          lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
-        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
-        if (!lower.includes('.m4s')) {
-          log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
-          sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
-        }
+      if (isVideoRequestUrl(lower)) {
+        log('[XHR] Intercepted video URL: ' + url.substring(0, 150));
+        sendDetectedVideos([toAbsoluteUrl(url)], 'xhr');
       }
       if (lower.includes('.m4s')) {
         trackM4sRequest(url);
@@ -767,15 +771,9 @@ export const VIDEO_DETECTOR_JS = `
     var url = typeof input === 'string' ? input : (input && (input.url || input.href)) || '';
     if (url) {
       var lower = url.toLowerCase();
-      if (lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.m3u8') ||
-          lower.includes('.mpd') || lower.includes('application/dash') ||
-          lower.includes('video/') || lower.includes('mime=video') ||
-          lower.includes('video.twimg.com') || lower.includes('/ext_tw_video/')) {
-        // Skip individual DASH segment files (.m4s) — they're fragments, not full videos
-        if (!lower.includes('.m4s')) {
-          log('[FETCH] Intercepted video URL: ' + url.substring(0, 150));
-          sendDetectedVideos([toAbsoluteUrl(url)], 'fetch');
-        }
+      if (isVideoRequestUrl(lower)) {
+        log('[FETCH] Intercepted video URL: ' + url.substring(0, 150));
+        sendDetectedVideos([toAbsoluteUrl(url)], 'fetch');
       }
       if (lower.includes('.m4s')) {
         trackM4sRequest(url);
@@ -818,6 +816,33 @@ export const VIDEO_DETECTOR_JS = `
 
   log('[INIT] Network & MSE hooks installed (before content loaded)');
 
+  // When RN re-injects after load (the onPageStarted injection missed this
+  // document), the player may already have requested its playlist before
+  // the hooks above existed. Recover those URLs from resource timing; M3U8
+  // bodies are re-fetched so variants/tracks still reach RN.
+  function scanPastRequests() {
+    try {
+      var entries = performance.getEntriesByType('resource');
+      for (var i = 0; i < entries.length; i++) {
+        var url = entries[i].name || '';
+        var lower = url.toLowerCase();
+        if (lower.includes('.m4s')) { trackM4sRequest(url); continue; }
+        if (!isVideoRequestUrl(lower)) continue;
+        var absUrl = toAbsoluteUrl(url);
+        sendDetectedVideos([absUrl], 'perf-entries');
+        if (isM3U8Url(absUrl) && !m3u8Parsed[absUrl]) {
+          (function(u) {
+            origFetch(u, { credentials: 'include' }).then(function(r) {
+              return r.ok ? r.text() : '';
+            }).then(function(body) {
+              if (body) parseM3U8Content(u, body);
+            }).catch(function() {});
+          })(absUrl);
+        }
+      }
+    } catch(e) {}
+  }
+
   // DOM-dependent code must wait for the document to be ready
   function onDomReady() {
     // Watch for DOM changes (dynamically added video elements)
@@ -851,6 +876,7 @@ export const VIDEO_DETECTOR_JS = `
     // Initial scan
     log('[INIT] DOM ready, starting video scans on ' + window.location.href);
     scanForVideos();
+    scanPastRequests();
 
     // Periodic rescan for SPAs and lazy-loaded content
     setInterval(scanForVideos, SCAN_INTERVAL_MS);

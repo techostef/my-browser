@@ -255,6 +255,9 @@ function BrowserScreen() {
     if (settings.popupBlockEnabled) js = POPUP_BLOCKER_JS + js;
     return js;
   }, [settings.adBlockEnabled, settings.popupBlockEnabled]);
+  // Read by handleLoadEnd, whose closure Browser's React.memo can freeze.
+  const injectedJsRef = useRef(injectedJavaScript);
+  injectedJsRef.current = injectedJavaScript;
   const previousUrl = useRef("");
   const navigation = useNavigation();
 
@@ -1061,11 +1064,43 @@ function BrowserScreen() {
     webViewRefs.current[activeTabId]?.reload();
   }, [activeTabId, updateLoadState, resetTabVideoState]);
 
-  const handleLoadStart = useCallback(
-    (tabId: string) => () => {
-      updateLoadState(tabId, { loading: true, progress: 0.05, error: null });
+  // Drops videos detected on the previous page when the tab moves to a new
+  // page (origin + path). Otherwise the banner's playing-video filter sees
+  // several HLS entries from different pages, matches none of them once a
+  // video starts, and hides itself until a refresh. Android also fires
+  // onLoadStart for SPA pushState/replaceState, so query/hash-only changes
+  // (e.g. a ?t= update during playback) are ignored. Videos detected just
+  // before the URL changed are kept: SPAs often fetch the playlist first.
+  const lastPageBaseRef = useRef<Record<string, string>>({});
+  const pruneVideosOnPageChange = useCallback(
+    (tabId: string, url: string | undefined) => {
+      if (!url) return;
+      const base = getBaseUrl(url).toLowerCase();
+      const prevBase = lastPageBaseRef.current[tabId];
+      lastPageBaseRef.current[tabId] = base;
+      if (prevBase === undefined || prevBase === base) return;
+      const cutoff = Date.now() - 2000;
+      setDetectedVideosMap((prev) => {
+        const existing = prev[tabId];
+        if (!existing || existing.length === 0) return prev;
+        const kept = existing.filter((v) => (v.timestamp ?? 0) >= cutoff);
+        if (kept.length === existing.length) return prev;
+        detectedUrlsRef.current[tabId] = new Set(kept.map((v) => v.url));
+        return { ...prev, [tabId]: kept };
+      });
+      setBannerDismissedMap((prev) =>
+        prev[tabId] ? { ...prev, [tabId]: false } : prev,
+      );
     },
-    [updateLoadState],
+    [getBaseUrl],
+  );
+
+  const handleLoadStart = useCallback(
+    (tabId: string) => (event: { nativeEvent: { url: string } }) => {
+      updateLoadState(tabId, { loading: true, progress: 0.05, error: null });
+      pruneVideosOnPageChange(tabId, event?.nativeEvent?.url);
+    },
+    [updateLoadState, pruneVideosOnPageChange],
   );
   const handleLoadProgress = useCallback(
     (tabId: string) => (progress: number) => {
@@ -1074,8 +1109,15 @@ function BrowserScreen() {
     [updateLoadState],
   );
   const handleLoadEnd = useCallback(
-    (tabId: string) => () => {
+    (tabId: string) => (event: { nativeEvent: { url: string } }) => {
       updateLoadState(tabId, { loading: false, progress: 1 });
+      // The native onPageStarted injection can land in the outgoing document
+      // (or be dropped) on cross-page navigation, leaving the new page without
+      // the detector until a refresh. Re-inject once the page has committed;
+      // each script's __*_INSTALLED__ guard makes this a no-op when it did run.
+      if (!isSearchEngineUrl(event?.nativeEvent?.url)) {
+        webViewRefs.current[tabId]?.injectJavaScript(injectedJsRef.current);
+      }
     },
     [updateLoadState],
   );
@@ -1363,6 +1405,7 @@ function BrowserScreen() {
         delete webViewCanGoBackRef.current[id];
         delete webViewCanGoForwardRef.current[id];
         delete detectedUrlsRef.current[id];
+        delete lastPageBaseRef.current[id];
         setDetectedVideosMap((prev) => {
           const next = { ...prev };
           delete next[id];
@@ -1757,9 +1800,13 @@ interface WebViewListProps {
   handleShouldStartLoadWithRequest: (
     tabId: string,
   ) => (request: ShouldStartLoadRequest) => boolean;
-  handleLoadStart: (tabId: string) => () => void;
+  handleLoadStart: (
+    tabId: string,
+  ) => (event: { nativeEvent: { url: string } }) => void;
   handleLoadProgress: (tabId: string) => (progress: number) => void;
-  handleLoadEnd: (tabId: string) => () => void;
+  handleLoadEnd: (
+    tabId: string,
+  ) => (event: { nativeEvent: { url: string } }) => void;
   handleLoadError: (tabId: string) => (event: WebViewErrorEvent) => void;
   handleHttpError: (tabId: string) => (event: WebViewHttpErrorEvent) => void;
   handleOpenWindow: (event: { nativeEvent: { targetUrl: string } }) => void;
